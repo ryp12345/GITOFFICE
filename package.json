@@ -1,0 +1,17 @@
+{
+  "name": "gitoffice",
+  "private": true,
+  "workspaces": [
+    "server",
+    "client"
+  ],
+  "scripts": {
+    "dev": "npm run dev -w server",
+    "dev:client": "npm run dev -w client",
+    "dev:server": "npm run dev -w server",
+    "test": "npm test -w server"
+  },
+  "dependencies": {
+    "sequelize": "^6.37.7"
+  }
+}
