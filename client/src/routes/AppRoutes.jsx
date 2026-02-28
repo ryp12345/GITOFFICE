@@ -18,6 +18,7 @@ import { useAuth } from '../context/AuthContext';
 import { getDashboardPathByRole } from '../utils/role';
 import DepartmentsPage from '../pages/establishment/Departments';
 import RemunerationHeadsPage from '../pages/establishment/RemunerationHeads';
+import StaffPage from '../pages/establishment/Staff';
 
 function HomeRedirect() {
   const { user, isAuthenticated } = useAuth();
@@ -53,6 +54,7 @@ export default function AppRoutes() {
               <Route path="/leave-management/leaves" element={<LeavesPage />} />
               <Route path="/leave-management/holiday-rh" element={<HolidayRHListPage />} />
             <Route path="/establishment/remuneration-heads" element={<RemunerationHeadsPage />} />
+              <Route path="/staff" element={<StaffPage />} />
           </Route>
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />

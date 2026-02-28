@@ -1,6 +1,6 @@
 const userModel = require('../models/user.model');
 const { hashPassword, comparePassword } = require('../utils/hash');
-const { signToken } = require('../utils/jwt');
+const { signAccessToken, signRefreshToken, verifyRefreshToken } = require('../utils/jwt');
 
 async function register(payload) {
   const existing = await userModel.findByEmail(payload.email);
@@ -33,13 +33,40 @@ async function login(payload) {
     throw err;
   }
 
-  const token = signToken({ id: user.id, role: user.role });
+  const token = signAccessToken({ id: user.id, role: user.role });
+  const refreshToken = signRefreshToken({ id: user.id, role: user.role });
   const safeUser = {
     id: user.id,
     email: user.email,
     role: user.role
   };
-  return { token, user: safeUser };
+  return { token, refreshToken, user: safeUser };
 }
 
-module.exports = { register, login };
+async function refreshSession(payload) {
+  let decoded;
+
+  try {
+    decoded = verifyRefreshToken(payload.refreshToken);
+  } catch (_error) {
+    const err = new Error('Invalid refresh token');
+    err.statusCode = 401;
+    throw err;
+  }
+
+  const user = await userModel.findById(decoded.id);
+  if (!user) {
+    const err = new Error('User not found');
+    err.statusCode = 401;
+    throw err;
+  }
+
+  const safeUser = { id: user.id, email: user.email, role: user.role };
+
+  const token = signAccessToken({ id: safeUser.id, role: safeUser.role });
+  const refreshToken = signRefreshToken({ id: safeUser.id, role: safeUser.role });
+
+  return { token, refreshToken, user: safeUser };
+}
+
+module.exports = { register, login, refreshSession };

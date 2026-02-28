@@ -18,4 +18,13 @@ async function login(req, res, next) {
   }
 }
 
-module.exports = { register, login };
+async function refresh(req, res, next) {
+  try {
+    const data = await authService.refreshSession(req.body);
+    res.json({ success: true, data });
+  } catch (error) {
+    next(error);
+  }
+}
+
+module.exports = { register, login, refresh };

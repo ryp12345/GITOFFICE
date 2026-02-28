@@ -18,4 +18,14 @@ function validateRegisterPayload(req, _res, next) {
   return next();
 }
 
-module.exports = { validateLoginPayload, validateRegisterPayload };
+function validateRefreshPayload(req, _res, next) {
+  const { refreshToken } = req.body;
+  if (!refreshToken) {
+    const err = new Error('Refresh token is required');
+    err.statusCode = 400;
+    return next(err);
+  }
+  return next();
+}
+
+module.exports = { validateLoginPayload, validateRegisterPayload, validateRefreshPayload };
