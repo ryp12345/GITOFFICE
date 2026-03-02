@@ -37,6 +37,8 @@ app.use('/api/castecategories', casteCategoryRoutes);
 app.use('/api/religions', religionRoutes);
 const departmentRoutes = require('./routes/department.routes');
 app.use('/api/departments', departmentRoutes);
+const staffRoutes = require('./routes/staff.routes');
+app.use('/api/staff', staffRoutes);
 
 app.use(errorMiddleware);
 

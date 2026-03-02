@@ -9,6 +9,7 @@ import { getInstitutions } from '../../api/institutionApi';
 import { getDesignations } from '../../api/designationApi';
 import { getReligions } from '../../api/religionApi';
 import { getCasteCategories } from '../../api/casteCategoryApi';
+import api from '../../api/axios';
 
 const initialForm = {
   fname: '',
@@ -38,7 +39,8 @@ const initialForm = {
   permanent_address: '',
   emergency_no: '',
   emergency_name: '',
-  gcr: ''
+  gcr: '',
+  duration: ''
 };
 
 const LOCAL_STAFF_KEY = 'gitoffice_staff_rows';
@@ -52,6 +54,9 @@ export default function StaffPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
   const [notification, setNotification] = useState({ show: false, message: '', type: 'success' });
+  const [emailChecked, setEmailChecked] = useState(false);
+  const [checkingEmail, setCheckingEmail] = useState(false);
+  const [emailStatus, setEmailStatus] = useState('');
 
   const [departments, setDepartments] = useState([]);
   const [associations, setAssociations] = useState([]);
@@ -59,8 +64,33 @@ export default function StaffPage() {
   const [designations, setDesignations] = useState([]);
   const [religions, setReligions] = useState([]);
   const [castes, setCastes] = useState([]);
+  const [payscaleOptions, setPayscaleOptions] = useState([]);
 
   useEffect(() => {
+    // fetch payscales when pay_type/designation/employee_type change
+    const fetchPayscales = async () => {
+      if (!token) return;
+      const pt = form.pay_type;
+      if (!pt || pt === 'Fixed') {
+        setPayscaleOptions([]);
+        return;
+      }
+
+      try {
+        const res = await api.get('/staff/getstaffpay_list', { params: { pay_type: pt, emp_type: form.employee_type, designation_id: form.designations_id } });
+        const data = res?.data || [];
+        // normalize to array
+        setPayscaleOptions(Array.isArray(data) ? data : []);
+      } catch (err) {
+        setPayscaleOptions([]);
+      }
+    };
+
+    fetchPayscales();
+  }, [form.pay_type, form.designations_id, form.employee_type, token]);
+  useEffect(() => {
+    // Only load local rows when not authenticated (token absent).
+    if (token) return;
     const savedRows = localStorage.getItem(LOCAL_STAFF_KEY);
     if (savedRows) {
       try {
@@ -71,6 +101,127 @@ export default function StaffPage() {
       }
     }
   }, []);
+
+  useEffect(() => {
+    // When token is available, fetch staff list from backend
+    const fetchRemoteRows = async () => {
+      if (!token) return;
+      setLoading(true);
+      try {
+        let localDepartments = departments;
+        let localAssociations = associations;
+        let localInstitutions = institutions;
+        let localDesignations = designations;
+        let localReligions = religions;
+        let localCastes = castes;
+
+        if (!departments.length || !associations.length || !institutions.length || !designations.length || !religions.length || !castes.length) {
+          try {
+            const [deptRes, assoRes, instRes, desigRes, relRes, casteRes] = await Promise.all([
+              getDepartments(token),
+              getAssociations(token),
+              getInstitutions(token),
+              getDesignations(token),
+              getReligions(token),
+              getCasteCategories(token)
+            ]);
+
+            const normalize = (res) => {
+              const data = res?.data?.data || res?.data || [];
+              return Array.isArray(data) ? data : [];
+            };
+
+            localDepartments = normalize(deptRes);
+            localAssociations = normalize(assoRes);
+            localInstitutions = normalize(instRes);
+            localDesignations = normalize(desigRes);
+            localReligions = normalize(relRes);
+            localCastes = normalize(casteRes);
+
+            setDepartments(localDepartments);
+            setAssociations(localAssociations);
+            setInstitutions(localInstitutions);
+            setDesignations(localDesignations);
+            setReligions(localReligions);
+            setCastes(localCastes);
+          } catch (_err) {
+            // ignore reference load errors - we'll still try to fetch staff
+          }
+        }
+
+        const res = await api.get('/staff');
+        const data = res?.data?.data || [];
+        // Map backend staff rows to table row shape (best-effort) using local reference arrays
+        const mapped = Array.isArray(data)
+          ? data.map((r) => {
+              const name = `${r.fname || ''} ${r.mname || ''} ${r.lname || ''}`.replace(/\s+/g, ' ').trim();
+
+              const getPivotFirst = (record, paths, keys) => {
+                for (const p of paths) {
+                  const val = record?.[p];
+                  if (Array.isArray(val) && val.length) {
+                    for (const k of keys) if (val[0]?.[k]) return val[0][k];
+                  }
+                  if (val && typeof val === 'object') {
+                    for (const k of keys) if (val[k]) return val[k];
+                  }
+                }
+                return null;
+              };
+
+              const deptLookup = getNameById(localDepartments, r.departments_id || r.department_id || r.dept_id || r.department || r.department_name || '', 'dept_name');
+              const pivotDept = getPivotFirst(r, ['departments', 'department_staff', 'department'], ['dept_name', 'name', 'department_name']);
+              const department_name = deptLookup !== '-' ? deptLookup : pivotDept || r.department_name || r.dept_name || r.department || '-';
+
+              const desigLookup = getNameById(localDesignations, r.designations_id || r.designation_id || r.designation || r.design_name || '', 'design_name');
+              const pivotDesig = getPivotFirst(r, ['designations', 'designation_staff', 'designation'], ['design_name', 'name', 'designation_name']);
+              const designation_name = desigLookup !== '-' ? desigLookup : pivotDesig || r.designation_name || r.design_name || r.designation || '-';
+
+              const assoLookup = getNameById(localAssociations, r.associations_id || r.association_id || r.association || r.asso_name || '', 'asso_name');
+              const pivotAsso = getPivotFirst(r, ['associations', 'association_staff', 'association'], ['asso_name', 'name', 'association_name']);
+              const association_name = assoLookup !== '-' ? assoLookup : pivotAsso || r.association_name || r.asso_name || r.association || '-';
+
+              const institution_name = r.institution_name || r.institution || r.inst_name || r.name || '';
+
+              return {
+                id: r.id,
+                name,
+                employee_type: r.employee_type || r.emp_type || (r.emp_type_name || '-') ,
+                department_name,
+                designation_name,
+                association_name,
+                institution_name: institution_name || '-',
+                email: r.email || (r.emailUser ? `${r.emailUser}@git.edu` : ''),
+                pay_type: r.pay_type || '',
+                fixed_pay: r.fixed_pay || '',
+                payscale: r.payscale || '',
+                gender: r.gender || '',
+                status: r.status || 'active',
+                formData: r,
+                created_at: r.created_at || ''
+              };
+            })
+          : [];
+
+        setRows(mapped);
+      } catch (err) {
+        // fallback to local storage if remote fails
+        const savedRows = localStorage.getItem(LOCAL_STAFF_KEY);
+        if (savedRows) {
+          try {
+            const parsed = JSON.parse(savedRows);
+            setRows(Array.isArray(parsed) ? parsed : []);
+          } catch (_error) {
+            setRows([]);
+          }
+        }
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchRemoteRows();
+  }, [token]);
 
   useEffect(() => {
     localStorage.setItem(LOCAL_STAFF_KEY, JSON.stringify(rows));
@@ -115,6 +266,33 @@ export default function StaffPage() {
     loadReferenceData();
   }, [token]);
 
+  // When religion changes, fetch caste categories for that religion (mirrors blade AJAX)
+  useEffect(() => {
+    const fetchCastes = async () => {
+      if (!token || !form.religion_id) return;
+      try {
+        const res = await getCasteCategories(token, form.religion_id);
+        const data = res?.data?.data || res?.data || [];
+        setCastes(Array.isArray(data) ? data : []);
+      } catch (err) {
+        // keep existing castes on error
+      }
+    };
+    fetchCastes();
+  }, [form.religion_id, token]);
+
+  // Show hint when email has been modified and is unchecked
+  useEffect(() => {
+    if (!form.emailUser) {
+      setEmailStatus('');
+      setEmailChecked(false);
+      return;
+    }
+    if (!emailChecked) {
+      setEmailStatus('Email has been modified. Please check again.');
+    }
+  }, [form.emailUser, emailChecked]);
+
   const showNotification = (message, type = 'success') => {
     setNotification({ show: true, message, type });
     setTimeout(() => setNotification({ show: false, message: '', type: 'success' }), 3500);
@@ -132,8 +310,10 @@ export default function StaffPage() {
     if (!dob) return '';
     const date = new Date(dob);
     if (Number.isNaN(date.getTime())) return '';
-    date.setFullYear(date.getFullYear() + 58);
-    return date.toISOString().slice(0, 10);
+    const year = date.getFullYear() + 58;
+    const month = date.getMonth() + 1;
+    const newDoS = new Date(year, month, 0);
+    return newDoS.toISOString().slice(0, 10);
   };
 
   const validate = () => {
@@ -157,6 +337,10 @@ export default function StaffPage() {
       ['permanent_address', 'Permanent address is required'],
       ['pay_type', 'Pay type is required']
     ];
+    // If association is contractual (id 4 in original blade) require duration
+    if (Number(form.associations_id) === 4) {
+      required.push(['duration', 'Duration is required for contractual association']);
+    }
 
     for (const [key, message] of required) {
       if (!String(form[key] || '').trim()) {
@@ -168,22 +352,76 @@ export default function StaffPage() {
       return 'Fixed pay is required for Fixed pay type';
     }
 
-    if (!/^[a-zA-Z][a-zA-Z0-9._-]*$/.test(form.emailUser)) {
-      return 'Enter a valid email username (before @git.edu)';
+    // Follow the Blade validation: biometric 2-4 digits (not stricter)
+    if (!/^\d{2,4}$/.test(form.biometric_code)) {
+      return 'Biometric employee code must be 2 to 4 digits';
     }
 
-    if (!/^\d{2,10}$/.test(form.biometric_code)) {
-      return 'Biometric employee code must be 2 to 10 digits';
-    }
-
-    if (rows.some((row) => row.email === `${form.emailUser}@git.edu`)) {
-      return 'Email already exists in staff list';
+    // Email format/duplicates are checked via availability check (server) like Blade.
+    if (!emailChecked) {
+      return 'Please check email availability before submitting';
     }
 
     return '';
   };
 
-  const onSubmit = (event) => {
+  const checkEmailAvailability = async () => {
+    const emailUser = (form.emailUser || '').trim();
+    const firstName = (form.fname || '').trim().toLowerCase();
+    const lastName = (form.lname || '').trim().toLowerCase();
+
+    if (!emailUser || !firstName || !lastName) {
+      setEmailStatus('Enter first name, last name and email before checking');
+      setEmailChecked(false);
+      return;
+    }
+
+    if (emailUser.includes('@')) {
+      setEmailStatus("@ is found, kindly change the email format.");
+      setEmailChecked(false);
+      return;
+    }
+
+    if (emailUser === firstName) {
+      setEmailStatus('Email contains only the first name. Please modify.');
+      setEmailChecked(false);
+      return;
+    }
+
+    if (emailUser === lastName) {
+      setEmailStatus('Email contains only the last name. Please modify.');
+      setEmailChecked(false);
+      return;
+    }
+
+    if (!/[a-zA-Z]/.test(emailUser)) {
+      setEmailStatus('Email cannot be composed of digits only. Please include letters.');
+      setEmailChecked(false);
+      return;
+    }
+
+    setCheckingEmail(true);
+    setEmailStatus('');
+    try {
+      // Use axios `api` so request goes to configured backend baseURL (avoids client-origin fetch)
+      const res = await api.get('/staff/checkemailid', { params: { current_email: emailUser } });
+      const taken = Array.isArray(res.data) ? res.data.length > 0 : Boolean(res.data && Object.keys(res.data).length);
+      if (taken) {
+        setEmailChecked(false);
+        setEmailStatus('Email Found! Kindly change the email ID');
+      } else {
+        setEmailChecked(true);
+        setEmailStatus('Email is available');
+      }
+    } catch (err) {
+      setEmailChecked(false);
+      setEmailStatus('Email check failed (network).');
+    } finally {
+      setCheckingEmail(false);
+    }
+  };
+
+  const onSubmit = async (event) => {
     event.preventDefault();
     const validationError = validate();
     if (validationError) {
@@ -191,40 +429,118 @@ export default function StaffPage() {
       return;
     }
 
-    const newRow = {
-      id: Date.now(),
-      name: `${form.fname} ${form.mname} ${form.lname}`.replace(/\s+/g, ' ').trim(),
+    const payload = {
+      emailUser: form.emailUser,
+      fname: form.fname,
+      mname: form.mname,
+      lname: form.lname,
       employee_type: form.employee_type,
-      email: `${form.emailUser}@git.edu`,
-      department_name: getNameById(departments, form.departments_id, 'dept_name'),
-      designation_name: getNameById(designations, form.designations_id, 'design_name'),
-      association_name: getNameById(associations, form.associations_id, 'asso_name'),
-      institution_name: getNameById(institutions, form.institution_id, 'name'),
+      biometric_code: form.biometric_code,
+      departments_id: form.departments_id,
+      associations_id: form.associations_id,
+      institution_id: form.institution_id,
+      designations_id: form.designations_id,
       pay_type: form.pay_type,
       fixed_pay: form.fixed_pay,
       payscale: form.payscale,
+      religion_id: form.religion_id,
+      castecategory_id: form.castecategory_id,
       gender: form.gender,
-      status: 'active',
-      formData: {
-        ...form,
-        date_of_superannuation: form.date_of_superannuation || computeSuperannuationDate(form.dob)
-      },
-      created_at: new Date().toISOString()
+      dob: form.dob,
+      doj: form.doj,
+      date_of_superanuation: form.date_of_superannuation || computeSuperannuationDate(form.dob),
+      bloodgroup: form.bloodgroup,
+      pan_card: form.pan_card,
+      adhar_card: form.adhar_card,
+      contactno: form.contactno,
+      local_address: form.local_address,
+      permanent_address: form.permanent_address,
+      emergency_no: form.emergency_no,
+      emergency_name: form.emergency_name,
+      gcr: form.gcr,
+      duration: form.duration
     };
 
-    setRows((previous) => [newRow, ...previous]);
-    showNotification('Staff added successfully', 'success');
-    closeModal();
+    if (token) {
+      try {
+        setLoading(true);
+        const res = await api.post('/staff', payload);
+        const created = res?.data?.data || {};
+        const newRow = {
+          id: created.staff?.id || Date.now(),
+          name: `${form.fname} ${form.mname} ${form.lname}`.replace(/\s+/g, ' ').trim(),
+          employee_type: form.employee_type,
+          email: `${form.emailUser}@git.edu`,
+          department_name: getNameById(departments, form.departments_id, 'dept_name'),
+          designation_name: getNameById(designations, form.designations_id, 'design_name'),
+          association_name: getNameById(associations, form.associations_id, 'asso_name'),
+          institution_name: getNameById(institutions, form.institution_id, 'name'),
+          pay_type: form.pay_type,
+          fixed_pay: form.fixed_pay,
+          payscale: form.payscale,
+          gender: form.gender,
+          status: 'active',
+          formData: { ...form, date_of_superanuation: payload.date_of_superannuation },
+          created_at: created.staff?.created_at || new Date().toISOString()
+        };
+
+        setRows((previous) => [newRow, ...previous]);
+        showNotification('Staff added successfully', 'success');
+        closeModal();
+      } catch (err) {
+        const msg = err?.response?.data?.message || err.message || 'Failed to create staff';
+        setError(msg);
+      } finally {
+        setLoading(false);
+      }
+    } else {
+      // fallback to local-only add when token/backend not available
+      const newRow = {
+        id: Date.now(),
+        name: `${form.fname} ${form.mname} ${form.lname}`.replace(/\s+/g, ' ').trim(),
+        employee_type: form.employee_type,
+        email: `${form.emailUser}@git.edu`,
+        department_name: getNameById(departments, form.departments_id, 'dept_name'),
+        designation_name: getNameById(designations, form.designations_id, 'design_name'),
+        association_name: getNameById(associations, form.associations_id, 'asso_name'),
+        institution_name: getNameById(institutions, form.institution_id, 'name'),
+        pay_type: form.pay_type,
+        fixed_pay: form.fixed_pay,
+        payscale: form.payscale,
+        gender: form.gender,
+        status: 'active',
+        formData: { ...form, date_of_superanuation: payload.date_of_superannuation },
+        created_at: new Date().toISOString()
+      };
+
+      setRows((previous) => [newRow, ...previous]);
+      showNotification('Staff added locally (no backend)', 'info');
+      closeModal();
+    }
   };
 
-  const onDelete = (rowId, rowName) => {
+  const onDelete = async (rowId, rowName) => {
     const confirmed = window.confirm(`Delete staff \"${rowName}\"?`);
-    if (!confirmed) {
+    if (!confirmed) return;
+
+    // If not authenticated, operate on local state only
+    if (!token) {
+      setRows((previous) => previous.filter((row) => String(row.id) !== String(rowId)));
+      showNotification('Staff deleted locally', 'success');
       return;
     }
 
-    setRows((previous) => previous.filter((row) => row.id !== rowId));
-    showNotification('Staff deleted successfully', 'success');
+    try {
+      setLoading(true);
+      await api.delete(`/staff/${rowId}`);
+      setRows((previous) => previous.filter((row) => String(row.id) !== String(rowId)));
+      showNotification('Staff deleted successfully', 'success');
+    } catch (err) {
+      const msg = err?.response?.data?.message || err?.response?.data?.error || err.message || 'Failed to delete staff';
+      showNotification(msg, 'error');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const filteredRows = useMemo(() => {
@@ -240,6 +556,17 @@ export default function StaffPage() {
     });
   }, [rows, search]);
 
+  // Pagination (mirror Departments page)
+  const [page, setPage] = useState(1);
+  const PAGE_SIZE = 10;
+
+  const paginatedRows = useMemo(() => {
+    const start = (page - 1) * PAGE_SIZE;
+    return filteredRows.slice(start, start + PAGE_SIZE);
+  }, [filteredRows, page]);
+
+  useEffect(() => { setPage(1); }, [search, rows]);
+
   return (
     <div className="min-h-screen bg-slate-100 flex flex-col">
       <Header />
@@ -254,13 +581,13 @@ export default function StaffPage() {
               onClose={() => setNotification({ show: false, message: '', type: 'success' })}
             />
 
-            <div className="mb-10 text-center">
+            <div className="mb-12 text-center">
               <h1 className="mb-2 text-4xl font-extrabold text-gray-900">Staff</h1>
-              <p className="text-lg text-gray-600">Create, filter and manage staff details</p>
+              <p className="text-lg text-gray-600">Create, update and manage staff</p>
             </div>
 
-            <div className="flex flex-col gap-3 mb-6 md:flex-row md:items-center md:justify-between">
-              <div className="relative w-full md:w-80">
+            <div className="flex flex-col items-start justify-between gap-4 mb-6 sm:flex-row sm:items-center">
+              <div className="relative w-full sm:w-72">
                 <input
                   value={search}
                   onChange={(event) => setSearch(event.target.value)}
@@ -272,28 +599,13 @@ export default function StaffPage() {
                 </svg>
               </div>
 
-              <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={() => showNotification('Generate Statistics is not connected yet.', 'info')}
-                  className="px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-lg hover:bg-green-700"
-                >
-                  Generate Statistics
-                </button>
-                <button
-                  type="button"
-                  onClick={() => showNotification('Staff Filter page is not connected yet.', 'info')}
-                  className="px-4 py-2 text-sm font-medium text-white bg-emerald-600 rounded-lg hover:bg-emerald-700"
-                >
-                  Staff Filter
-                </button>
-                <button
-                  onClick={() => setIsModalOpen(true)}
-                  className="px-5 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700"
-                >
-                  Add Staff
-                </button>
-              </div>
+              <button
+                onClick={() => setIsModalOpen(true)}
+                className="flex items-center justify-center w-full px-6 py-3 font-medium text-white transition-all duration-300 transform rounded-lg shadow-lg bg-blue-600 hover:bg-blue-700 hover:-translate-y-1 hover:scale-105 sm:w-auto"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 mr-2" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" /></svg>
+                Add Staff
+              </button>
             </div>
 
             <div className="overflow-hidden bg-white shadow-xl rounded-xl">
@@ -320,9 +632,9 @@ export default function StaffPage() {
                         <td colSpan="7" className="px-6 py-10 text-center text-gray-500">No staff added.</td>
                       </tr>
                     ) : (
-                      filteredRows.map((row, index) => (
-                        <tr key={row.id} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                          <td className="px-6 py-4 text-sm text-gray-900">{index + 1}</td>
+                      paginatedRows.map((row, idx) => (
+                        <tr key={row.id} className={`${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'} hover:bg-blue-50 transition-colors duration-150`}>
+                          <td className="px-6 py-4 text-sm text-gray-900">{(page - 1) * PAGE_SIZE + idx + 1}</td>
                           <td className="px-6 py-4 text-sm font-medium text-gray-900">{row.name}</td>
                           <td className="px-6 py-4 text-sm text-gray-700">{row.employee_type}</td>
                           <td className="px-6 py-4 text-sm text-gray-700">{row.department_name}</td>
@@ -356,7 +668,30 @@ export default function StaffPage() {
                   </tbody>
                 </table>
               </div>
+               {/* Pagination Controls */}
+            {filteredRows.length > PAGE_SIZE && (
+              <div className="flex justify-end items-center gap-2 px-6 pb-6">
+                <button
+                  className="px-3 py-1 rounded border border-gray-300 bg-white text-gray-700 disabled:opacity-50"
+                  onClick={() => setPage(p => Math.max(1, p - 1))}
+                  disabled={page === 1}
+                >
+                  Prev
+                </button>
+                <span className="text-sm text-gray-700">
+                  Page {page} of {Math.ceil(filteredRows.length / PAGE_SIZE)}
+                </span>
+                <button
+                  className="px-3 py-1 rounded border border-gray-300 bg-white text-gray-700 disabled:opacity-50"
+                  onClick={() => setPage(p => Math.min(Math.ceil(filteredRows.length / PAGE_SIZE), p + 1))}
+                  disabled={page === Math.ceil(filteredRows.length / PAGE_SIZE)}
+                >
+                  Next
+                </button>
+              </div>
+            )}
             </div>
+           
           </div>
         </main>
       </div>
@@ -372,12 +707,14 @@ export default function StaffPage() {
                   <h3 className="text-lg font-medium text-white">Add New Staff</h3>
                   <button type="button" onClick={closeModal} className="text-white hover:text-slate-200">✕</button>
                 </div>
+
+                {/* duration will be displayed inside the form (below selects) */}
               </div>
 
               <form onSubmit={onSubmit} className="p-6 space-y-5 max-h-[80vh] overflow-y-auto">
                 {error && <div className="p-3 text-sm text-red-700 border border-red-200 rounded bg-red-50">{error}</div>}
 
-                <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
                   <InputField label="First Name *" value={form.fname} onChange={(value) => setForm({ ...form, fname: value })} />
                   <InputField label="Middle Name *" value={form.mname} onChange={(value) => setForm({ ...form, mname: value })} />
                   <InputField label="Last Name *" value={form.lname} onChange={(value) => setForm({ ...form, lname: value })} />
@@ -393,12 +730,32 @@ export default function StaffPage() {
                       { value: 'Non-Teaching', label: 'Non-Teaching' }
                     ]}
                   />
-                  <InputField
-                    label="Email *"
-                    value={form.emailUser}
-                    onChange={(value) => setForm({ ...form, emailUser: value.toLowerCase().replace(/[^a-z0-9._-]/g, '') })}
-                    suffix="@git.edu"
-                  />
+                  <div>
+                    <label className="block mb-2 text-sm font-medium text-gray-700">Email *</label>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={form.emailUser}
+                        onChange={(e) => { setForm({ ...form, emailUser: e.target.value.toLowerCase().replace(/[^a-z0-9._-]/g, '') }); setEmailChecked(false); setEmailStatus('Email has been modified. Please check again.'); }}
+                        placeholder="youremail"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      />
+                      <span className="px-3 py-2 text-sm text-gray-600 bg-gray-100 border border-l-0 border-gray-300 rounded-lg">@git.edu</span>
+                      <button
+                        type="button"
+                        onClick={checkEmailAvailability}
+                        disabled={checkingEmail}
+                        className="px-3 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700"
+                      >
+                        {checkingEmail ? 'Checking...' : 'Check'}
+                      </button>
+                    </div>
+                    {emailStatus && (
+                      <div className={`mt-1 text-sm ${emailStatus.toLowerCase().includes('available') ? 'text-green-700' : 'text-red-700'}`}>
+                        {emailStatus}
+                      </div>
+                    )}
+                  </div>
                   <InputField
                     label="Biometric Employee Code *"
                     value={form.biometric_code}
@@ -416,7 +773,7 @@ export default function StaffPage() {
                   <SelectField
                     label="Association *"
                     value={form.associations_id}
-                    onChange={(value) => setForm({ ...form, associations_id: value })}
+                    onChange={(value) => setForm((prev) => ({ ...prev, associations_id: value, duration: Number(value) === 4 ? prev.duration : '' }))}
                     options={associations.map((item) => ({ value: String(item.id), label: item.asso_name }))}
                   />
                   <SelectField
@@ -428,7 +785,7 @@ export default function StaffPage() {
                   <SelectField
                     label="Designation *"
                     value={form.designations_id}
-                    onChange={(value) => setForm({ ...form, designations_id: value })}
+                    onChange={(value) => setForm({ ...form, designations_id: value, pay_type: '', fixed_pay: '', payscale: '' })}
                     options={designations
                       .filter((item) => !form.employee_type || item.emp_type === form.employee_type || item.emp_type === '0')
                       .map((item) => ({ value: String(item.id), label: item.design_name }))}
@@ -460,10 +817,11 @@ export default function StaffPage() {
                       onChange={(value) => setForm({ ...form, fixed_pay: value.replace(/[^\d.]/g, '') })}
                     />
                   ) : (
-                    <InputField
+                    <SelectField
                       label="Payscale"
                       value={form.payscale}
                       onChange={(value) => setForm({ ...form, payscale: value })}
+                      options={payscaleOptions.map((p) => ({ value: String(p.id), label: p.payscale_title || p.title || (p.basepay ? `${p.basepay}` : String(p.id)) }))}
                     />
                   )}
                   <SelectField
@@ -476,6 +834,14 @@ export default function StaffPage() {
                       { value: 'others', label: 'Others' }
                     ]}
                   />
+                  {Number(form.associations_id) === 4 && (
+                    <InputField
+                      label="Duration"
+                      value={form.duration}
+                      onChange={(value) => setForm({ ...form, duration: value })}
+                      placeholder="Duration (e.g., 2 years)"
+                    />
+                  )}
                 </div>
 
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
