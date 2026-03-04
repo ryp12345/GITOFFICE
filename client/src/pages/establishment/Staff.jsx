@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import Header from '../../components/layout/Header';
 import Sidebar from '../../components/layout/Sidebar';
 import Notification from '../../components/common/Notification';
@@ -47,6 +48,7 @@ const LOCAL_STAFF_KEY = 'gitoffice_staff_rows';
 
 export default function StaffPage() {
   const { token } = useAuth?.() || {};
+  const navigate = useNavigate();
   const [rows, setRows] = useState([]);
   const [search, setSearch] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -644,10 +646,13 @@ export default function StaffPage() {
                             <div className="flex items-center gap-2">
                               <button
                                 type="button"
-                                onClick={() => showNotification(`Staff: ${row.name} (${row.email})`, 'info')}
-                                className="px-3 py-1 text-xs font-medium text-white bg-slate-700 rounded-md hover:bg-slate-800"
+                                onClick={() => navigate(`/establishment/staff/${row.id}`)}
+                                className="p-2 text-blue-600 transition-colors duration-200 bg-white rounded-lg hover:bg-blue-100 border border-blue-300"
                               >
-                                View
+                                <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.477 0 8.268 2.943 9.542 7-1.274 4.057-5.065 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                </svg>
                               </button>
                               <button
                                 type="button"

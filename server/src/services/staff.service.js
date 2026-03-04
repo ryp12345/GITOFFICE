@@ -197,4 +197,78 @@ async function remove(id) {
   }
 }
 
-module.exports = { listAll, create, remove };
+async function getById(id) {
+  const sql = `
+    SELECT s.*, u.email,
+      (SELECT a.asso_name FROM association_staff ast JOIN associations a ON a.id = ast.association_id WHERE ast.staff_id = s.id AND ast.status = 'active' ORDER BY ast.id DESC LIMIT 1) AS association_name,
+      (SELECT d.dept_name FROM department_staff dst JOIN departments d ON d.id = dst.department_id WHERE dst.staff_id = s.id AND dst.status = 'active' ORDER BY dst.id DESC LIMIT 1) AS department_name,
+      (SELECT des.design_name FROM designation_staff dst2 JOIN designations des ON des.id = dst2.designation_id WHERE dst2.staff_id = s.id AND dst2.status = 'active' ORDER BY dst2.id DESC LIMIT 1) AS designation_name,
+      (SELECT i.name FROM institution_staff ist JOIN institutions i ON i.id = ist.institution_id WHERE ist.staff_id = s.id AND ist.status = 'active' ORDER BY ist.id DESC LIMIT 1) AS institution_name,
+      (SELECT et.employee_type FROM employee_types et WHERE et.staff_id = s.id AND et.status = 'active' ORDER BY et.id DESC LIMIT 1) AS emp_type_name
+    FROM staff s
+    LEFT JOIN users u ON u.id = s.user_id
+    WHERE s.id = $1
+    LIMIT 1
+  `;
+  const { rows } = await pool.query(sql, [id]);
+  const staff = rows[0] || null;
+  if (!staff) return null;
+
+  // Fetch all association_staff rows for this staff
+  const assocSql = `
+    SELECT ast.*, a.asso_name as association_name
+    FROM association_staff ast
+    JOIN associations a ON a.id = ast.association_id
+    WHERE ast.staff_id = $1
+    ORDER BY ast.id DESC
+  `;
+  const { rows: association_staff } = await pool.query(assocSql, [id]);
+  staff.association_staff = association_staff;
+
+  // Fetch all institution_staff rows for this staff
+  const instSql = `
+    SELECT ist.*, i.name as institution_name
+    FROM institution_staff ist
+    JOIN institutions i ON i.id = ist.institution_id
+    WHERE ist.staff_id = $1
+    ORDER BY ist.id DESC
+  `;
+  const { rows: institutions } = await pool.query(instSql, [id]);
+  staff.institutions = institutions;
+
+  return staff;
+}
+
+async function updateById(id, payload) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    // Only update allowed fields
+    const allowed = [
+      'fname','mname','lname','local_address','permanent_address','dob','doj','religion_id','castecategory_id','gender','date_of_superanuation','bloodgroup','pan_card','adhar_card','contactno','emergency_no','emergency_name','employeecode','biometric_code','pay_type','fixed_pay','payscale','gcr','duration'
+    ];
+    const updates = [];
+    const values = [];
+    let idx = 1;
+    for (const key of allowed) {
+      if (payload[key] !== undefined) {
+        updates.push(`${key} = $${idx}`);
+        values.push(payload[key]);
+        idx++;
+      }
+    }
+    if (!updates.length) throw new Error('No valid fields to update');
+    values.push(id);
+    const sql = `UPDATE staff SET ${updates.join(', ')}, updated_at = NOW() WHERE id = $${idx} RETURNING *`;
+    const { rows } = await client.query(sql, values);
+    await client.query('COMMIT');
+    return rows[0] || null;
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+module.exports = { listAll, create, remove, getById, updateById };

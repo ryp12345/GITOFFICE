@@ -119,6 +119,31 @@ async function remove(req, res, next) {
   }
 }
 
+async function getById(req, res, next) {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (!id) return res.status(400).json({ success: false, message: 'Invalid id' });
+    const data = await staffService.getById(id);
+    if (!data) return res.status(404).json({ success: false, message: 'Staff not found' });
+    return res.json({ success: true, data });
+  } catch (err) {
+    next(err);
+  }
+}
+
+async function update(req, res, next) {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (!id) return res.status(400).json({ success: false, message: 'Invalid id' });
+    const payload = req.body || {};
+    const data = await staffService.updateById(id, payload);
+    if (!data) return res.status(404).json({ success: false, message: 'Staff not found' });
+    return res.json({ success: true, data });
+  } catch (err) {
+    next(err);
+  }
+}
+
 module.exports = {
   checkEmail,
   create,
@@ -127,4 +152,6 @@ module.exports = {
   getDesignationsByEmployeeType,
   getCasteCategoriesByReligion,
   getStaffPayList,
+  getById,
+  update,
 };

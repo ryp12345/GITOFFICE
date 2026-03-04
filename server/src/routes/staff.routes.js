@@ -8,6 +8,8 @@ router.get('/getcastecategory_list', staffController.getCasteCategoriesByReligio
 router.get('/getstaffpay_list', staffController.getStaffPayList);
 router.get('/', staffController.list);
 router.post('/', staffController.create);
+router.put('/:id', staffController.update);
 router.delete('/:id', staffController.remove);
+router.get('/:id', staffController.getById);
 
 module.exports = router;
