@@ -1,5 +1,10 @@
 require('dotenv').config();
 
+const defaultCorsOrigins = ['http://localhost:3000', 'http://127.0.0.1:3000'];
+const corsOrigins = process.env.CORS_ORIGIN
+  ? process.env.CORS_ORIGIN.split(',').map((origin) => origin.trim()).filter(Boolean)
+  : defaultCorsOrigins;
+
 module.exports = {
   nodeEnv: process.env.NODE_ENV || 'development',
   port: Number(process.env.PORT || 3001),
@@ -13,7 +18,7 @@ module.exports = {
   dbName: process.env.DB_NAME || 'gitoffice',
   dbUser: process.env.DB_USER || 'postgres',
   dbPass: process.env.DB_PASS || '',
-  corsOrigin: process.env.CORS_ORIGIN || 'http://localhost:3000',
+  corsOrigins,
   smtpHost: process.env.SMTP_HOST || '',
   smtpPort: Number(process.env.SMTP_PORT || 465),
   smtpSecure: String(process.env.SMTP_SECURE || 'true') === 'true',

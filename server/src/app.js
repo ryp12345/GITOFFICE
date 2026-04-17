@@ -14,11 +14,34 @@ const remunerationHeadRoutes = require('./routes/remunerationhead.routes');
 const casteCategoryRoutes = require('./routes/castecategory.routes');
 const religionRoutes = require('./routes/religion.routes');
 const { errorMiddleware } = require('./middlewares/error.middleware');
-const { corsOrigin } = require('./config');
+const { corsOrigins, nodeEnv } = require('./config');
 
 const app = express();
 
-app.use(cors({ origin: corsOrigin }));
+const privateNetworkOriginPattern = /^https?:\/\/(10\.\d{1,3}\.\d{1,3}\.\d{1,3}|127\.0\.0\.1|192\.168\.\d{1,3}\.\d{1,3}|172\.(1[6-9]|2\d|3[0-1])\.\d{1,3}\.\d{1,3})(:\d+)?$/i;
+
+const corsOptions = {
+	origin: (origin, callback) => {
+		if (!origin) {
+			callback(null, true);
+			return;
+		}
+
+		if (corsOrigins.includes(origin)) {
+			callback(null, true);
+			return;
+		}
+
+		if (nodeEnv !== 'production' && privateNetworkOriginPattern.test(origin)) {
+			callback(null, true);
+			return;
+		}
+
+		callback(new Error(`CORS blocked for origin: ${origin}`));
+	}
+};
+
+app.use(cors(corsOptions));
 app.use(express.json());
 
 app.get('/health', (_req, res) => res.json({ ok: true }));
