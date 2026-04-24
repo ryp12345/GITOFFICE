@@ -3,6 +3,9 @@ import Login from '../pages/auth/Login';
 import Register from '../pages/auth/Register';
 import SuperAdminDashboard from '../pages/super-admin/Dashboard';
 import EstablishmentDashboard from '../pages/establishment/Dashboard';
+import HODDashboard from '../pages/hod/Dashboard';
+import TeachingDashboard from '../pages/teaching/Dashboard';
+import NonTeachingDashboard from '../pages/nonteaching/Dashboard';
 import AssociationsPage from '../pages/establishment/Associations';
 import DepartmentPage from '../pages/establishment/Departments';
 import DesignationsPage from '../pages/establishment/Designations';
@@ -65,6 +68,15 @@ export default function AppRoutes() {
               <Route path="/staff" element={<StaffPage />} />
               <Route path="/establishment/staff/:id" element={<StaffViewPageWrapper />} />
           </Route>
+        </Route>
+        <Route element={<RoleRoute role="Head of Department" />}>
+          <Route path="/hod" element={<HODDashboard />} />
+        </Route>
+        <Route element={<RoleRoute role="Teaching" />}>
+          <Route path="/teaching" element={<TeachingDashboard />} />
+        </Route>
+        <Route element={<RoleRoute role="Non-Teaching" />}>
+          <Route path="/nonteaching" element={<NonTeachingDashboard />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
