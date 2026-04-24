@@ -1,5 +1,5 @@
-const Leave = require('../models/leave.model');
-const { sendSuccess, sendError } = require('../utils/response');
+const Leave = require('../../models/leave.model');
+const { sendSuccess, sendError } = require('../../utils/response');
 
 exports.getAll = async (req, res) => {
   try {

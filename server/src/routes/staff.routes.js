@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const staffController = require('../controllers/staff.controller');
+const staffController = require('../controllers/establishment/staff.controller');
 
 router.get('/checkemailid', staffController.checkEmail);
 router.get('/employee/designations', staffController.getDesignationsByEmployeeType);

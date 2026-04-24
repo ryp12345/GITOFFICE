@@ -1,5 +1,5 @@
-const LeaveRules = require('../models/leave_rules.model');
-const { sendSuccess, sendError } = require('../utils/response');
+const LeaveRules = require('../../models/leave_rules.model');
+const { sendSuccess, sendError } = require('../../utils/response');
 
 exports.getAll = async (req, res) => {
   try {

@@ -1,5 +1,5 @@
-const HolidayRH = require('../models/holidayrh.model');
-const { sendSuccess, sendError } = require('../utils/response');
+const HolidayRH = require('../../models/holidayrh.model');
+const { sendSuccess, sendError } = require('../../utils/response');
 
 const allowedTypes = ['Holiday', 'RH'];
 

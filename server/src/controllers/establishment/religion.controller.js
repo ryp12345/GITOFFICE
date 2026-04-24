@@ -1,5 +1,5 @@
-const Religion = require('../models/religion.model');
-const { sendSuccess, sendError } = require('../utils/response');
+const Religion = require('../../models/religion.model');
+const { sendSuccess, sendError } = require('../../utils/response');
 
 const validStatuses = ['Active', 'Inactive'];
 

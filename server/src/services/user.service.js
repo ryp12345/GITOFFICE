@@ -10,4 +10,8 @@ async function getById(id) {
   return user;
 }
 
-module.exports = { getById };
+async function listAll() {
+  return userModel.findAll();
+}
+
+module.exports = { getById, listAll };

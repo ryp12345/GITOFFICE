@@ -1,5 +1,5 @@
-const RemunerationHead = require('../models/remunerationhead.model');
-const { sendSuccess, sendError } = require('../utils/response');
+const RemunerationHead = require('../../models/remunerationhead.model');
+const { sendSuccess, sendError } = require('../../utils/response');
 
 exports.getAll = async (_req, res) => {
   try {

@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const leaveController = require('../controllers/leave.controller');
+const leaveController = require('../controllers/establishment/leave.controller');
 const { authMiddleware } = require('../middlewares/auth.middleware');
 const { roleMiddleware } = require('../middlewares/role.middleware');
 

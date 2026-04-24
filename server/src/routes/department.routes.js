@@ -1,5 +1,5 @@
 const { Router } = require('express');
-const departmentController = require('../controllers/department.controller');
+const departmentController = require('../controllers/establishment/department.controller');
 const { authMiddleware } = require('../middlewares/auth.middleware');
 
 const router = Router();

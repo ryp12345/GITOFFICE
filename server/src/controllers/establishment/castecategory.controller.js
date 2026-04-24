@@ -1,5 +1,5 @@
-const CasteCategory = require('../models/castecategory.model');
-const { sendSuccess, sendError } = require('../utils/response');
+const CasteCategory = require('../../models/castecategory.model');
+const { sendSuccess, sendError } = require('../../utils/response');
 
 exports.getAll = async (req, res) => {
   try {

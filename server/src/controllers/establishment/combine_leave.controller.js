@@ -1,5 +1,5 @@
-const CombineLeave = require('../models/combine_leave.model');
-const { sendSuccess, sendError } = require('../utils/response');
+const CombineLeave = require('../../models/combine_leave.model');
+const { sendSuccess, sendError } = require('../../utils/response');
 
 exports.getByLeaveId = async (req, res) => {
   try {

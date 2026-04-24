@@ -10,6 +10,13 @@ async function findById(id) {
   return rows[0] || null;
 }
 
+async function findAll() {
+  const { rows } = await pool.query(
+    'SELECT id, email, role, status, created_at FROM users ORDER BY created_at DESC NULLS LAST, id DESC'
+  );
+  return rows;
+}
+
 async function create({ email, passwordHash, role }) {
   const { rows } = await pool.query(
     "INSERT INTO users (email, password, role, status, created_at, updated_at) VALUES ($1, $2, $3, 'Active', NOW(), NOW()) RETURNING id, email, role, status, created_at",
@@ -18,4 +25,4 @@ async function create({ email, passwordHash, role }) {
   return rows[0];
 }
 
-module.exports = { findByEmail, findById, create };
+module.exports = { findByEmail, findById, findAll, create };

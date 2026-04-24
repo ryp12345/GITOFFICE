@@ -1,4 +1,4 @@
-const Designation = require('../models/designation.model');
+const Designation = require('../../models/designation.model');
 
 const designationController = {
   async getAll(req, res) {

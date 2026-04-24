@@ -1,5 +1,5 @@
 const { Router } = require('express');
-const { register, login, refresh } = require('../controllers/auth.controller');
+const { register, login, refresh } = require('../controllers/common/auth.controller');
 const {
 	validateLoginPayload,
 	validateRegisterPayload,

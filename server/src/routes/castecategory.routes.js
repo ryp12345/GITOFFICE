@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const casteCategoryController = require('../controllers/castecategory.controller');
+const casteCategoryController = require('../controllers/establishment/castecategory.controller');
 const { authMiddleware } = require('../middlewares/auth.middleware');
 const { roleMiddleware } = require('../middlewares/role.middleware');
 

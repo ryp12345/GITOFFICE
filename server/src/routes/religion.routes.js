@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const religionController = require('../controllers/religion.controller');
+const religionController = require('../controllers/establishment/religion.controller');
 const { authMiddleware } = require('../middlewares/auth.middleware');
 const { roleMiddleware } = require('../middlewares/role.middleware');
 

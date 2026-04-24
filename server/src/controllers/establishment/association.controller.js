@@ -1,4 +1,4 @@
-const associationService = require('../services/association.service');
+const associationService = require('../../services/association.service');
 
 async function list(req, res, next) {
   try {

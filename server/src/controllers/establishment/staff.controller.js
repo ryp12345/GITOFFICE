@@ -1,8 +1,8 @@
-const staffService = require('../services/staff.service');
-const userModel = require('../models/user.model');
-const Designation = require('../models/designation.model');
-const CasteCategory = require('../models/castecategory.model');
-const { pool } = require('../config/db');
+const staffService = require('../../services/staff.service');
+const userModel = require('../../models/user.model');
+const Designation = require('../../models/designation.model');
+const CasteCategory = require('../../models/castecategory.model');
+const { pool } = require('../../config/db');
 
 async function checkEmail(req, res, next) {
   try {

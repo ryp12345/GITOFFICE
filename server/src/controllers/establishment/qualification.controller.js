@@ -1,5 +1,5 @@
-const Qualification = require('../models/qualification.model');
-const { sendSuccess, sendError } = require('../utils/response');
+const Qualification = require('../../models/qualification.model');
+const { sendSuccess, sendError } = require('../../utils/response');
 
 const validStatuses = ['Active', 'Inactive'];
 

@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const remunerationHeadController = require('../controllers/remunerationhead.controller');
+const remunerationHeadController = require('../controllers/establishment/remunerationhead.controller');
 const { authMiddleware } = require('../middlewares/auth.middleware');
 const { roleMiddleware } = require('../middlewares/role.middleware');
 
