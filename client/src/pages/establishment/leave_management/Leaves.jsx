@@ -57,6 +57,43 @@ export default function LeavesPage() {
     setIsModalOpen(true);
   };
 
+  const toInputDate = (value) => {
+    if (!value) return '';
+
+    // Preserve plain date values to avoid timezone drift.
+    if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
+      return value;
+    }
+
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return '';
+
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  const formatDateDMY = (value) => {
+    if (!value) return '-';
+
+    if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
+      const [year, month, day] = value.split('-');
+      const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      const monthIndex = Number(month) - 1;
+      if (monthIndex < 0 || monthIndex > 11) return '-';
+      return `${day}-${monthNames[monthIndex]}-${year}`;
+    }
+
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return '-';
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const day = String(date.getDate()).padStart(2, '0');
+    const month = monthNames[date.getMonth()];
+    const year = date.getFullYear();
+    return `${day}-${month}-${year}`;
+  };
+
   const openEdit = (row) => {
     setEditingId(row.id);
     setForm({
@@ -67,8 +104,8 @@ export default function LeavesPage() {
       max_days: row.max_days || '',
       vacation_type: row.vacation_type || 'Vacational',
       applicable_to: row.applicable_to || 'all',
-      leave_wef: row.leave_wef ? row.leave_wef.slice(0, 10) : '',
-      leave_end_date: row.leave_end_date ? row.leave_end_date.slice(0, 10) : '',
+      leave_wef: toInputDate(row.leave_wef),
+      leave_end_date: toInputDate(row.leave_end_date),
       status: row.status || 'active',
     });
     setIsModalOpen(true);
@@ -102,7 +139,11 @@ export default function LeavesPage() {
       return;
     }
     try {
-      const payload = { ...form };
+      const payload = {
+        ...form,
+        leave_wef: form.leave_wef || null,
+        leave_end_date: form.leave_end_date || null,
+      };
       if (editingId) {
         await axios.put(`/leaves/${editingId}`, payload, { headers: { Authorization: `Bearer ${token}` } });
         showNotification('Leave updated successfully!', 'success');
@@ -223,8 +264,8 @@ export default function LeavesPage() {
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">{row.max_days}</td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">{row.vacation_type}</td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">{row.applicable_to}</td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">{row.leave_wef ? new Date(row.leave_wef).toLocaleDateString() : '-'}</td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">{row.leave_end_date ? new Date(row.leave_end_date).toLocaleDateString() : '-'}</td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">{formatDateDMY(row.leave_wef)}</td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">{formatDateDMY(row.leave_end_date)}</td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm">
                             <span className={`px-3 py-1 text-xs font-medium rounded-full ${row.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}>
                               {row.status}
@@ -232,7 +273,7 @@ export default function LeavesPage() {
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium">
                             <div className="flex items-center justify-center space-x-2">
-                             
+
                               <button
                                 onClick={() => window.location.href = `/leave-management/leave-rules?leave_id=${row.id}`}
                                 className="p-2 text-blue-600 transition-colors duration-200 bg-white rounded-lg hover:bg-blue-100 border border-blue-300"

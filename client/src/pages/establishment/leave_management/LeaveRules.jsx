@@ -107,6 +107,19 @@ export default function LeaveRulesPage() {
     return String(value).slice(0, 10);
   };
 
+  const normalizeDateValue = (value) => {
+    if (value === undefined || value === null) return null;
+    if (typeof value === 'string' && value.trim() === '') return null;
+    return value;
+  };
+
+  const normalizeIntegerValue = (value) => {
+    if (value === undefined || value === null) return null;
+    if (typeof value === 'string' && value.trim() === '') return null;
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  };
+
   const hydrateCombinationSelection = (rows) => {
     const activeRows = (rows || []).filter(row => row.status === 'active');
     const mapped = {};
@@ -139,29 +152,29 @@ export default function LeaveRulesPage() {
       }
 
       const payload = {
-        leave_id: form.leave_id,
+        leave_id: normalizeIntegerValue(form.leave_id),
         carry_forwardable: form.carry_forwardable,
         cf_gcr: form.cf_gcr,
-        cf_wef: form.cf_wef,
-        cf_closing_date: form.cf_closing_date,
+        cf_wef: normalizeDateValue(form.cf_wef),
+        cf_closing_date: normalizeDateValue(form.cf_closing_date),
         cf_closing_gcr: form.cf_closing_gcr,
-        max_cf: form.max_cf,
-        entitlement_post_max_cf: form.entitlement_post_max_cf,
+        max_cf: normalizeIntegerValue(form.max_cf),
+        entitlement_post_max_cf: normalizeIntegerValue(form.entitlement_post_max_cf),
         encashable: form.encashable,
         enc_gcr: form.enc_gcr,
-        enc_wef: form.enc_wef,
-        enc_closing_date: form.enc_closing_date,
+        enc_wef: normalizeDateValue(form.enc_wef),
+        enc_closing_date: normalizeDateValue(form.enc_closing_date),
         enc_closing_gcr: form.enc_closing_gcr,
-        max_enc: form.max_enc,
+        max_enc: normalizeIntegerValue(form.max_enc),
         gap: form.gap,
         gap_gcr: form.gap_gcr,
-        gap_wef: form.gap_wef,
-        gap_closing_date: form.gap_closing_date,
+        gap_wef: normalizeDateValue(form.gap_wef),
+        gap_closing_date: normalizeDateValue(form.gap_closing_date),
         gap_closing_gcr: form.gap_closing_gcr,
-        min_gap: form.min_gap,
-        max_time_allowed: form.max_time_allowed,
+        min_gap: normalizeIntegerValue(form.min_gap),
+        max_time_allowed: normalizeIntegerValue(form.max_time_allowed),
         period: form.period,
-        prior_intimation_days: form.prior_intimation_days,
+        prior_intimation_days: normalizeIntegerValue(form.prior_intimation_days),
         status: form.status,
       };
       if (editingId) {
@@ -320,6 +333,18 @@ export default function LeaveRulesPage() {
         <main className="flex-1 overflow-auto p-6">
           <div className="max-w-7xl mx-auto">
             <Notification show={notification.show} message={notification.message} type={notification.type} onClose={() => setNotification({ show: false, message: '', type: '' })} />
+            <div className="mb-4 flex justify-start">
+              <button
+                type="button"
+                onClick={() => { window.location.href = '/leave-management/leaves'; }}
+                className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-blue-700 bg-white border border-blue-200 rounded-lg shadow-sm hover:bg-blue-50"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                </svg>
+                Back to Leaves
+              </button>
+            </div>
             <div className="mb-12 text-center">
               <h1 className="mb-2 text-4xl font-extrabold text-gray-900">Leave Rules</h1>
               <p className="text-lg text-gray-600">Create, update and manage leave rules</p>
@@ -334,7 +359,7 @@ export default function LeaveRulesPage() {
               <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
                 <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div className="flex items-center gap-3 w-full sm:w-auto">
-                   
+
                     <div className="relative w-full sm:w-72">
                       <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search leave rules..." className="w-full py-2 pl-10 pr-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500" />
                       <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-400 absolute left-3 top-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
@@ -484,7 +509,7 @@ export default function LeaveRulesPage() {
                 ) : null}
                 </h2>
               <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
-               
+
                 <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:gap-4">
                   <div className="relative w-full sm:w-72">
                     <input
@@ -495,7 +520,7 @@ export default function LeaveRulesPage() {
                     />
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-400 absolute left-3 top-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
                   </div>
-                 
+
                 </div>
               </div>
               <div className="overflow-x-auto">

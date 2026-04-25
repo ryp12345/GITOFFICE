@@ -56,12 +56,29 @@ export default function DepartmentsPage() {
     setIsModalOpen(true);
   };
 
+  const toInputDate = (value) => {
+    if (!value) return '';
+
+    // Preserve plain date values as-is to avoid timezone shifts.
+    if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
+      return value;
+    }
+
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return '';
+
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
   const openEdit = (row) => {
     setEditingId(row.id);
     setForm({
       dept_name: row.dept_name || '',
       dept_shortname: row.dept_shortname || '',
-      yoe: row.yoe ? row.yoe.slice(0, 10) : '',
+      yoe: toInputDate(row.yoe),
       status: row.status || 'active',
     });
     setIsModalOpen(true);
@@ -121,6 +138,26 @@ export default function DepartmentsPage() {
   const showNotification = (message, type = 'success') => {
     setNotification({ show: true, message, type });
     setTimeout(() => setNotification({ show: false, message: '', type: '' }), 4000);
+  };
+
+  const formatDateDMY = (value) => {
+    if (!value) return '-';
+
+    if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
+      const [year, month, day] = value.split('-');
+      const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      const monthIndex = Number(month) - 1;
+      if (monthIndex < 0 || monthIndex > 11) return '-';
+      return `${day}-${monthNames[monthIndex]}-${year}`;
+    }
+
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return '-';
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const day = String(date.getDate()).padStart(2, '0');
+    const month = monthNames[date.getMonth()];
+    const year = date.getFullYear();
+    return `${day}-${month}-${year}`;
   };
 
   // Pagination state
@@ -198,7 +235,7 @@ export default function DepartmentsPage() {
                           <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{(page - 1) * PAGE_SIZE + idx + 1}</td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{row.dept_name}</td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">{row.dept_shortname}</td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">{row.yoe ? new Date(row.yoe).toLocaleDateString() : '-'}</td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700"><span>{formatDateDMY(row.yoe)}</span></td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm">
                             <span className={`px-3 py-1 text-xs font-medium rounded-full ${row.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}>
                               {row.status}
