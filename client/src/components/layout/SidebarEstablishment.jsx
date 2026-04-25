@@ -28,7 +28,7 @@ export default function SidebarEstablishment() {
     },
     { name: 'Qualifications', path: '/qualifications', icon: '🎓' },
     { name: 'Religions & Castes', path: '/religions', icon: '🛐' },
-    { name: 'Remuneration Heads', path: '/establishment/remuneration-heads', icon: '💰' },
+    // Remuneration Heads removed
     { name: 'Staff', path: '/staff', icon: '👥' }
   ];
 

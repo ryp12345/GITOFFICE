@@ -14,7 +14,7 @@ export default function SidebarTeaching() {
     { name: 'My Designation and Payscale', path: '/teaching/designation-payscale', icon: '💼' },
     { name: 'My Association', path: '/teaching/association', icon: '🤝' },
     { name: 'My Qualification', path: '/teaching/qualification', icon: '🎓' },
-    { name: 'Remuneration', path: '/teaching/remuneration', icon: '💰' },
+    // Remuneration removed
     { name: 'Salary', path: '/teaching/salary', icon: '💵' },
     { name: 'Leave Application', path: '/teaching/leave-application', icon: '🌿' },
     { name: 'Professional Activities', path: '/teaching/professional-activities', icon: '📚' },

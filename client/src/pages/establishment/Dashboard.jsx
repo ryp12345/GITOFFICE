@@ -141,9 +141,7 @@ export default function EstablishmentDashboard() {
                 <a href="/institutions" className="bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-4 rounded-lg flex items-center justify-center shadow transition">
                   Institutions
                 </a>
-                <a href="/establishment/remuneration-heads" className="bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-4 rounded-lg flex items-center justify-center shadow transition">
-                  Remuneration Heads
-                </a>
+                {/* Remuneration Heads link removed */}
                 <a href="/qualifications" className="bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-4 rounded-lg flex items-center justify-center shadow transition">
                   Qualifications
                 </a>

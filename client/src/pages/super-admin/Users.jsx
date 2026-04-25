@@ -5,11 +5,13 @@ import { getUsers } from '../../api/userApi';
 
 const PAGE_SIZE = 10;
 
+
 export default function SuperAdminUsersPage() {
   const [users, setUsers] = useState([]);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
+  const [tab, setTab] = useState('DEAN/HOD');
 
   useEffect(() => {
     const loadUsers = async () => {
@@ -28,18 +30,40 @@ export default function SuperAdminUsersPage() {
     loadUsers();
   }, []);
 
+
+  // Filter users by tab
+  const tabFilteredUsers = useMemo(() => {
+    if (tab === 'DEAN/Head of Department') {
+      return users.filter((user) => {
+        const role = String(user.role || '').toLowerCase();
+        return role === 'dean' || role === 'Head of Department';
+      });
+    } else if (tab === 'Teaching') {
+      return users.filter((user) => {
+        const role = String(user.role || '').toLowerCase();
+        return role === 'teaching';
+      });
+    } else if (tab === 'Non-Teaching') {
+      return users.filter((user) => {
+        const role = String(user.role || '').toLowerCase();
+        return role === 'non-teaching';
+      });
+    }
+    return users;
+  }, [users, tab]);
+
+  // Search filter within tab
   const filteredUsers = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return users;
-
-    return users.filter((user) => {
+    if (!q) return tabFilteredUsers;
+    return tabFilteredUsers.filter((user) => {
       const email = String(user.email || '').toLowerCase();
       const role = String(user.role || '').toLowerCase();
       const status = String(user.status || '').toLowerCase();
       const id = String(user.id || '').toLowerCase();
       return email.includes(q) || role.includes(q) || status.includes(q) || id.includes(q);
     });
-  }, [users, search]);
+  }, [tabFilteredUsers, search]);
 
   const totalPages = Math.max(1, Math.ceil(filteredUsers.length / PAGE_SIZE));
 
@@ -70,6 +94,23 @@ export default function SuperAdminUsersPage() {
               <p className="mt-1 text-slate-600">View and search all registered users.</p>
             </div>
 
+            {/* Tabs */}
+            <div className="mb-4 flex gap-2">
+              {['DEAN/HOD', 'Teaching', 'Non-Teaching'].map((t) => (
+                <button
+                  key={t}
+                  className={`px-4 py-2 rounded-t-lg font-semibold border-b-2 transition-colors duration-150 ${
+                    tab === t
+                      ? 'border-blue-600 bg-white text-blue-700'
+                      : 'border-transparent bg-slate-200 text-slate-600 hover:bg-slate-300'
+                  }`}
+                  onClick={() => { setTab(t); setPage(1); }}
+                >
+                  {t}
+                </button>
+              ))}
+            </div>
+
             <div className="mb-4 max-w-sm">
               <input
                 type="text"
@@ -88,6 +129,8 @@ export default function SuperAdminUsersPage() {
                       <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-white">S.No</th>
                       <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-white">User ID</th>
                       <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-white">Email</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-white">Staff Name</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-white">Department</th>
                       <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-white">Role</th>
                       <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-white">Status</th>
                     </tr>
@@ -95,20 +138,24 @@ export default function SuperAdminUsersPage() {
                   <tbody className="divide-y divide-slate-100 bg-white">
                     {loading ? (
                       <tr>
-                        <td colSpan={5} className="px-4 py-10 text-center text-slate-500">Loading users...</td>
+                        <td colSpan={7} className="px-4 py-10 text-center text-slate-500">Loading users...</td>
                       </tr>
                     ) : filteredUsers.length === 0 ? (
                       <tr>
-                        <td colSpan={5} className="px-4 py-10 text-center text-slate-500">No users found.</td>
+                        <td colSpan={7} className="px-4 py-10 text-center text-slate-500">No users found.</td>
                       </tr>
                     ) : (
                       paginatedUsers.map((user, index) => {
                         const isActive = String(user.status || '').toLowerCase() === 'active';
+                        const staffNameRaw = [user.fname, user.mname, user.lname].filter(Boolean).join(' ');
+                        const staffName = staffNameRaw && staffNameRaw.trim() ? staffNameRaw : '--NA--';
                         return (
                           <tr key={user.id || `${user.email}-${index}`} className="hover:bg-slate-50">
                             <td className="px-4 py-3 text-sm text-slate-700">{(page - 1) * PAGE_SIZE + index + 1}</td>
                             <td className="px-4 py-3 text-sm font-medium text-slate-900">{user.id || '-'}</td>
                             <td className="px-4 py-3 text-sm text-slate-700">{user.email || '-'}</td>
+                            <td className="px-4 py-3 text-sm text-slate-700">{staffName}</td>
+                            <td className="px-4 py-3 text-sm text-slate-700">{user.department_name && user.department_name.trim() ? user.department_name : '--NA--'}</td>
                             <td className="px-4 py-3 text-sm text-slate-700">{user.role || '-'}</td>
                             <td className="px-4 py-3 text-sm">
                               <span

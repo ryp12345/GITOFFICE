@@ -12,7 +12,7 @@ export default function SidebarNonTeaching() {
     { name: 'My Designation and Payscale', path: '/nonteaching/designation-payscale', icon: '💼' },
     { name: 'My Association', path: '/nonteaching/association', icon: '🤝' },
     { name: 'My Qualification', path: '/nonteaching/qualification', icon: '🎓' },
-    { name: 'Remuneration', path: '/nonteaching/remuneration', icon: '💰' },
+    // Remuneration removed
     { name: 'Salary', path: '/nonteaching/salary', icon: '💵' },
     { name: 'Leave Application', path: '/nonteaching/leave-application', icon: '🌿' },
     { name: 'Professional Activities', path: '/nonteaching/professional-activities', icon: '📚' },

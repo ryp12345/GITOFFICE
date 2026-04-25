@@ -10,7 +10,7 @@ const leaveRoutes = require('./routes/leave.routes');
 const combineLeaveRoutes = require('./routes/combine_leave.routes');
 const holidayrhRoutes = require('./routes/holidayrh.routes');
 const qualificationRoutes = require('./routes/qualification.routes');
-const remunerationHeadRoutes = require('./routes/remunerationhead.routes');
+// Remuneration Head routes removed
 const casteCategoryRoutes = require('./routes/castecategory.routes');
 const religionRoutes = require('./routes/religion.routes');
 const { errorMiddleware } = require('./middlewares/error.middleware');
@@ -55,7 +55,7 @@ app.use('/api/leaves', leaveRoutes);
 app.use('/api/combine-leaves', combineLeaveRoutes);
 app.use('/api/holidayrhs', holidayrhRoutes);
 app.use('/api/qualifications', qualificationRoutes);
-app.use('/api/remunerationheads', remunerationHeadRoutes);
+// Remuneration Head API route removed
 app.use('/api/castecategories', casteCategoryRoutes);
 app.use('/api/religions', religionRoutes);
 const departmentRoutes = require('./routes/department.routes');

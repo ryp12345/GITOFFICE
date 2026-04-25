@@ -11,9 +11,21 @@ async function findById(id) {
 }
 
 async function findAll() {
-  const { rows } = await pool.query(
-    'SELECT id, email, role, status, created_at FROM users ORDER BY created_at DESC NULLS LAST, id DESC'
-  );
+  const { rows } = await pool.query(`
+    SELECT u.id, u.email, u.role, u.status, u.created_at,
+      s.fname, s.mname, s.lname,
+      (
+        SELECT d.dept_name
+        FROM department_staff ds
+        JOIN departments d ON d.id = ds.department_id
+        WHERE ds.staff_id = s.id AND ds.status = 'active'
+        ORDER BY ds.id DESC
+        LIMIT 1
+      ) AS department_name
+    FROM users u
+    LEFT JOIN staff s ON s.user_id = u.id
+    ORDER BY u.created_at DESC NULLS LAST, u.id DESC
+  `);
   return rows;
 }
 
