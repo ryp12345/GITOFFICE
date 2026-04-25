@@ -14,9 +14,7 @@ export default function SidebarSuperAdmin() {
     { name: 'Events', path: '/super-admin/events', icon: '📅' },
     { name: 'Notice', path: '/super-admin/notice', icon: '📢' },
     { name: 'Users', path: '/super-admin/users', icon: '👤' },
-    { name: 'Coordinators', path: '/super-admin/coordinators', icon: '🤝' },
-    { name: 'Biometric', path: '/super-admin/biometric', icon: '🖐️' },
-    {
+     {
       name: 'Leave Management',
       path: '/super-admin/leave-management',
       icon: '🌿',
@@ -25,7 +23,10 @@ export default function SidebarSuperAdmin() {
         { name: 'Holiday & RH List', path: '/super-admin/leave-management/holiday-rh' },
         { name: 'Leave Calendar', path: '/super-admin/leave-management/calendar' }
       ]
-    }
+    },
+    { name: 'Coordinators', path: '/super-admin/coordinators', icon: '🤝' },
+    { name: 'Biometric', path: '/super-admin/biometric', icon: '🖐️' },
+
   ];
 
   return (

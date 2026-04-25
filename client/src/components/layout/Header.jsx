@@ -1,13 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { stopImpersonation } from '../../api/userApi';
 import { useAuth } from '../../context/AuthContext';
+import { getDashboardPathByRole } from '../../utils/role';
 
 export default function Header() {
   const navigate = useNavigate();
-  const { user, logout } = useAuth();
+  const { user, logout, setSession } = useAuth();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [isStoppingImpersonation, setIsStoppingImpersonation] = useState(false);
 
   const notificationRef = useRef(null);
   const profileRef = useRef(null);
@@ -54,6 +57,29 @@ export default function Header() {
     navigate('/login', { replace: true });
   };
 
+  const handleStopImpersonation = async () => {
+    if (isStoppingImpersonation) return;
+
+    const confirmed = window.confirm('Stop impersonation and return to your original login?');
+    if (!confirmed) return;
+
+    setIsStoppingImpersonation(true);
+
+    try {
+      const response = await stopImpersonation();
+      const session = response?.data?.data;
+      setSession(session);
+      setIsMenuOpen(false);
+      setIsProfileOpen(false);
+      navigate(getDashboardPathByRole(session?.user?.role), { replace: true });
+    } catch (error) {
+      const message = error?.response?.data?.message || 'Failed to stop impersonation.';
+      window.alert(message);
+    } finally {
+      setIsStoppingImpersonation(false);
+    }
+  };
+
   return (
     <header className="border-b border-slate-200 bg-white shadow-sm">
       <div className="flex h-20 w-full items-center justify-between px-4 sm:px-6 lg:px-8">
@@ -64,6 +90,17 @@ export default function Header() {
         </div>
 
         <div className="flex items-center justify-end space-x-3 relative">
+          {Boolean(user?.impersonating) && (
+            <button
+              type="button"
+              onClick={handleStopImpersonation}
+              disabled={isStoppingImpersonation}
+              className="hidden sm:inline-flex items-center rounded-lg border border-red-500 px-3 py-2 text-xs font-semibold text-red-600 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:border-slate-300 disabled:text-slate-400"
+            >
+              {isStoppingImpersonation ? 'Stopping...' : 'Stop Impersonation'}
+            </button>
+          )}
+
           <div className="relative" ref={notificationRef}>
             <button
               className="relative p-2 rounded-full hover:bg-slate-100"
@@ -155,6 +192,16 @@ export default function Header() {
           <div className="inline-flex px-3 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-700">
             {user?.role || 'User'}
           </div>
+          {Boolean(user?.impersonating) && (
+            <button
+              type="button"
+              onClick={handleStopImpersonation}
+              disabled={isStoppingImpersonation}
+              className="w-full border border-red-500 text-red-600 px-4 py-2 rounded-lg transition text-sm font-semibold hover:bg-red-50 disabled:cursor-not-allowed disabled:border-slate-300 disabled:text-slate-400"
+            >
+              {isStoppingImpersonation ? 'Stopping...' : 'Stop Impersonation'}
+            </button>
+          )}
           <button
             onClick={handleLogout}
             className="w-full bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition text-sm font-semibold"

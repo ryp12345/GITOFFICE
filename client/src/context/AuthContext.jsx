@@ -53,6 +53,14 @@ export default function AuthProvider({ children }) {
     setUser(null);
   };
 
+  const setSession = (session) => {
+    if (!session?.token || !session?.refreshToken || !session?.user) {
+      throw new Error('A complete session is required');
+    }
+
+    persistSession(session.token, session.refreshToken, session.user);
+  };
+
   const value = useMemo(
     () => ({
       user,
@@ -62,6 +70,7 @@ export default function AuthProvider({ children }) {
       isLoading,
       login,
       register,
+      setSession,
       logout
     }),
     [user, token, refreshToken, isLoading]

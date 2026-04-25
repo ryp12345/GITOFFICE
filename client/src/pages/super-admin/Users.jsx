@@ -1,7 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import Notification from '../../components/common/Notification';
 import Header from '../../components/layout/Header';
 import Sidebar from '../../components/layout/Sidebar';
-import { getUsers } from '../../api/userApi';
+import { impersonateUser, getUsers, resetUserPassword } from '../../api/userApi';
+import { useAuth } from '../../context/AuthContext';
+import { getDashboardPathByRole } from '../../utils/role';
 
 const PAGE_SIZE = 10;
 const USER_TABS = [
@@ -59,28 +63,82 @@ const getDepartments = (user) => {
 
 
 export default function SuperAdminUsersPage() {
+  const navigate = useNavigate();
+  const { user: currentUser, setSession } = useAuth();
   const [users, setUsers] = useState([]);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
   const [tab, setTab] = useState(USER_TABS[0].key);
+  const [actionLoading, setActionLoading] = useState({ type: '', userId: null });
+  const [notification, setNotification] = useState({ show: false, message: '', type: 'success' });
 
   useEffect(() => {
-    const loadUsers = async () => {
-      setLoading(true);
-      try {
-        const response = await getUsers();
-        const data = response?.data?.data || response?.data || [];
-        setUsers(Array.isArray(data) ? data : []);
-      } catch (_error) {
-        setUsers([]);
-      } finally {
-        setLoading(false);
-      }
-    };
-
     loadUsers();
   }, []);
+
+  const showNotification = (message, type = 'success') => {
+    setNotification({ show: true, message, type });
+  };
+
+  const closeNotification = () => {
+    setNotification({ show: false, message: '', type: 'success' });
+  };
+
+  const loadUsers = async () => {
+    setLoading(true);
+    try {
+      const response = await getUsers();
+      const data = response?.data?.data || response?.data || [];
+      setUsers(Array.isArray(data) ? data : []);
+    } catch (_error) {
+      setUsers([]);
+      showNotification('Failed to load users.', 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleImpersonate = async (selectedUser) => {
+    if (!selectedUser?.id) return;
+
+    const confirmed = window.confirm(`Impersonate ${selectedUser.email || 'this user'}?`);
+    if (!confirmed) return;
+
+    setActionLoading({ type: 'impersonate', userId: selectedUser.id });
+
+    try {
+      const response = await impersonateUser(selectedUser.id);
+      const session = response?.data?.data;
+      setSession(session);
+      navigate(getDashboardPathByRole(session?.user?.role), { replace: true });
+    } catch (error) {
+      const message = error?.response?.data?.message || 'Failed to impersonate user.';
+      showNotification(message, 'error');
+    } finally {
+      setActionLoading({ type: '', userId: null });
+    }
+  };
+
+  const handleResetPassword = async (selectedUser) => {
+    if (!selectedUser?.id) return;
+
+    const confirmed = window.confirm(`Reset ${selectedUser.email || 'this user'} password to Password@123?`);
+    if (!confirmed) return;
+
+    setActionLoading({ type: 'reset', userId: selectedUser.id });
+
+    try {
+      const response = await resetUserPassword(selectedUser.id);
+      const message = response?.data?.message || 'Password reset successfully.';
+      showNotification(message, 'success');
+    } catch (error) {
+      const message = error?.response?.data?.message || 'Failed to reset password.';
+      showNotification(message, 'error');
+    } finally {
+      setActionLoading({ type: '', userId: null });
+    }
+  };
 
 
   // Filter users by tab
@@ -141,6 +199,12 @@ export default function SuperAdminUsersPage() {
         <Sidebar />
         <main className="flex-1 overflow-auto p-6">
           <div className="max-w-7xl mx-auto">
+            <Notification
+              show={notification.show}
+              message={notification.message}
+              type={notification.type}
+              onClose={closeNotification}
+            />
             <div className="mb-8 text-center justify-center">
               <h1 className="text-3xl font-bold text-slate-900">Users</h1>
               <p className="mt-1 text-slate-600">Browse users by HoD / DEAN, Teaching, and Non-Teaching</p>
@@ -188,20 +252,25 @@ export default function SuperAdminUsersPage() {
                       <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-white">Name</th>
                       <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-white">Department</th>
                       <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-white">Role</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-white">Action</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-white">Reset Password</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 bg-white">
                     {loading ? (
                       <tr>
-                        <td colSpan={5} className="px-4 py-10 text-center text-slate-500">Loading users...</td>
+                        <td colSpan={7} className="px-4 py-10 text-center text-slate-500">Loading users...</td>
                       </tr>
                     ) : filteredUsers.length === 0 ? (
                       <tr>
-                        <td colSpan={5} className="px-4 py-10 text-center text-slate-500">No users found.</td>
+                        <td colSpan={7} className="px-4 py-10 text-center text-slate-500">No users found.</td>
                       </tr>
                     ) : (
                       paginatedUsers.map((user, index) => {
                         const departments = getDepartments(user);
+                        const isCurrentUser = Number(currentUser?.id) === Number(user.id);
+                        const isImpersonating = actionLoading.type === 'impersonate' && actionLoading.userId === user.id;
+                        const isResetting = actionLoading.type === 'reset' && actionLoading.userId === user.id;
                         return (
                           <tr key={user.id || `${user.email}-${index}`} className="hover:bg-slate-50">
                             <td className="px-4 py-3 text-sm text-slate-700">{(page - 1) * PAGE_SIZE + index + 1}</td>
@@ -223,6 +292,26 @@ export default function SuperAdminUsersPage() {
                               ) : 'N/A'}
                             </td>
                             <td className="px-4 py-3 text-sm text-slate-700">{user.role || '-'}</td>
+                            <td className="px-4 py-3 text-sm text-slate-700">
+                              <button
+                                type="button"
+                                className="rounded bg-blue-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+                                disabled={isCurrentUser || Boolean(actionLoading.type)}
+                                onClick={() => handleImpersonate(user)}
+                              >
+                                {isCurrentUser ? 'Current User' : isImpersonating ? 'Impersonating...' : 'Impersonate'}
+                              </button>
+                            </td>
+                            <td className="px-4 py-3 text-sm text-slate-700">
+                              <button
+                                type="button"
+                                className="rounded border border-amber-500 px-3 py-2 text-xs font-semibold text-amber-700 transition hover:bg-amber-50 disabled:cursor-not-allowed disabled:border-slate-300 disabled:text-slate-400"
+                                disabled={Boolean(actionLoading.type)}
+                                onClick={() => handleResetPassword(user)}
+                              >
+                                {isResetting ? 'Resetting...' : 'Reset to Password'}
+                              </button>
+                            </td>
                           </tr>
                         );
                       })

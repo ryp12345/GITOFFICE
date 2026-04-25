@@ -2,6 +2,43 @@ const userModel = require('../models/user.model');
 const { hashPassword, comparePassword } = require('../utils/hash');
 const { signAccessToken, signRefreshToken, verifyRefreshToken } = require('../utils/jwt');
 
+function buildImpersonatorContext(source) {
+  if (!source?.impersonator?.id) {
+    return null;
+  }
+
+  return {
+    id: source.impersonator.id,
+    email: source.impersonator.email,
+    role: source.impersonator.role
+  };
+}
+
+function buildSafeUser(user, impersonator = null) {
+  return {
+    id: user.id,
+    email: user.email,
+    role: user.role,
+    impersonating: Boolean(impersonator),
+    impersonator
+  };
+}
+
+function issueSession(user, options = {}) {
+  const impersonator = buildImpersonatorContext(options);
+  const tokenPayload = { id: user.id, role: user.role };
+
+  if (impersonator) {
+    tokenPayload.impersonator = impersonator;
+  }
+
+  const token = signAccessToken(tokenPayload);
+  const refreshToken = signRefreshToken(tokenPayload);
+  const safeUser = buildSafeUser(user, impersonator);
+
+  return { token, refreshToken, user: safeUser };
+}
+
 async function register(payload) {
   const existing = await userModel.findByEmail(payload.email);
   if (existing) {
@@ -33,14 +70,7 @@ async function login(payload) {
     throw err;
   }
 
-  const token = signAccessToken({ id: user.id, role: user.role });
-  const refreshToken = signRefreshToken({ id: user.id, role: user.role });
-  const safeUser = {
-    id: user.id,
-    email: user.email,
-    role: user.role
-  };
-  return { token, refreshToken, user: safeUser };
+  return issueSession(user);
 }
 
 async function refreshSession(payload) {
@@ -61,12 +91,20 @@ async function refreshSession(payload) {
     throw err;
   }
 
-  const safeUser = { id: user.id, email: user.email, role: user.role };
-
-  const token = signAccessToken({ id: safeUser.id, role: safeUser.role });
-  const refreshToken = signRefreshToken({ id: safeUser.id, role: safeUser.role });
-
-  return { token, refreshToken, user: safeUser };
+  return issueSession(user, decoded);
 }
 
-module.exports = { register, login, refreshSession };
+async function resetPassword(userId, nextPassword) {
+  const passwordHash = await hashPassword(nextPassword);
+  const user = await userModel.updatePasswordById(userId, passwordHash);
+
+  if (!user) {
+    const err = new Error('User not found');
+    err.statusCode = 404;
+    throw err;
+  }
+
+  return user;
+}
+
+module.exports = { register, login, refreshSession, issueSession, resetPassword };

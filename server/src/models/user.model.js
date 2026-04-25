@@ -10,6 +10,19 @@ async function findById(id) {
   return rows[0] || null;
 }
 
+async function updatePasswordById(id, passwordHash) {
+  const { rows } = await pool.query(
+    `
+      UPDATE users
+      SET password = $2, updated_at = NOW()
+      WHERE id = $1
+      RETURNING id, email, role, status, created_at
+    `,
+    [id, passwordHash]
+  );
+  return rows[0] || null;
+}
+
 async function findAll() {
   const { rows } = await pool.query(`
     SELECT u.id, u.email, u.role, u.status, u.created_at,
@@ -37,4 +50,4 @@ async function create({ email, passwordHash, role }) {
   return rows[0];
 }
 
-module.exports = { findByEmail, findById, findAll, create };
+module.exports = { findByEmail, findById, updatePasswordById, findAll, create };
