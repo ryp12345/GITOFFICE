@@ -766,6 +766,279 @@ async function deleteInstitutionForStaff(staffId, institutionStaffId) {
   return rowCount > 0;
 }
 
+// ── Annual Increment ──────────────────────────────────────────────────────────
+
+async function listAnnualIncrementsByStaffId(staffId) {
+  const sql = `
+    SELECT *
+    FROM annual_increments
+    WHERE staff_id = $1
+    ORDER BY id ASC
+  `;
+  const { rows } = await pool.query(sql, [staffId]);
+  return rows;
+}
+
+async function createAnnualIncrementForStaff(staffId, payload) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const { rows: staffRows } = await client.query('SELECT id, date_of_increment FROM staff WHERE id = $1 LIMIT 1', [staffId]);
+    if (!staffRows.length) {
+      const err = new Error('Staff not found');
+      err.statusCode = 404;
+      throw err;
+    }
+
+    const wef = payload.wef || null;
+    const gc = payload.gc || null;
+    const reason = payload.reason || null;
+    const basic = payload.basic ? Number(payload.basic) : null;
+    const additionalDays = payload.additional_days ? parseInt(payload.additional_days, 10) : 0;
+    const additionalDaysType = payload.additional_days_type || 'Permanent';
+
+    if (!wef || !gc || !reason || basic === null) {
+      const err = new Error('wef, gc, reason and basic are required');
+      err.statusCode = 400;
+      throw err;
+    }
+
+    const { rows: inserted } = await client.query(
+      `INSERT INTO annual_increments
+        (staff_id, wef, additional_days, additional_days_type, gc, reason, basic, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW())
+       RETURNING *`,
+      [staffId, wef, additionalDays, additionalDaysType, gc, reason, basic]
+    );
+
+    // Mirror Laravel logic: update date_of_increment when reason is Regular Annual Increment
+    if (reason === 'Regular Annual Increment') {
+      const currentDoi = staffRows[0].date_of_increment;
+      if (currentDoi) {
+        let daysToAdd = 0;
+        if (additionalDaysType === 'Permanent') {
+          daysToAdd = 365 + additionalDays;
+        } else {
+          daysToAdd = additionalDays;
+        }
+        await client.query(
+          `UPDATE staff SET date_of_increment = (date_of_increment::date + ($1 || ' days')::interval)::date WHERE id = $2`,
+          [daysToAdd, staffId]
+        );
+      }
+    }
+
+    await client.query('COMMIT');
+    return inserted[0];
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+async function updateAnnualIncrementForStaff(staffId, incrementId, payload) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const { rows: existingRows } = await client.query(
+      'SELECT * FROM annual_increments WHERE id = $1 AND staff_id = $2 LIMIT 1',
+      [incrementId, staffId]
+    );
+
+    if (!existingRows.length) {
+      const err = new Error('Annual increment not found for this staff');
+      err.statusCode = 404;
+      throw err;
+    }
+
+    const existing = existingRows[0];
+    const allowed = ['wef', 'additional_days', 'additional_days_type', 'gc', 'reason', 'basic'];
+    const updates = [];
+    const values = [];
+    let idx = 1;
+
+    for (const key of allowed) {
+      if (payload[key] !== undefined) {
+        updates.push(`${key} = $${idx}`);
+        values.push(payload[key]);
+        idx++;
+      }
+    }
+
+    if (!updates.length) {
+      const err = new Error('No fields provided to update');
+      err.statusCode = 400;
+      throw err;
+    }
+
+    values.push(incrementId, staffId);
+    const { rows: updatedRows } = await client.query(
+      `UPDATE annual_increments SET ${updates.join(', ')}, updated_at = NOW()
+       WHERE id = $${idx} AND staff_id = $${idx + 1}
+       RETURNING *`,
+      values
+    );
+
+    // Mirror Laravel update logic: adjust date_of_increment if Permanent and additional_days changed
+    const newReason = payload.reason !== undefined ? payload.reason : existing.reason;
+    const newAdditionalDays = payload.additional_days !== undefined ? parseInt(payload.additional_days, 10) : parseInt(existing.additional_days, 10);
+    const newAdditionalDaysType = payload.additional_days_type !== undefined ? payload.additional_days_type : existing.additional_days_type;
+    const oldAdditionalDays = parseInt(existing.additional_days, 10);
+
+    if (
+      newReason === 'Regular Annual Increment' &&
+      newAdditionalDaysType === 'Permanent' &&
+      newAdditionalDays !== oldAdditionalDays
+    ) {
+      const diff = newAdditionalDays - oldAdditionalDays;
+      await client.query(
+        `UPDATE staff SET date_of_increment = (date_of_increment::date + ($1 || ' days')::interval)::date WHERE id = $2`,
+        [diff, staffId]
+      );
+    }
+
+    await client.query('COMMIT');
+    return updatedRows[0];
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+async function deleteAnnualIncrementForStaff(staffId, incrementId) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const { rows: existingRows } = await client.query(
+      'SELECT * FROM annual_increments WHERE id = $1 AND staff_id = $2 LIMIT 1',
+      [incrementId, staffId]
+    );
+
+    if (!existingRows.length) {
+      await client.query('COMMIT');
+      return false;
+    }
+
+    const existing = existingRows[0];
+
+    // Mirror Laravel delete logic: reverse date_of_increment change
+    if (existing.reason === 'Regular Annual Increment') {
+      const additionalDays = parseInt(existing.additional_days, 10) || 0;
+      let daysToSubtract = 0;
+      if (existing.additional_days_type === 'Permanent') {
+        daysToSubtract = 365 + additionalDays;
+      } else {
+        daysToSubtract = additionalDays;
+      }
+      await client.query(
+        `UPDATE staff SET date_of_increment = (date_of_increment::date - ($1 || ' days')::interval)::date WHERE id = $2`,
+        [daysToSubtract, staffId]
+      );
+    }
+
+    const { rowCount } = await client.query(
+      'DELETE FROM annual_increments WHERE id = $1 AND staff_id = $2',
+      [incrementId, staffId]
+    );
+
+    await client.query('COMMIT');
+    return rowCount > 0;
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+// ── Laptop Loan ───────────────────────────────────────────────────────────────
+
+async function listLaptopLoansByStaffId(staffId) {
+  const { rows } = await pool.query(
+    'SELECT * FROM laptoploans WHERE staff_id = $1 ORDER BY id ASC',
+    [staffId]
+  );
+  return rows;
+}
+
+async function createLaptopLoanForStaff(staffId, payload) {
+  const dateOfApplication = payload.date_of_application || null;
+  const configuration = payload.configuration || null;
+  const amount = payload.amount !== undefined ? parseInt(payload.amount, 10) : null;
+  const emi = payload.emi !== undefined ? parseInt(payload.emi, 10) : null;
+  const startDate = payload.start_date || null;
+
+  if (!dateOfApplication || !configuration || amount === null || emi === null || !startDate) {
+    const err = new Error('date_of_application, configuration, amount, emi and start_date are required');
+    err.statusCode = 400;
+    throw err;
+  }
+
+  const { rows } = await pool.query(
+    `INSERT INTO laptoploans (staff_id, date_of_application, configuration, amount, emi, start_date, created_at, updated_at)
+     VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())
+     RETURNING *`,
+    [staffId, dateOfApplication, configuration, amount, emi, startDate]
+  );
+  return rows[0];
+}
+
+async function updateLaptopLoanForStaff(staffId, loanId, payload) {
+  const { rows: existingRows } = await pool.query(
+    'SELECT * FROM laptoploans WHERE id = $1 AND staff_id = $2 LIMIT 1',
+    [loanId, staffId]
+  );
+
+  if (!existingRows.length) {
+    const err = new Error('Laptop loan not found for this staff');
+    err.statusCode = 404;
+    throw err;
+  }
+
+  const allowed = ['date_of_application', 'configuration', 'amount', 'emi', 'start_date'];
+  const updates = [];
+  const values = [];
+  let idx = 1;
+
+  for (const key of allowed) {
+    if (payload[key] !== undefined) {
+      updates.push(`${key} = $${idx}`);
+      values.push(payload[key]);
+      idx++;
+    }
+  }
+
+  if (!updates.length) {
+    const err = new Error('No fields provided to update');
+    err.statusCode = 400;
+    throw err;
+  }
+
+  values.push(loanId, staffId);
+  const { rows } = await pool.query(
+    `UPDATE laptoploans SET ${updates.join(', ')}, updated_at = NOW()
+     WHERE id = $${idx} AND staff_id = $${idx + 1}
+     RETURNING *`,
+    values
+  );
+  return rows[0];
+}
+
+async function deleteLaptopLoanForStaff(staffId, loanId) {
+  const { rowCount } = await pool.query(
+    'DELETE FROM laptoploans WHERE id = $1 AND staff_id = $2',
+    [loanId, staffId]
+  );
+  return rowCount > 0;
+}
+
 module.exports = {
   listAll,
   create,
@@ -784,4 +1057,12 @@ module.exports = {
   createInstitutionForStaff,
   updateInstitutionForStaff,
   deleteInstitutionForStaff,
+  listAnnualIncrementsByStaffId,
+  createAnnualIncrementForStaff,
+  updateAnnualIncrementForStaff,
+  deleteAnnualIncrementForStaff,
+  listLaptopLoansByStaffId,
+  createLaptopLoanForStaff,
+  updateLaptopLoanForStaff,
+  deleteLaptopLoanForStaff,
 };

@@ -8,11 +8,11 @@ import PersonalInfo from './staff/PersonalInfo';
 import Association from './staff/Association';
 import Department from './staff/Department';
 import Designation from './staff/Designation';
+import Form16 from './staff/Form16';
+import AnnualIncrement from './staff/AnnualIncrement';
+import LaptopLoan from './staff/LaptopLoan';
 
 const TABS = [
-  { key: 'summary', label: 'Summary', icon: (
-    <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M3 7h18M3 12h18M3 17h18" /></svg>
-  ) },
   { key: 'personal', label: 'Personal Info', icon: (
     <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M5.121 17.804A9.001 9.001 0 0112 15c2.21 0 4.21.8 5.879 2.137M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
   ) },
@@ -108,12 +108,12 @@ export default function StaffViewPage() {
       />
       <div className="flex flex-1 min-h-0">
         <Sidebar />
-        <main className="flex-1 overflow-auto p-0">
-          <div className="w-full h-full flex flex-col items-center">
+        <main className="flex-1 overflow-auto p-0 px-2">
+          <div className="w-full h-full flex flex-col">
             {/* Back Button */}
             <button
               onClick={() => navigate(-1)}
-              className="self-start mt-8 ml-4 px-4 py-2 bg-blue-100 hover:bg-blue-200 text-blue-800 rounded-md font-medium flex items-center gap-2 shadow-sm border border-blue-200"
+              className="self-start mt-2 ml-1 px-3 py-1 bg-blue-100 hover:bg-blue-200 text-blue-800 rounded-md font-medium flex items-center gap-2 shadow-sm border border-blue-200 text-sm"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
@@ -122,20 +122,24 @@ export default function StaffViewPage() {
             </button>
             {/* Staff Name Heading */}
             {staff && (
-              <h1 className="text-2xl font-bold text-blue-800 mt-8 mb-2">Selected Staff: {staff.name || (staff.fname ? `${staff.fname} ${staff.lname}` : '')}</h1>
+              <h1 className="text-lg font-bold text-blue-800 mt-2 mb-1">Selected Staff: {staff.name || (staff.fname ? `${staff.fname} ${staff.lname}` : '')}</h1>
             )}
-            <div className="flex w-full max-w-6xl bg-white shadow-2xl rounded-xl my-10 min-h-[600px]">
+            <div className="flex w-full bg-white shadow-lg rounded-lg my-1 h-[600px]">
               {/* Left: Image & Tabs */}
-              <div className="flex flex-col items-center py-10 px-4 border-r border-gray-200 min-w-[200px] bg-slate-50">
-                <div className="w-24 h-24 rounded-full bg-gray-200 flex items-center justify-center mb-4 border-4 border-blue-100 shadow">
+              <div className="flex flex-col items-center py-4 px-2 border-r border-gray-200 min-w-[180px] bg-slate-50 overflow-y-auto max-h-[600px]">
+                <button
+                  onClick={() => setActiveTab('summary')}
+                  className="w-24 h-24 rounded-full bg-gray-200 flex items-center justify-center mb-4 border-4 border-blue-100 shadow hover:border-blue-400 hover:shadow-lg transition-all duration-200 cursor-pointer"
+                  title="Click to view summary"
+                >
                   <svg className="w-12 h-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.121 17.804A9.001 9.001 0 0112 15c2.21 0 4.21.8 5.879 2.137M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
                   </svg>
-                </div>
+                </button>
                 <h2 className="text-lg font-bold text-blue-700 mb-1 text-center truncate w-full">{staff?.name || '-'}</h2>
                 <span className="text-gray-500 text-sm text-center mb-6 truncate w-full">{staff?.designation_name || ''}</span>
-                {/* Sidebar Tabs - compact */}
-                <div className="flex flex-col gap-2 w-full">
+                {/* Sidebar Tabs - scrollable */}
+                <div className="flex flex-col gap-2 w-full overflow-y-auto flex-1">
                   {TABS.map(tab => (
                     <button
                       key={tab.key}
@@ -149,7 +153,7 @@ export default function StaffViewPage() {
                 </div>
               </div>
               {/* Right: Tab Content */}
-              <div className="flex-1 px-10 py-10 flex flex-col items-start">
+              <div className="flex-1 px-4 py-4 flex flex-col items-start overflow-y-auto">
                 {staff ? (
                   <>
                     {activeTab === 'summary' && (
@@ -245,13 +249,21 @@ export default function StaffViewPage() {
                       <Designation staff={staff} setNotification={setNotification} />
                     )}
                     {activeTab === 'annual_increment' && (
-                      <div>Annual Increment content goes here.</div>
+                      <AnnualIncrement
+                        staff={staff}
+                        setNotification={setNotification}
+                        onAnnualIncrementUpdated={refreshStaff}
+                      />
                     )}
                     {activeTab === 'form_16' && (
-                      <div>Form 16 content goes here.</div>
+                      <Form16 staff={staff} setNotification={setNotification} />
                     )}
                     {activeTab === 'laptop_loan' && (
-                      <div>Laptop Loan content goes here.</div>
+                      <LaptopLoan
+                        staff={staff}
+                        setNotification={setNotification}
+                        onLaptopLoanUpdated={refreshStaff}
+                      />
                     )}
                     {activeTab === 'qualification' && (
                       <div>Qualification content goes here.</div>

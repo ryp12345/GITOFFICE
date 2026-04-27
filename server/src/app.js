@@ -1,5 +1,6 @@
 const express = require('express');
 const cors = require('cors');
+const path = require('path');
 const authRoutes = require('./routes/auth.routes');
 const userRoutes = require('./routes/user.routes');
 const associationRoutes = require('./routes/association.routes');
@@ -7,6 +8,7 @@ const designationRoutes = require('./routes/designation.routes');
 const institutionRoutes = require('./routes/institution.routes');
 const leaveRulesRoutes = require('./routes/leave_rules.routes');
 const leaveRoutes = require('./routes/leave.routes');
+const leaveEntitlementRoutes = require('./routes/leave_entitlement.routes');
 const combineLeaveRoutes = require('./routes/combine_leave.routes');
 const holidayrhRoutes = require('./routes/holidayrh.routes');
 const qualificationRoutes = require('./routes/qualification.routes');
@@ -43,6 +45,7 @@ const corsOptions = {
 
 app.use(cors(corsOptions));
 app.use(express.json());
+app.use('/uploads', express.static(path.resolve(__dirname, '..', 'uploads')));
 
 app.get('/health', (_req, res) => res.json({ ok: true }));
 app.use('/api/auth', authRoutes);
@@ -52,6 +55,7 @@ app.use('/api/designations', designationRoutes);
 app.use('/api/institutions', institutionRoutes);
 app.use('/api/leave-rules', leaveRulesRoutes);
 app.use('/api/leaves', leaveRoutes);
+app.use('/api/leave-entitlements', leaveEntitlementRoutes);
 app.use('/api/combine-leaves', combineLeaveRoutes);
 app.use('/api/holidayrhs', holidayrhRoutes);
 app.use('/api/qualifications', qualificationRoutes);

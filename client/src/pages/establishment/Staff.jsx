@@ -561,6 +561,78 @@ export default function StaffPage() {
   // Pagination (mirror Departments page)
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 10;
+  const [form16BulkYear, setForm16BulkYear] = useState(new Date().getFullYear());
+  const [form16ZipFile, setForm16ZipFile] = useState(null);
+  const [uploadingForm16Zip, setUploadingForm16Zip] = useState(false);
+  const [isForm16BulkModalOpen, setIsForm16BulkModalOpen] = useState(false);
+
+  const handleForm16ZipUpload = async () => {
+    if (!token) {
+      showNotification('Please login to upload Form 16 ZIP/RAR.', 'error');
+      return;
+    }
+
+    const year = Number(form16BulkYear);
+    if (!year || year < 2000 || year > 2100) {
+      showNotification('Please enter a valid year.', 'error');
+      return;
+    }
+
+    if (!form16ZipFile) {
+      showNotification('Please select a ZIP or RAR file.', 'error');
+      return;
+    }
+
+    const isArchive = /\.(zip|rar)$/i.test(form16ZipFile.name);
+    if (!isArchive) {
+      showNotification('Only ZIP or RAR files are allowed.', 'error');
+      return;
+    }
+
+    setUploadingForm16Zip(true);
+    try {
+      const formData = new FormData();
+      formData.append('year', String(year));
+      formData.append('zipFile', form16ZipFile);
+
+      const res = await api.post('/staff/form-16/bulk-upload', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+
+      const payload = res?.data?.data || {};
+      const unmatchedCount = Array.isArray(payload.unmatchedPans) ? payload.unmatchedPans.length : 0;
+      const uploadedCount = Number(payload.uploaded || 0);
+      const totalCount = Number(payload.totalPdfInZip || 0);
+
+      const archiveType = (payload.archiveType || 'archive').toUpperCase();
+      showNotification(
+        `${archiveType} processed: ${uploadedCount}/${totalCount} uploaded.${unmatchedCount ? ` ${unmatchedCount} PAN not matched.` : ''}`,
+        unmatchedCount ? 'info' : 'success'
+      );
+
+      setForm16ZipFile(null);
+      setIsForm16BulkModalOpen(false);
+      const zipInput = document.getElementById('form16-zip-input');
+      if (zipInput) zipInput.value = '';
+    } catch (err) {
+      const body = err?.response?.data || {};
+      const payload = body?.data || {};
+      const invalidPartCount = Array.isArray(payload.invalidPartPath) ? payload.invalidPartPath.length : 0;
+      const unmatchedCount = Array.isArray(payload.unmatchedPans) ? payload.unmatchedPans.length : 0;
+      const invalidFileCount = Array.isArray(payload.invalidFiles) ? payload.invalidFiles.length : 0;
+
+      const detail = [
+        invalidPartCount ? `Invalid folder path: ${invalidPartCount}` : '',
+        unmatchedCount ? `PAN not matched: ${unmatchedCount}` : '',
+        invalidFileCount ? `Invalid files: ${invalidFileCount}` : ''
+      ].filter(Boolean).join(' | ');
+
+      const msg = body?.message || err.message || 'Failed to upload Form 16 ZIP/RAR';
+      showNotification(detail ? `${msg} (${detail})` : msg, 'error');
+    } finally {
+      setUploadingForm16Zip(false);
+    }
+  };
 
   const paginatedRows = useMemo(() => {
     const start = (page - 1) * PAGE_SIZE;
@@ -601,13 +673,22 @@ export default function StaffPage() {
                 </svg>
               </div>
 
-              <button
-                onClick={() => setIsModalOpen(true)}
-                className="flex items-center justify-center w-full px-6 py-3 font-medium text-white transition-all duration-300 transform rounded-lg shadow-lg bg-blue-600 hover:bg-blue-700 hover:-translate-y-1 hover:scale-105 sm:w-auto"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 mr-2" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" /></svg>
-                Add Staff
-              </button>
+              <div className="flex w-full gap-2 sm:w-auto">
+                <button
+                  onClick={() => setIsModalOpen(true)}
+                  className="flex items-center justify-center w-full px-6 py-3 font-medium text-white transition-all duration-300 transform rounded-lg shadow-lg bg-blue-600 hover:bg-blue-700 hover:-translate-y-1 hover:scale-105 sm:w-auto"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 mr-2" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" /></svg>
+                  Add Staff
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsForm16BulkModalOpen(true)}
+                  className="flex items-center justify-center w-full px-6 py-3 font-medium text-blue-700 transition-all duration-300 transform rounded-lg shadow-lg bg-blue-100 hover:bg-blue-200 sm:w-auto"
+                >
+                  Bulk Upload Form 16
+                </button>
+              </div>
             </div>
 
             <div className="overflow-hidden bg-white shadow-xl rounded-xl">
@@ -696,7 +777,7 @@ export default function StaffPage() {
               </div>
             )}
             </div>
-           
+
           </div>
         </main>
       </div>
@@ -931,6 +1012,75 @@ export default function StaffPage() {
                   </button>
                 </div>
               </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isForm16BulkModalOpen && (
+        <div className="fixed inset-0 z-50 overflow-y-auto" role="dialog" aria-modal="true">
+          <div className="flex items-end justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
+            <div className="fixed inset-0 transition-opacity bg-gray-500 bg-opacity-75" onClick={() => setIsForm16BulkModalOpen(false)} />
+
+            <div className="inline-block w-full max-w-2xl p-0 my-8 overflow-hidden text-left align-middle transition-all transform bg-white rounded-lg shadow-xl">
+              <div className="px-6 py-4 bg-blue-600">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-lg font-medium text-white">Bulk Upload Form 16 ZIP</h3>
+                  <button
+                    type="button"
+                    onClick={() => setIsForm16BulkModalOpen(false)}
+                    className="text-white hover:text-slate-200"
+                  >
+                    ✕
+                  </button>
+                </div>
+              </div>
+
+              <div className="p-6 space-y-4">
+                <p className="text-sm text-gray-600">
+                  Upload a ZIP/RAR with two folders: Part A and Part B. Each folder must contain PDFs named by PAN (example: ABCDE1234F.pdf).
+                </p>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+                  <div>
+                    <label className="block mb-1 text-sm font-medium text-gray-700">Year</label>
+                    <input
+                      type="number"
+                      min="2000"
+                      max="2100"
+                      value={form16BulkYear}
+                      onChange={(e) => setForm16BulkYear(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    />
+                  </div>
+                  <div className="md:col-span-2">
+                    <label className="block mb-1 text-sm font-medium text-gray-700">ZIP/RAR File</label>
+                    <input
+                      id="form16-zip-input"
+                      type="file"
+                      accept=".zip,.rar,application/zip,application/x-zip-compressed,application/vnd.rar,application/x-rar-compressed"
+                      onChange={(e) => setForm16ZipFile(e.target.files?.[0] || null)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                    />
+                  </div>
+                </div>
+                <div className="flex justify-end gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsForm16BulkModalOpen(false)}
+                    className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleForm16ZipUpload}
+                    disabled={uploadingForm16Zip}
+                    className="px-4 py-2 text-sm font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-60"
+                  >
+                    {uploadingForm16Zip ? 'Uploading...' : 'Upload ZIP/RAR'}
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         </div>

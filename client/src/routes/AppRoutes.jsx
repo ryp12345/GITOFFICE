@@ -27,6 +27,7 @@ import StaffViewPage from '../pages/establishment/StaffViewPage';
 import { useParams } from 'react-router-dom';
 import { useMemo } from 'react';
 import LeaveRulesPage from '../pages/establishment/leave_management/LeaveRules';
+import LeaveEntitlementPage from '../pages/establishment/leave_management/leave_entitlement';
 
 // StaffViewPage now fetches its own data from API using id
 function StaffViewPageWrapper() {
@@ -66,6 +67,7 @@ export default function AppRoutes() {
             <Route path="/caste-categories" element={<CasteCategoriesPage />} />
             <Route path="/religions-and-castes" element={<ReligionsPage />} />
               <Route path="/leave-management/leaves" element={<LeavesPage />} />
+              <Route path="/leave-management/entitlement" element={<LeaveEntitlementPage />} />
               <Route path="/leave-management/holiday-rh" element={<HolidayRHListPage />} />
               <Route path="/leave-management/leave-rules" element={<LeaveRulesPage />} />
             {/* RemunerationHeadsPage removed */}
