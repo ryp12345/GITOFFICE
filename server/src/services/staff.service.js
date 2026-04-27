@@ -225,6 +225,17 @@ async function getById(id) {
   const { rows: association_staff } = await pool.query(assocSql, [id]);
   staff.association_staff = association_staff;
 
+  // Fetch all department_staff rows for this staff
+  const deptSql = `
+    SELECT dst.*, d.dept_name AS department_name
+    FROM department_staff dst
+    JOIN departments d ON d.id = dst.department_id
+    WHERE dst.staff_id = $1
+    ORDER BY dst.id DESC
+  `;
+  const { rows: department_staff } = await pool.query(deptSql, [id]);
+  staff.department_staff = department_staff;
+
   // Fetch all institution_staff rows for this staff
   const instSql = `
     SELECT ist.*, i.name as institution_name
@@ -433,6 +444,328 @@ async function deleteAssociationForStaff(staffId, associationStaffId) {
   return rowCount > 0;
 }
 
+async function listDepartmentsByStaffId(staffId) {
+  const sql = `
+    SELECT dst.*, d.dept_name AS department_name
+    FROM department_staff dst
+    JOIN departments d ON d.id = dst.department_id
+    WHERE dst.staff_id = $1
+    ORDER BY dst.id DESC
+  `;
+  const { rows } = await pool.query(sql, [staffId]);
+  return rows;
+}
+
+async function createDepartmentForStaff(staffId, payload) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const departmentId = Number(payload.department_id || payload.departments_id);
+    const startDate = payload.start_date || null;
+
+    if (!departmentId || !startDate) {
+      const err = new Error('department_id and start_date are required');
+      err.statusCode = 400;
+      throw err;
+    }
+
+    const { rows: staffRows } = await client.query('SELECT id FROM staff WHERE id = $1 LIMIT 1', [staffId]);
+    if (!staffRows.length) {
+      const err = new Error('Staff not found');
+      err.statusCode = 404;
+      throw err;
+    }
+
+    const { rows: activeRows } = await client.query(
+      `SELECT id
+       FROM department_staff
+       WHERE staff_id = $1 AND status = 'active'
+       ORDER BY id DESC
+       LIMIT 1`,
+      [staffId]
+    );
+
+    if (activeRows.length) {
+      await client.query(
+        `UPDATE department_staff
+         SET end_date = $1,
+             status = 'inactive',
+             updated_at = NOW()
+         WHERE id = $2`,
+        [startDate, activeRows[0].id]
+      );
+    }
+
+    const { rows: insertedRows } = await client.query(
+      `INSERT INTO department_staff
+        (department_id, staff_id, start_date, end_date, status, created_at, updated_at)
+       VALUES
+        ($1, $2, $3, $4, 'active', NOW(), NOW())
+       RETURNING *`,
+      [
+        departmentId,
+        staffId,
+        startDate,
+        payload.end_date || null,
+      ]
+    );
+
+    const inserted = insertedRows[0];
+    const { rows: joinedRows } = await client.query(
+      `SELECT dst.*, d.dept_name AS department_name
+       FROM department_staff dst
+       JOIN departments d ON d.id = dst.department_id
+       WHERE dst.id = $1
+       LIMIT 1`,
+      [inserted.id]
+    );
+
+    await client.query('COMMIT');
+    return joinedRows[0] || inserted;
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+async function updateDepartmentForStaff(staffId, departmentStaffId, payload) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const { rows: existingRows } = await client.query(
+      'SELECT * FROM department_staff WHERE id = $1 AND staff_id = $2 LIMIT 1',
+      [departmentStaffId, staffId]
+    );
+
+    if (!existingRows.length) {
+      const err = new Error('Department row not found for this staff');
+      err.statusCode = 404;
+      throw err;
+    }
+
+    const allowed = ['department_id', 'departments_id', 'start_date', 'end_date', 'status'];
+    const updates = [];
+    const values = [];
+    let idx = 1;
+
+    for (const key of allowed) {
+      if (payload[key] !== undefined) {
+        const column = key === 'departments_id' ? 'department_id' : key;
+        updates.push(`${column} = $${idx}`);
+        values.push(payload[key]);
+        idx++;
+      }
+    }
+
+    if (!updates.length) {
+      const err = new Error('No fields provided to update');
+      err.statusCode = 400;
+      throw err;
+    }
+
+    values.push(departmentStaffId, staffId);
+    const updateSql = `
+      UPDATE department_staff
+      SET ${updates.join(', ')}, updated_at = NOW()
+      WHERE id = $${idx} AND staff_id = $${idx + 1}
+      RETURNING *
+    `;
+    const { rows: updatedRows } = await client.query(updateSql, values);
+
+    const updated = updatedRows[0];
+    const { rows: joinedRows } = await client.query(
+      `SELECT dst.*, d.dept_name AS department_name
+       FROM department_staff dst
+       JOIN departments d ON d.id = dst.department_id
+       WHERE dst.id = $1
+       LIMIT 1`,
+      [updated.id]
+    );
+
+    await client.query('COMMIT');
+    return joinedRows[0] || updated;
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+async function deleteDepartmentForStaff(staffId, departmentStaffId) {
+  const { rowCount } = await pool.query(
+    'DELETE FROM department_staff WHERE id = $1 AND staff_id = $2',
+    [departmentStaffId, staffId]
+  );
+  return rowCount > 0;
+}
+
+async function listInstitutionsByStaffId(staffId) {
+  const sql = `
+    SELECT ist.*, i.name AS institution_name
+    FROM institution_staff ist
+    JOIN institutions i ON i.id = ist.institution_id
+    WHERE ist.staff_id = $1
+    ORDER BY ist.id DESC
+  `;
+  const { rows } = await pool.query(sql, [staffId]);
+  return rows;
+}
+
+async function createInstitutionForStaff(staffId, payload) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const institutionId = Number(payload.institution_id || payload.institutions_id);
+    const startDate = payload.start_date || null;
+
+    if (!institutionId || !startDate) {
+      const err = new Error('institution_id and start_date are required');
+      err.statusCode = 400;
+      throw err;
+    }
+
+    const { rows: staffRows } = await client.query('SELECT id FROM staff WHERE id = $1 LIMIT 1', [staffId]);
+    if (!staffRows.length) {
+      const err = new Error('Staff not found');
+      err.statusCode = 404;
+      throw err;
+    }
+
+    const { rows: activeRows } = await client.query(
+      `SELECT id
+       FROM institution_staff
+       WHERE staff_id = $1 AND status = 'active'
+       ORDER BY id DESC
+       LIMIT 1`,
+      [staffId]
+    );
+
+    if (activeRows.length) {
+      await client.query(
+        `UPDATE institution_staff
+         SET end_date = $1,
+             status = 'inactive',
+             updated_at = NOW()
+         WHERE id = $2`,
+        [startDate, activeRows[0].id]
+      );
+    }
+
+    const { rows: insertedRows } = await client.query(
+      `INSERT INTO institution_staff
+        (institution_id, staff_id, start_date, end_date, reason, gcr, status, created_at, updated_at)
+       VALUES
+        ($1, $2, $3, $4, $5, $6, 'active', NOW(), NOW())
+       RETURNING *`,
+      [
+        institutionId,
+        staffId,
+        startDate,
+        payload.end_date || null,
+        payload.reason || null,
+        payload.gcr || null,
+      ]
+    );
+
+    const inserted = insertedRows[0];
+    const { rows: joinedRows } = await client.query(
+      `SELECT ist.*, i.name AS institution_name
+       FROM institution_staff ist
+       JOIN institutions i ON i.id = ist.institution_id
+       WHERE ist.id = $1
+       LIMIT 1`,
+      [inserted.id]
+    );
+
+    await client.query('COMMIT');
+    return joinedRows[0] || inserted;
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+async function updateInstitutionForStaff(staffId, institutionStaffId, payload) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const { rows: existingRows } = await client.query(
+      'SELECT * FROM institution_staff WHERE id = $1 AND staff_id = $2 LIMIT 1',
+      [institutionStaffId, staffId]
+    );
+
+    if (!existingRows.length) {
+      const err = new Error('Institution row not found for this staff');
+      err.statusCode = 404;
+      throw err;
+    }
+
+    const allowed = ['institution_id', 'institutions_id', 'start_date', 'end_date', 'reason', 'gcr', 'status'];
+    const updates = [];
+    const values = [];
+    let idx = 1;
+
+    for (const key of allowed) {
+      if (payload[key] !== undefined) {
+        const column = key === 'institutions_id' ? 'institution_id' : key;
+        updates.push(`${column} = $${idx}`);
+        values.push(payload[key]);
+        idx++;
+      }
+    }
+
+    if (!updates.length) {
+      const err = new Error('No fields provided to update');
+      err.statusCode = 400;
+      throw err;
+    }
+
+    values.push(institutionStaffId, staffId);
+    const updateSql = `
+      UPDATE institution_staff
+      SET ${updates.join(', ')}, updated_at = NOW()
+      WHERE id = $${idx} AND staff_id = $${idx + 1}
+      RETURNING *
+    `;
+    const { rows: updatedRows } = await client.query(updateSql, values);
+
+    const updated = updatedRows[0];
+    const { rows: joinedRows } = await client.query(
+      `SELECT ist.*, i.name AS institution_name
+       FROM institution_staff ist
+       JOIN institutions i ON i.id = ist.institution_id
+       WHERE ist.id = $1
+       LIMIT 1`,
+      [updated.id]
+    );
+
+    await client.query('COMMIT');
+    return joinedRows[0] || updated;
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+async function deleteInstitutionForStaff(staffId, institutionStaffId) {
+  const { rowCount } = await pool.query(
+    'DELETE FROM institution_staff WHERE id = $1 AND staff_id = $2',
+    [institutionStaffId, staffId]
+  );
+  return rowCount > 0;
+}
+
 module.exports = {
   listAll,
   create,
@@ -443,4 +776,12 @@ module.exports = {
   createAssociationForStaff,
   updateAssociationForStaff,
   deleteAssociationForStaff,
+  listDepartmentsByStaffId,
+  createDepartmentForStaff,
+  updateDepartmentForStaff,
+  deleteDepartmentForStaff,
+  listInstitutionsByStaffId,
+  createInstitutionForStaff,
+  updateInstitutionForStaff,
+  deleteInstitutionForStaff,
 };

@@ -235,7 +235,11 @@ export default function StaffViewPage() {
                       />
                     )}
                     {activeTab === 'department' && (
-                      <Department staff={staff} setNotification={setNotification} />
+                      <Department
+                        staff={staff}
+                        setNotification={setNotification}
+                        onDepartmentUpdated={refreshStaff}
+                      />
                     )}
                     {activeTab === 'designation' && (
                       <Designation staff={staff} setNotification={setNotification} />
