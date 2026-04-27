@@ -51,8 +51,9 @@ function detectPart(entryName) {
   // part a/file.pdf, part-a/file.pdf, part_a/file.pdf,
   // root/part a/file.pdf, ROOT/PART-B/file.pdf, etc.
   const segments = normalized.split('/').filter(Boolean);
-  const hasPartA = segments.some((segment) => /^part[ _-]*a$/.test(segment));
-  const hasPartB = segments.some((segment) => /^part[ _-]*b$/.test(segment));
+  // Match segments that contain "part a" or "part b" anywhere (e.g. "form 16 part a")
+  const hasPartA = segments.some((segment) => /part[ _-]*a/i.test(segment));
+  const hasPartB = segments.some((segment) => /part[ _-]*b/i.test(segment));
 
   if (hasPartA) return 'part_a';
   if (hasPartB) return 'part_b';
@@ -317,7 +318,9 @@ async function bulkUpload(req, res, next) {
 
       const originalPdfName = path.basename(entry.entryName || '');
       const baseNoExt = originalPdfName.replace(/\.pdf$/i, '');
-      const panFromFileName = normalizePan(baseNoExt);
+      // PAN is 10 chars: 5 letters + 4 digits + 1 letter. Extract from start of filename.
+      const panMatch = baseNoExt.match(/^([A-Za-z]{5}[0-9]{4}[A-Za-z]{1})/i);
+      const panFromFileName = panMatch ? normalizePan(panMatch[1]) : '';
 
       if (!panFromFileName) {
         invalidFiles.push(originalPdfName);

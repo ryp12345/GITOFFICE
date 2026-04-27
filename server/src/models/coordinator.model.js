@@ -2,14 +2,14 @@ const { pool } = require('../config/db');
 
 async function findAll() {
   const { rows } = await pool.query(
-    'SELECT id, name, employee_type, created_at, updated_at FROM coordinators ORDER BY created_at DESC, id DESC'
+    'SELECT id, name, employee_type FROM coordinators ORDER BY id DESC'
   );
   return rows;
 }
 
 async function findById(id) {
   const { rows } = await pool.query(
-    'SELECT id, name, employee_type, created_at, updated_at FROM coordinators WHERE id = $1 LIMIT 1',
+    'SELECT id, name, employee_type FROM coordinators WHERE id = $1 LIMIT 1',
     [id]
   );
   return rows[0] || null;
@@ -17,7 +17,7 @@ async function findById(id) {
 
 async function create({ name, employee_type }) {
   const { rows } = await pool.query(
-    'INSERT INTO coordinators (name, employee_type, created_at, updated_at) VALUES ($1, $2, NOW(), NOW()) RETURNING id, name, employee_type, created_at, updated_at',
+    'INSERT INTO coordinators (name, employee_type) VALUES ($1, $2) RETURNING id, name, employee_type',
     [name, employee_type]
   );
   return rows[0];
@@ -39,8 +39,7 @@ async function update(id, { name, employee_type }) {
 
   if (fields.length === 0) return findById(id);
 
-  fields.push('updated_at = NOW()');
-  const sql = `UPDATE coordinators SET ${fields.join(', ')} WHERE id = $${idx} RETURNING id, name, employee_type, created_at, updated_at`;
+  const sql = `UPDATE coordinators SET ${fields.join(', ')} WHERE id = $${idx} RETURNING id, name, employee_type`;
   values.push(id);
 
   const { rows } = await pool.query(sql, values);

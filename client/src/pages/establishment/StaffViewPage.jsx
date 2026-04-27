@@ -9,8 +9,13 @@ import Association from './staff/Association';
 import Department from './staff/Department';
 import Designation from './staff/Designation';
 import Form16 from './staff/Form16';
+
 import AnnualIncrement from './staff/AnnualIncrement';
 import LaptopLoan from './staff/LaptopLoan';
+import Qualification from './staff/Qualification';
+import SocietyShare from './staff/SocietyShare';
+import SocietyLoan from './staff/SocietyLoan';
+import TaxRegime from './staff/TaxRegime';
 
 const TABS = [
   { key: 'personal', label: 'Personal Info', icon: (
@@ -266,19 +271,31 @@ export default function StaffViewPage() {
                       />
                     )}
                     {activeTab === 'qualification' && (
-                      <div>Qualification content goes here.</div>
+                      <Qualification staffId={staff.id} token={localStorage.getItem('token')} />
                     )}
                     {activeTab === 'salary' && (
                       <div>Salary content goes here.</div>
                     )}
                     {activeTab === 'society_share' && (
-                      <div>Society Share content goes here.</div>
+                      <SocietyShare
+                        staff={staff}
+                        setNotification={setNotification}
+                        onSocietyShareUpdated={refreshStaff}
+                      />
                     )}
                     {activeTab === 'society_loan' && (
-                      <div>Society Loan content goes here.</div>
+                      <SocietyLoan
+                        staff={staff}
+                        setNotification={setNotification}
+                        onSocietyLoanUpdated={refreshStaff}
+                      />
                     )}
                     {activeTab === 'tax_regime' && (
-                      <div>Tax Regime content goes here.</div>
+                      <TaxRegime
+                        staff={staff}
+                        setNotification={setNotification}
+                        onTaxRegimeUpdated={refreshStaff}
+                      />
                     )}
                   </>
                 ) : (

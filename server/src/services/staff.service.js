@@ -1039,6 +1039,424 @@ async function deleteLaptopLoanForStaff(staffId, loanId) {
   return rowCount > 0;
 }
 
+// ── Society Shares ───────────────────────────────────────────────────────────
+
+async function listSocietySharesByStaffId(staffId) {
+  const { rows } = await pool.query(
+    'SELECT * FROM staffshares WHERE staff_id = $1 ORDER BY id ASC',
+    [staffId]
+  );
+  return rows;
+}
+
+async function createSocietyShareForStaff(staffId, payload) {
+  const memberId = payload.member_id || null;
+  const amount = payload.amount !== undefined ? parseFloat(payload.amount) : null;
+  const startDate = payload.start_date || null;
+  const endDate = payload.end_date || null;
+
+  if (!memberId || amount === null || !startDate) {
+    const err = new Error('member_id, amount, and start_date are required');
+    err.statusCode = 400;
+    throw err;
+  }
+
+  const { rows } = await pool.query(
+    `INSERT INTO staffshares (staff_id, member_id, amount, start_date, end_date, status, created_at, updated_at)
+     VALUES ($1, $2, $3, $4, $5, 'active', NOW(), NOW())
+     RETURNING *`,
+    [staffId, memberId, amount, startDate, endDate]
+  );
+  return rows[0];
+}
+
+async function updateSocietyShareForStaff(staffId, shareId, payload) {
+  const { rows: existingRows } = await pool.query(
+    'SELECT * FROM staffshares WHERE id = $1 AND staff_id = $2 LIMIT 1',
+    [shareId, staffId]
+  );
+
+  if (!existingRows.length) {
+    const err = new Error('Society share not found for this staff');
+    err.statusCode = 404;
+    throw err;
+  }
+
+  const allowed = ['member_id', 'amount', 'start_date', 'end_date', 'status'];
+  const updates = [];
+  const values = [];
+  let idx = 1;
+
+  for (const key of allowed) {
+    if (payload[key] !== undefined) {
+      updates.push(`${key} = $${idx}`);
+      values.push(payload[key]);
+      idx++;
+    }
+  }
+
+  if (!updates.length) {
+    const err = new Error('No fields provided to update');
+    err.statusCode = 400;
+    throw err;
+  }
+
+  values.push(shareId, staffId);
+  const { rows } = await pool.query(
+    `UPDATE staffshares SET ${updates.join(', ')}, updated_at = NOW()
+     WHERE id = $${idx} AND staff_id = $${idx + 1}
+     RETURNING *`,
+    values
+  );
+  return rows[0];
+}
+
+async function deleteSocietyShareForStaff(staffId, shareId) {
+  const { rowCount } = await pool.query(
+    'DELETE FROM staffshares WHERE id = $1 AND staff_id = $2',
+    [shareId, staffId]
+  );
+  return rowCount > 0;
+}
+
+// ── Society Loans ────────────────────────────────────────────────────────────
+
+async function listSocietyLoansByStaffId(staffId) {
+  const { rows } = await pool.query(
+    'SELECT * FROM staffloans WHERE staff_id = $1 ORDER BY id ASC',
+    [staffId]
+  );
+  return rows;
+}
+
+async function createSocietyLoanForStaff(staffId, payload) {
+  const memberId = payload.member_id || null;
+  const loanType = payload.loan_type || null;
+  const loanId = payload.loan_id || null;
+  const loanAmount = payload.loan_amount !== undefined ? parseFloat(payload.loan_amount) : null;
+  const monthlyEmi = payload.monthly_emi !== undefined ? parseFloat(payload.monthly_emi) : null;
+  const startDate = payload.start_date || null;
+  const endDate = payload.end_date || null;
+
+  if (!memberId || !loanType || !loanId || loanAmount === null || monthlyEmi === null || !startDate) {
+    const err = new Error('member_id, loan_type, loan_id, loan_amount, monthly_emi, and start_date are required');
+    err.statusCode = 400;
+    throw err;
+  }
+
+  const { rows } = await pool.query(
+    `INSERT INTO staffloans (staff_id, member_id, loan_type, loan_id, loan_amount, monthly_emi, start_date, end_date, status, created_at, updated_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'active', NOW(), NOW())
+     RETURNING *`,
+    [staffId, memberId, loanType, loanId, loanAmount, monthlyEmi, startDate, endDate]
+  );
+  return rows[0];
+}
+
+async function updateSocietyLoanForStaff(staffId, loanRowId, payload) {
+  const { rows: existingRows } = await pool.query(
+    'SELECT * FROM staffloans WHERE id = $1 AND staff_id = $2 LIMIT 1',
+    [loanRowId, staffId]
+  );
+
+  if (!existingRows.length) {
+    const err = new Error('Society loan not found for this staff');
+    err.statusCode = 404;
+    throw err;
+  }
+
+  const allowed = ['member_id', 'loan_type', 'loan_id', 'loan_amount', 'monthly_emi', 'start_date', 'end_date', 'status'];
+  const updates = [];
+  const values = [];
+  let idx = 1;
+
+  for (const key of allowed) {
+    if (payload[key] !== undefined) {
+      updates.push(`${key} = $${idx}`);
+      values.push(payload[key]);
+      idx++;
+    }
+  }
+
+  if (!updates.length) {
+    const err = new Error('No fields provided to update');
+    err.statusCode = 400;
+    throw err;
+  }
+
+  values.push(loanRowId, staffId);
+  const { rows } = await pool.query(
+    `UPDATE staffloans SET ${updates.join(', ')}, updated_at = NOW()
+     WHERE id = $${idx} AND staff_id = $${idx + 1}
+     RETURNING *`,
+    values
+  );
+  return rows[0];
+}
+
+async function deleteSocietyLoanForStaff(staffId, loanRowId) {
+  const { rowCount } = await pool.query(
+    'DELETE FROM staffloans WHERE id = $1 AND staff_id = $2',
+    [loanRowId, staffId]
+  );
+  return rowCount > 0;
+}
+
+// ── Tax Regime ───────────────────────────────────────────────────────────────
+
+async function resolveStaffTaxRegimeColumns(client) {
+  const { rows } = await client.query(
+    `SELECT column_name
+     FROM information_schema.columns
+     WHERE table_schema = 'public' AND table_name = 'staff_taxregime'`
+  );
+
+  const columns = new Set(rows.map((row) => row.column_name));
+  const taxHeadIdColumn = columns.has('tax_heads_id')
+    ? 'tax_heads_id'
+    : columns.has('tax_head_id')
+      ? 'tax_head_id'
+      : columns.has('regime_id')
+        ? 'regime_id'
+        : 'tax_heads_id';
+
+  const financialYearColumn = columns.has('finyear')
+    ? 'finyear'
+    : columns.has('year')
+      ? 'year'
+      : null;
+
+  return {
+    hasStatusColumn: columns.has('status'),
+    taxHeadIdColumn,
+    financialYearColumn,
+  };
+}
+
+async function listTaxRegimesByStaffId(staffId) {
+  const client = await pool.connect();
+  try {
+    const meta = await resolveStaffTaxRegimeColumns(client);
+
+    const selectParts = [
+      'str.id',
+      'str.staff_id',
+      `str.${meta.taxHeadIdColumn} AS tax_heads_id`,
+      'th.name AS tax_regime_name',
+      'th.year AS regime_year',
+      meta.financialYearColumn
+        ? `str.${meta.financialYearColumn}::text AS financial_year`
+        : 'NULL::text AS financial_year',
+      meta.hasStatusColumn ? 'str.status' : "'active'::text AS status",
+      'str.created_at',
+      'str.updated_at',
+    ];
+
+    const { rows } = await client.query(
+      `SELECT ${selectParts.join(', ')}
+       FROM staff_taxregime str
+       JOIN tax_heads th ON th.id = str.${meta.taxHeadIdColumn}
+       WHERE str.staff_id = $1
+       ORDER BY str.id ASC`,
+      [staffId]
+    );
+
+    return rows;
+  } finally {
+    client.release();
+  }
+}
+
+async function listTaxRegimeHeads() {
+  const { rows } = await pool.query(
+    `SELECT id, name, year, status
+     FROM tax_heads
+     WHERE COALESCE(LOWER(status), 'active') = 'active'
+     ORDER BY year DESC, id DESC`
+  );
+  return rows;
+}
+
+async function createTaxRegimeForStaff(staffId, payload) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const meta = await resolveStaffTaxRegimeColumns(client);
+    if (!meta.financialYearColumn) {
+      const err = new Error('Financial year column not found in staff_taxregime table');
+      err.statusCode = 500;
+      throw err;
+    }
+
+    const taxHeadsId = Number(payload.tax_heads_id || payload.tax_head_id || payload.regime_id);
+    const financialYear = String(payload.financial_year || payload.year || '').trim();
+
+    if (!taxHeadsId || !financialYear) {
+      const err = new Error('tax_heads_id and financial_year are required');
+      err.statusCode = 400;
+      throw err;
+    }
+
+    const { rows: staffRows } = await client.query('SELECT id FROM staff WHERE id = $1 LIMIT 1', [staffId]);
+    if (!staffRows.length) {
+      const err = new Error('Staff not found');
+      err.statusCode = 404;
+      throw err;
+    }
+
+    const { rows: headRows } = await client.query('SELECT id FROM tax_heads WHERE id = $1 LIMIT 1', [taxHeadsId]);
+    if (!headRows.length) {
+      const err = new Error('Tax regime not found');
+      err.statusCode = 404;
+      throw err;
+    }
+
+    if (meta.hasStatusColumn) {
+      await client.query(
+        `UPDATE staff_taxregime
+         SET status = CASE WHEN status = 'Active' THEN 'Inactive' ELSE 'inactive' END,
+             updated_at = NOW()
+         WHERE staff_id = $1 AND LOWER(status) = 'active'`,
+        [staffId]
+      );
+    }
+
+    const insertColumns = ['staff_id', meta.taxHeadIdColumn, meta.financialYearColumn];
+    const insertValues = [staffId, taxHeadsId, financialYear];
+
+    const placeholders = insertColumns.map((_, idx) => `$${idx + 1}`);
+    const { rows } = await client.query(
+      `INSERT INTO staff_taxregime (${insertColumns.join(', ')}, created_at, updated_at)
+       VALUES (${placeholders.join(', ')}, NOW(), NOW())
+       RETURNING *`,
+      insertValues
+    );
+
+    const inserted = rows[0];
+    const { rows: joinedRows } = await client.query(
+      `SELECT str.id,
+              str.staff_id,
+              str.${meta.taxHeadIdColumn} AS tax_heads_id,
+              th.name AS tax_regime_name,
+              th.year AS regime_year,
+              str.${meta.financialYearColumn}::text AS financial_year,
+              ${meta.hasStatusColumn ? 'str.status' : "'active'::text AS status"},
+              str.created_at,
+              str.updated_at
+       FROM staff_taxregime str
+       JOIN tax_heads th ON th.id = str.${meta.taxHeadIdColumn}
+       WHERE str.id = $1
+       LIMIT 1`,
+      [inserted.id]
+    );
+
+    await client.query('COMMIT');
+    return joinedRows[0] || inserted;
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+async function updateTaxRegimeForStaff(staffId, regimeRowId, payload) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const meta = await resolveStaffTaxRegimeColumns(client);
+    const { rows: existingRows } = await client.query(
+      'SELECT id FROM staff_taxregime WHERE id = $1 AND staff_id = $2 LIMIT 1',
+      [regimeRowId, staffId]
+    );
+
+    if (!existingRows.length) {
+      const err = new Error('Tax regime row not found for this staff');
+      err.statusCode = 404;
+      throw err;
+    }
+
+    const updates = [];
+    const values = [];
+    let idx = 1;
+
+    if (payload.tax_heads_id !== undefined || payload.tax_head_id !== undefined || payload.regime_id !== undefined) {
+      const nextTaxHeadId = Number(payload.tax_heads_id || payload.tax_head_id || payload.regime_id);
+      if (!nextTaxHeadId) {
+        const err = new Error('Invalid tax_heads_id');
+        err.statusCode = 400;
+        throw err;
+      }
+      updates.push(`${meta.taxHeadIdColumn} = $${idx}`);
+      values.push(nextTaxHeadId);
+      idx += 1;
+    }
+
+    if (meta.financialYearColumn && (payload.financial_year !== undefined || payload.year !== undefined)) {
+      const nextYear = String(payload.financial_year ?? payload.year ?? '').trim();
+      if (!nextYear) {
+        const err = new Error('Invalid financial_year');
+        err.statusCode = 400;
+        throw err;
+      }
+      updates.push(`${meta.financialYearColumn} = $${idx}`);
+      values.push(nextYear);
+      idx += 1;
+    }
+
+    if (!updates.length) {
+      const err = new Error('No fields provided to update');
+      err.statusCode = 400;
+      throw err;
+    }
+
+    values.push(regimeRowId, staffId);
+    const { rows: updatedRows } = await client.query(
+      `UPDATE staff_taxregime
+       SET ${updates.join(', ')}, updated_at = NOW()
+       WHERE id = $${idx} AND staff_id = $${idx + 1}
+       RETURNING *`,
+      values
+    );
+
+    const updated = updatedRows[0];
+    const { rows: joinedRows } = await client.query(
+      `SELECT str.id,
+              str.staff_id,
+              str.${meta.taxHeadIdColumn} AS tax_heads_id,
+              th.name AS tax_regime_name,
+              th.year AS regime_year,
+              ${meta.financialYearColumn ? `str.${meta.financialYearColumn}::text` : 'NULL::text'} AS financial_year,
+              ${meta.hasStatusColumn ? 'str.status' : "'active'::text AS status"},
+              str.created_at,
+              str.updated_at
+       FROM staff_taxregime str
+       JOIN tax_heads th ON th.id = str.${meta.taxHeadIdColumn}
+       WHERE str.id = $1
+       LIMIT 1`,
+      [updated.id]
+    );
+
+    await client.query('COMMIT');
+    return joinedRows[0] || updated;
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+async function deleteTaxRegimeForStaff(staffId, regimeRowId) {
+  const { rowCount } = await pool.query(
+    'DELETE FROM staff_taxregime WHERE id = $1 AND staff_id = $2',
+    [regimeRowId, staffId]
+  );
+  return rowCount > 0;
+}
+
 module.exports = {
   listAll,
   create,
@@ -1065,4 +1483,17 @@ module.exports = {
   createLaptopLoanForStaff,
   updateLaptopLoanForStaff,
   deleteLaptopLoanForStaff,
+  listSocietySharesByStaffId,
+  createSocietyShareForStaff,
+  updateSocietyShareForStaff,
+  deleteSocietyShareForStaff,
+  listSocietyLoansByStaffId,
+  createSocietyLoanForStaff,
+  updateSocietyLoanForStaff,
+  deleteSocietyLoanForStaff,
+  listTaxRegimeHeads,
+  listTaxRegimesByStaffId,
+  createTaxRegimeForStaff,
+  updateTaxRegimeForStaff,
+  deleteTaxRegimeForStaff,
 };
