@@ -271,4 +271,176 @@ async function updateById(id, payload) {
   }
 }
 
-module.exports = { listAll, create, remove, getById, updateById };
+async function listAssociationsByStaffId(staffId) {
+  const sql = `
+    SELECT ast.*, a.asso_name AS association_name
+    FROM association_staff ast
+    JOIN associations a ON a.id = ast.association_id
+    WHERE ast.staff_id = $1
+    ORDER BY ast.id DESC
+  `;
+  const { rows } = await pool.query(sql, [staffId]);
+  return rows;
+}
+
+async function createAssociationForStaff(staffId, payload) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const associationId = Number(payload.associations_id || payload.association_id);
+    const startDate = payload.start_date || null;
+
+    if (!associationId || !startDate) {
+      const err = new Error('associations_id and start_date are required');
+      err.statusCode = 400;
+      throw err;
+    }
+
+    const { rows: staffRows } = await client.query('SELECT id FROM staff WHERE id = $1 LIMIT 1', [staffId]);
+    if (!staffRows.length) {
+      const err = new Error('Staff not found');
+      err.statusCode = 404;
+      throw err;
+    }
+
+    const { rows: activeRows } = await client.query(
+      `SELECT id
+       FROM association_staff
+       WHERE staff_id = $1 AND status = 'active'
+       ORDER BY id DESC
+       LIMIT 1`,
+      [staffId]
+    );
+
+    if (activeRows.length) {
+      await client.query(
+        `UPDATE association_staff
+         SET end_date = $1,
+             status = 'inactive',
+             updated_at = NOW()
+         WHERE id = $2`,
+        [startDate, activeRows[0].id]
+      );
+    }
+
+    const { rows: insertedRows } = await client.query(
+      `INSERT INTO association_staff
+        (association_id, staff_id, start_date, closing_date, reason, gcr, status, created_at, updated_at)
+       VALUES
+        ($1, $2, $3, $4, $5, $6, 'active', NOW(), NOW())
+       RETURNING *`,
+      [
+        associationId,
+        staffId,
+        startDate,
+        payload.closing_date || null,
+        payload.reason || null,
+        payload.gcr || null,
+      ]
+    );
+
+    const inserted = insertedRows[0];
+    const { rows: joinedRows } = await client.query(
+      `SELECT ast.*, a.asso_name AS association_name
+       FROM association_staff ast
+       JOIN associations a ON a.id = ast.association_id
+       WHERE ast.id = $1
+       LIMIT 1`,
+      [inserted.id]
+    );
+
+    await client.query('COMMIT');
+    return joinedRows[0] || inserted;
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+async function updateAssociationForStaff(staffId, associationStaffId, payload) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const { rows: existingRows } = await client.query(
+      'SELECT * FROM association_staff WHERE id = $1 AND staff_id = $2 LIMIT 1',
+      [associationStaffId, staffId]
+    );
+
+    if (!existingRows.length) {
+      const err = new Error('Association row not found for this staff');
+      err.statusCode = 404;
+      throw err;
+    }
+
+    const allowed = ['association_id', 'associations_id', 'start_date', 'closing_date', 'end_date', 'reason', 'gcr', 'status'];
+    const updates = [];
+    const values = [];
+    let idx = 1;
+
+    for (const key of allowed) {
+      if (payload[key] !== undefined) {
+        const column = key === 'associations_id' ? 'association_id' : key;
+        updates.push(`${column} = $${idx}`);
+        values.push(payload[key]);
+        idx++;
+      }
+    }
+
+    if (!updates.length) {
+      const err = new Error('No fields provided to update');
+      err.statusCode = 400;
+      throw err;
+    }
+
+    values.push(associationStaffId, staffId);
+    const updateSql = `
+      UPDATE association_staff
+      SET ${updates.join(', ')}, updated_at = NOW()
+      WHERE id = $${idx} AND staff_id = $${idx + 1}
+      RETURNING *
+    `;
+    const { rows: updatedRows } = await client.query(updateSql, values);
+
+    const updated = updatedRows[0];
+    const { rows: joinedRows } = await client.query(
+      `SELECT ast.*, a.asso_name AS association_name
+       FROM association_staff ast
+       JOIN associations a ON a.id = ast.association_id
+       WHERE ast.id = $1
+       LIMIT 1`,
+      [updated.id]
+    );
+
+    await client.query('COMMIT');
+    return joinedRows[0] || updated;
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+async function deleteAssociationForStaff(staffId, associationStaffId) {
+  const { rowCount } = await pool.query(
+    'DELETE FROM association_staff WHERE id = $1 AND staff_id = $2',
+    [associationStaffId, staffId]
+  );
+  return rowCount > 0;
+}
+
+module.exports = {
+  listAll,
+  create,
+  remove,
+  getById,
+  updateById,
+  listAssociationsByStaffId,
+  createAssociationForStaff,
+  updateAssociationForStaff,
+  deleteAssociationForStaff,
+};

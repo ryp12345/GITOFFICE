@@ -8,6 +8,10 @@ router.get('/getcastecategory_list', staffController.getCasteCategoriesByReligio
 router.get('/getstaffpay_list', staffController.getStaffPayList);
 router.get('/', staffController.list);
 router.post('/', staffController.create);
+router.get('/:id/associations', staffController.listAssociations);
+router.post('/:id/associations', staffController.createAssociation);
+router.patch('/:id/associations/:associationStaffId', staffController.updateAssociation);
+router.delete('/:id/associations/:associationStaffId', staffController.deleteAssociation);
 router.put('/:id', staffController.update);
 router.delete('/:id', staffController.remove);
 router.get('/:id', staffController.getById);

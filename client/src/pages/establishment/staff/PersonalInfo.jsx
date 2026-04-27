@@ -54,9 +54,13 @@ export default function PersonalInfo({ staff, setNotification }) {
   };
 
   return (
-    <div>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {editError && <div className="col-span-2 text-red-600 text-sm mb-2">{editError}</div>}
+    <div className="w-full">
+      <form
+        className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-5 bg-white p-6 rounded-lg shadow"
+        onSubmit={e => { e.preventDefault(); handleSave(); }}
+        autoComplete="off"
+      >
+        {editError && <div className="col-span-1 md:col-span-2 text-red-600 text-sm mb-2">{editError}</div>}
         <Input label="First Name" value={editForm.fname || ''} onChange={v => { setEditForm(f => ({ ...f, fname: v })); }} />
         <Input label="Middle Name" value={editForm.mname || ''} onChange={v => { setEditForm(f => ({ ...f, mname: v })); }} />
         <Input label="Last Name" value={editForm.lname || ''} onChange={v => { setEditForm(f => ({ ...f, lname: v })); }} />
@@ -92,11 +96,11 @@ export default function PersonalInfo({ staff, setNotification }) {
         </div>
         <Input label="GC Resolution No" value={editForm.gcr || ''} onChange={v => { setEditForm(f => ({ ...f, gcr: v })); }} />
         <Input label="Duration" value={editForm.duration || ''} onChange={v => { setEditForm(f => ({ ...f, duration: v })); }} />
-        <div className="col-span-2 flex gap-3 mt-4">
-          <button className="px-5 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700" onClick={handleSave} disabled={saving}>Save</button>
-          <button className="px-4 py-2 bg-gray-200 rounded-md" onClick={handleCancel} disabled={saving}>Cancel</button>
+        <div className="col-span-1 md:col-span-2 flex justify-end gap-3 mt-6">
+          <button type="submit" className="px-5 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700" disabled={saving}>Update Inoformation</button>
+          <button type="button" className="px-4 py-2 bg-gray-200 rounded-md" onClick={handleCancel} disabled={saving}>Cancel</button>
         </div>
-      </div>
+      </form>
     </div>
   );
 }
