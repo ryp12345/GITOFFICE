@@ -1457,6 +1457,118 @@ async function deleteTaxRegimeForStaff(staffId, regimeRowId) {
   return rowCount > 0;
 }
 
+// ─── LIC Management ──────────────────────────────────────────────────────────
+
+async function listLicsByStaffId(staffId) {
+  const { rows } = await pool.query(
+    'SELECT * FROM stafflics WHERE staff_id = $1 ORDER BY created_at DESC, id DESC',
+    [staffId]
+  );
+  return rows;
+}
+
+async function createLicForStaff(staffId, payload) {
+  const { policy_no, premium, start_date } = payload;
+  if (!policy_no || !premium || !start_date) {
+    const err = new Error('policy_no, premium, and start_date are required');
+    err.statusCode = 400;
+    throw err;
+  }
+  const { rows } = await pool.query(
+    `INSERT INTO stafflics (staff_id, policy_no, premium, start_date, status, created_at, updated_at)
+     VALUES ($1, $2, $3, $4, 'active', NOW(), NOW()) RETURNING *`,
+    [staffId, policy_no, premium, start_date]
+  );
+  return rows[0];
+}
+
+async function updateLicForStaff(staffId, licId, payload) {
+  const ALLOWED_STATUSES = ['active', 'transfered', 'stopped'];
+  const updates = [];
+  const values = [];
+  let paramIdx = 1;
+
+  if (payload.policy_no !== undefined) { updates.push(`policy_no = $${paramIdx++}`); values.push(payload.policy_no); }
+  if (payload.premium !== undefined) { updates.push(`premium = $${paramIdx++}`); values.push(payload.premium); }
+  if (payload.end_date !== undefined) { updates.push(`end_date = $${paramIdx++}`); values.push(payload.end_date || null); }
+  if (payload.status !== undefined && ALLOWED_STATUSES.includes(payload.status)) {
+    updates.push(`status = $${paramIdx++}`); values.push(payload.status);
+  }
+  updates.push('updated_at = NOW()');
+
+  values.push(licId, staffId);
+  const { rows } = await pool.query(
+    `UPDATE stafflics SET ${updates.join(', ')} WHERE id = $${paramIdx++} AND staff_id = $${paramIdx} RETURNING *`,
+    values
+  );
+  if (!rows.length) {
+    const err = new Error('LIC record not found');
+    err.statusCode = 404;
+    throw err;
+  }
+  return rows[0];
+}
+
+async function deleteLicForStaff(staffId, licId) {
+  const { rowCount } = await pool.query(
+    'DELETE FROM stafflics WHERE id = $1 AND staff_id = $2',
+    [licId, staffId]
+  );
+  return rowCount > 0;
+}
+
+async function listLicTransactions(staffId, licId) {
+  const { rows } = await pool.query(
+    `SELECT t.* FROM stafflic_transactions t
+     JOIN stafflics l ON l.id = t.stafflic_id
+     WHERE t.stafflic_id = $1 AND l.staff_id = $2
+     ORDER BY t.years DESC, t.id DESC`,
+    [licId, staffId]
+  );
+  return rows;
+}
+
+async function createLicTransaction(staffId, licId, payload) {
+  const { month, years, dop, gst } = payload;
+  if (!month || !years || !dop) {
+    const err = new Error('month, years, and dop are required');
+    err.statusCode = 400;
+    throw err;
+  }
+  const { rows: lics } = await pool.query(
+    'SELECT id FROM stafflics WHERE id = $1 AND staff_id = $2',
+    [licId, staffId]
+  );
+  if (!lics.length) {
+    const err = new Error('LIC record not found');
+    err.statusCode = 404;
+    throw err;
+  }
+  const { rows } = await pool.query(
+    `INSERT INTO stafflic_transactions (stafflic_id, month, years, dop, gst, created_at, updated_at)
+     VALUES ($1, $2, $3, $4, $5, NOW(), NOW()) RETURNING *`,
+    [licId, month, years, dop, gst || 0]
+  );
+  return rows[0];
+}
+
+async function deleteLicTransaction(staffId, licId, transactionId) {
+  const { rows: lics } = await pool.query(
+    'SELECT id FROM stafflics WHERE id = $1 AND staff_id = $2',
+    [licId, staffId]
+  );
+  if (!lics.length) {
+    const err = new Error('LIC record not found');
+    err.statusCode = 404;
+    throw err;
+  }
+  const { rowCount } = await pool.query(
+    'DELETE FROM stafflic_transactions WHERE id = $1 AND stafflic_id = $2',
+    [transactionId, licId]
+  );
+  return rowCount > 0;
+}
+
 module.exports = {
   listAll,
   create,
@@ -1496,4 +1608,11 @@ module.exports = {
   createTaxRegimeForStaff,
   updateTaxRegimeForStaff,
   deleteTaxRegimeForStaff,
+  listLicsByStaffId,
+  createLicForStaff,
+  updateLicForStaff,
+  deleteLicForStaff,
+  listLicTransactions,
+  createLicTransaction,
+  deleteLicTransaction,
 };

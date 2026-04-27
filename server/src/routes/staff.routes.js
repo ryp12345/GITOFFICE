@@ -10,6 +10,7 @@ const staffLaptopLoanRoutes = require('./staffLaptopLoan.routes');
 const staffSocietyShareRoutes = require('./staffSocietyShare.routes');
 const staffSocietyLoanRoutes = require('./staffSocietyLoan.routes');
 const staffTaxRegimeRoutes = require('./staffTaxRegime.routes');
+const staffLicRoutes = require('./staffLic.routes');
 
 router.get('/checkemailid', staffController.checkEmail);
 router.get('/employee/designations', staffController.getDesignationsByEmployeeType);
@@ -26,6 +27,7 @@ router.use('/', staffLaptopLoanRoutes);
 router.use('/', staffSocietyShareRoutes);
 router.use('/', staffSocietyLoanRoutes);
 router.use('/', staffTaxRegimeRoutes);
+router.use('/', staffLicRoutes);
 router.put('/:id', staffController.update);
 router.delete('/:id', staffController.remove);
 router.get('/:id', staffController.getById);

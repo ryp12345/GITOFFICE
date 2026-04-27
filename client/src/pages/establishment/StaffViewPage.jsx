@@ -16,6 +16,7 @@ import Qualification from './staff/Qualification';
 import SocietyShare from './staff/SocietyShare';
 import SocietyLoan from './staff/SocietyLoan';
 import TaxRegime from './staff/TaxRegime';
+import LicManagement from './staff/LicManagement';
 
 const TABS = [
   { key: 'personal', label: 'Personal Info', icon: (
@@ -27,7 +28,7 @@ const TABS = [
   { key: 'department', label: 'Department', icon: (
     <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M3 7h18M3 12h18M3 17h18" /></svg>
   ) },
-  { key: 'designation', label: 'Designation', icon: (
+  { key: 'designation', label: 'Designation & Payscale', icon: (
     <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 01-8 0" /></svg>
   ) },
   { key: 'annual_increment', label: 'Annual Increment', icon: (
@@ -53,6 +54,9 @@ const TABS = [
   ) },
   { key: 'tax_regime', label: 'Tax Regime', icon: (
     <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3" /></svg>
+  ) },
+  { key: 'lic_management', label: 'LIC Management', icon: (
+    <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>
   ) },
 ];
 
@@ -180,7 +184,7 @@ export default function StaffViewPage() {
                               <svg className="w-7 h-7" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 01-8 0" /></svg>
                             </span>
                             <div>
-                              <div className="text-gray-500 text-xs">Designation</div>
+                              <div className="text-gray-500 text-xs">Designation & Payscale</div>
                               <div className="text-lg font-semibold">{staff.designation_name || '-'}</div>
                             </div>
                           </div>
@@ -295,6 +299,13 @@ export default function StaffViewPage() {
                         staff={staff}
                         setNotification={setNotification}
                         onTaxRegimeUpdated={refreshStaff}
+                      />
+                    )}
+                    {activeTab === 'lic_management' && (
+                      <LicManagement
+                        staff={staff}
+                        setNotification={setNotification}
+                        onLicUpdated={refreshStaff}
                       />
                     )}
                   </>
