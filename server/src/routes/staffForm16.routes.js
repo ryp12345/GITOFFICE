@@ -2,9 +2,11 @@ const express = require('express');
 const router = express.Router();
 const staffForm16Controller = require('../controllers/establishment/staffForm16.controller');
 const { uploadForm16Pdf, uploadForm16Archive } = require('../middlewares/upload.middleware');
+const { authMiddleware } = require('../middlewares/auth.middleware');
 
 router.post(
 	'/form-16/bulk-upload',
+	authMiddleware,
 	uploadForm16Archive.fields([
 		{ name: 'zipFile', maxCount: 1 },
 		{ name: 'archiveFile', maxCount: 1 },

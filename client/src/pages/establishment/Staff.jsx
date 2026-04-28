@@ -684,7 +684,7 @@ export default function StaffPage() {
                 <button
                   type="button"
                   onClick={() => setIsForm16BulkModalOpen(true)}
-                  className="flex items-center justify-center w-full px-6 py-3 font-medium text-blue-700 transition-all duration-300 transform rounded-lg shadow-lg bg-blue-100 hover:bg-blue-200 sm:w-auto"
+                  className="flex items-center justify-center w-full px-6 py-3 font-medium text-white transition-all duration-300 transform rounded-lg shadow-lg bg-blue-600 hover:bg-blue-700 hover:-translate-y-1 hover:scale-105 sm:w-auto"
                 >
                   Bulk Upload Form 16
                 </button>

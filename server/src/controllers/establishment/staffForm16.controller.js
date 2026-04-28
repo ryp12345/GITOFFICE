@@ -3,6 +3,7 @@ const path = require('path');
 const AdmZip = require('adm-zip');
 const { pool } = require('../../config/db');
 const { form16Root, ensureDir } = require('../../middlewares/upload.middleware');
+const { sendForm16UploadIssueReport } = require('../../services/email.service');
 
 function toYear(value) {
   const parsed = Number(value);
@@ -268,6 +269,21 @@ async function bulkUpload(req, res, next) {
   try {
     const year = toYear(req.body.year);
     if (!year) return res.status(400).json({ success: false, message: 'Valid year is required' });
+
+    // Resolve the uploader's email from req.user (set by authMiddleware)
+    let uploaderEmail = null;
+    if (req.user?.id) {
+      try {
+        const { rows: userRows } = await pool.query(
+          'SELECT email FROM users WHERE id = $1 LIMIT 1',
+          [req.user.id]
+        );
+        uploaderEmail = userRows[0]?.email || null;
+      } catch (_err) {
+        // Non-fatal — proceed without email
+      }
+    }
+
     const archiveFile =
       req.file ||
       req.files?.zipFile?.[0] ||
@@ -353,6 +369,19 @@ async function bulkUpload(req, res, next) {
     }
 
     if (uploaded === 0) {
+      const issuePayload = {
+        toEmail: uploaderEmail,
+        year,
+        archiveType: isRar ? 'rar' : 'zip',
+        totalPdfInZip: pdfEntries.length,
+        uploaded,
+        unmatchedPans: Array.from(new Set(unmatchedPans)),
+        invalidFiles,
+        invalidPartPath
+      };
+      if (uploaderEmail) {
+        sendForm16UploadIssueReport(issuePayload).catch(() => {});
+      }
       return res.status(400).json({
         success: false,
         message: 'No files were uploaded. Check PAN filenames and Part A/Part B folder names.',
@@ -366,6 +395,20 @@ async function bulkUpload(req, res, next) {
           invalidPartPath
         }
       });
+    }
+
+    const hasPartialIssues = unmatchedPans.length > 0 || invalidFiles.length > 0 || invalidPartPath.length > 0;
+    if (hasPartialIssues && uploaderEmail) {
+      sendForm16UploadIssueReport({
+        toEmail: uploaderEmail,
+        year,
+        archiveType: isRar ? 'rar' : 'zip',
+        totalPdfInZip: pdfEntries.length,
+        uploaded,
+        unmatchedPans: Array.from(new Set(unmatchedPans)),
+        invalidFiles,
+        invalidPartPath
+      }).catch(() => {});
     }
 
     return res.status(201).json({
