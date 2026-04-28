@@ -1,5 +1,31 @@
 const { pool } = require('../config/db');
 
+function emptyStringToNull(value) {
+  return typeof value === 'string' && value.trim() === '' ? null : value;
+}
+
+function normalizePayloadDateFields(payload, fields) {
+  if (!payload || typeof payload !== 'object') return payload;
+
+  for (const field of fields) {
+    if (Object.prototype.hasOwnProperty.call(payload, field)) {
+      payload[field] = emptyStringToNull(payload[field]);
+    }
+  }
+
+  return payload;
+}
+
+function toOptionalPositiveInt(value) {
+  if (value === undefined || value === null || value === '') return undefined;
+  const n = Number(value);
+  return Number.isInteger(n) && n > 0 ? n : undefined;
+}
+
+function emptyToUndefined(value) {
+  return value === '' ? undefined : value;
+}
+
 async function getEmployeeType(staffId) {
   const { rows } = await pool.query(
     `SELECT et.employee_type
@@ -206,23 +232,34 @@ async function insertTeachingPayscaleRow(client, staffId, teachingPayId, startDa
 }
 
 async function updateTeachingPayscaleRow(staffId, payRowId, payload) {
-  if (payload.payscales_id !== undefined) {
+  normalizePayloadDateFields(payload, ['start_date', 'end_date']);
+
+  payload.pay = emptyToUndefined(payload.pay);
+  payload.fixed_pay = emptyToUndefined(payload.fixed_pay);
+  payload.consolidated_pay = emptyToUndefined(payload.consolidated_pay);
+
+  const mappedTeachingPayscaleId = toOptionalPositiveInt(payload.payscales_id);
+  if (mappedTeachingPayscaleId !== undefined) {
     if (payload.teaching_payscale_id === undefined) {
-      payload.teaching_payscale_id = payload.payscales_id;
+      payload.teaching_payscale_id = mappedTeachingPayscaleId;
     }
     if (payload.teaching_payscales_id === undefined) {
-      payload.teaching_payscales_id = payload.payscales_id;
+      payload.teaching_payscales_id = mappedTeachingPayscaleId;
     }
   }
 
   const variants = [
     {
       table: 'teaching_payscale_staff',
-      fields: ['teaching_payscale_id', 'teaching_payscales_id', 'start_date', 'end_date', 'reason', 'gcr', 'status'],
+      fields: ['teaching_payscale_id', 'start_date', 'end_date', 'reason', 'gcr', 'status'],
+    },
+    {
+      table: 'teaching_payscale_staff',
+      fields: ['teaching_payscales_id', 'start_date', 'end_date', 'reason', 'gcr', 'status'],
     },
     {
       table: 'staff_teaching_payscale',
-      fields: ['teaching_payscale_id', 'teaching_payscales_id', 'start_date', 'end_date', 'reason', 'gcr', 'status'],
+      fields: ['teaching_payscale_id', 'start_date', 'end_date', 'reason', 'gcr', 'status'],
     },
     {
       table: 'staff_teaching_payscale',
@@ -445,6 +482,8 @@ async function closeActivePayRecords(client, staffId, startDate) {
 }
 
 async function changeDesignationPayscaleForStaff(staffId, payload) {
+  normalizePayloadDateFields(payload, ['start_date', 'end_date']);
+
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -625,6 +664,8 @@ async function changeDesignationPayscaleForStaff(staffId, payload) {
 }
 
 async function updateStaffDesignationRow(staffId, designationRowId, payload) {
+  normalizePayloadDateFields(payload, ['start_date', 'end_date']);
+
   const allowed = ['designation_id', 'start_date', 'end_date', 'reason', 'gcr', 'status'];
   const updates = [];
   const values = [];
@@ -707,6 +748,12 @@ function getPayscaleTableMeta(payRecordType) {
 }
 
 async function updateStaffPayscaleRow(staffId, payRecordType, payRowId, payload) {
+  normalizePayloadDateFields(payload, ['start_date', 'end_date']);
+
+  payload.pay = emptyToUndefined(payload.pay);
+  payload.fixed_pay = emptyToUndefined(payload.fixed_pay);
+  payload.consolidated_pay = emptyToUndefined(payload.consolidated_pay);
+
   if (payRecordType === 'teaching_payscale') {
     return updateTeachingPayscaleRow(staffId, payRowId, payload);
   }
@@ -718,13 +765,14 @@ async function updateStaffPayscaleRow(staffId, payRecordType, payRowId, payload)
     throw err;
   }
 
-  if (payload.payscales_id !== undefined) {
+  const mappedPayscaleId = toOptionalPositiveInt(payload.payscales_id);
+  if (mappedPayscaleId !== undefined) {
     if (payRecordType === 'teaching_payscale') {
-      payload.teaching_payscale_id = payload.payscales_id;
+      payload.teaching_payscale_id = mappedPayscaleId;
     } else if (payRecordType === 'nt_payscale') {
-      payload.ntpayscale_id = payload.payscales_id;
+      payload.ntpayscale_id = mappedPayscaleId;
     } else if (payRecordType === 'ntc_payscale') {
-      payload.ntcpayscale_id = payload.payscales_id;
+      payload.ntcpayscale_id = mappedPayscaleId;
     }
   }
 
@@ -823,6 +871,8 @@ async function listAdditionalDesignationsByStaffId(staffId) {
 }
 
 async function createAdditionalDesignationForStaff(staffId, payload) {
+  normalizePayloadDateFields(payload, ['start_date', 'end_date', 'gcr_close']);
+
   const designationId = Number(payload.designation_id || payload.designations_id);
   const deptId = payload.dept_id ? Number(payload.dept_id) : null;
   const startDate = payload.start_date || null;
@@ -870,6 +920,8 @@ async function createAdditionalDesignationForStaff(staffId, payload) {
 }
 
 async function updateAdditionalDesignationForStaff(staffId, rowId, payload) {
+  normalizePayloadDateFields(payload, ['start_date', 'end_date', 'gcr_close']);
+
   const allowed = ['designation_id', 'dept_id', 'start_date', 'end_date', 'allowance_status', 'gcr', 'gcr_close', 'status'];
   const updates = [];
   const values = [];

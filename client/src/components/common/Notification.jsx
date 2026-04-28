@@ -1,6 +1,16 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 
-export default function Notification({ show, message, type = 'success', onClose }) {
+export default function Notification({ show, message, type = 'success', onClose, autoCloseMs = 4000 }) {
+  useEffect(() => {
+    if (!show || typeof onClose !== 'function' || autoCloseMs <= 0) return undefined;
+
+    const timeoutId = setTimeout(() => {
+      onClose();
+    }, autoCloseMs);
+
+    return () => clearTimeout(timeoutId);
+  }, [show, onClose, autoCloseMs]);
+
   if (!show) return null;
 
   const base = 'fixed top-6 right-6 z-50 max-w-sm px-4 py-3 rounded shadow-lg flex items-start space-x-3';

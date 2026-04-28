@@ -6,6 +6,6 @@ const { roleMiddleware } = require('../middlewares/role.middleware');
 
 router.get('/meta', authMiddleware, leaveEntitlementController.getMeta);
 router.get('/', authMiddleware, leaveEntitlementController.getAll);
-router.patch('/', authMiddleware, roleMiddleware('Establishment', 'super-admin'), leaveEntitlementController.update);
+router.patch('/', authMiddleware, roleMiddleware('Establishment'), leaveEntitlementController.update);
 
 module.exports = router;

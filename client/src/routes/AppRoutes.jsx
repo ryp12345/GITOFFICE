@@ -4,6 +4,8 @@ import Register from '../pages/auth/Register';
 import SuperAdminDashboard from '../pages/super-admin/Dashboard';
 import SuperAdminUsersPage from '../pages/super-admin/Users';
 import SuperAdminCoordinatorsPage from '../pages/super-admin/Coordinators';
+import SuperAdminLeaveEntitlementPage from '../pages/super-admin/LeaveEntitlement';
+import SuperAdminHolidayRHListPage from '../pages/super-admin/HolidayRHList';
 import EstablishmentDashboard from '../pages/establishment/Dashboard';
 import HODDashboard from '../pages/hod/Dashboard';
 import TeachingDashboard from '../pages/teaching/Dashboard';
@@ -57,6 +59,8 @@ export default function AppRoutes() {
             <Route path="/super-admin" element={<SuperAdminDashboard />} />
             <Route path="/super-admin/users" element={<SuperAdminUsersPage />} />
             <Route path="/super-admin/coordinators" element={<SuperAdminCoordinatorsPage />} />
+            <Route path="/super-admin/leave-management/entitlement" element={<SuperAdminLeaveEntitlementPage />} />
+            <Route path="/super-admin/leave-management/holiday-rh" element={<SuperAdminHolidayRHListPage />} />
           </Route>
           <Route element={<RoleRoute role="Establishment" />}>
             <Route path="/establishment" element={<EstablishmentDashboard />} />

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   changeStaffDesignationPayscale,
   createStaffAdditionalDesignation,
@@ -129,6 +129,8 @@ const additionalDefaults = {
 };
 
 export default function Designation({ staff, setNotification, onDesignationUpdated }) {
+  const notificationTimeoutRef = useRef(null);
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
@@ -223,9 +225,54 @@ export default function Designation({ staff, setNotification, onDesignationUpdat
     fetchOptions();
   }, [mainForm.pay_type, mainForm.designations_id, employeeType]);
 
+  useEffect(() => {
+    const fetchEditPayscaleOptions = async () => {
+      if (!editingPayscale?.pay_record_type || !employeeType) return;
+
+      const recordType = editingPayscale.pay_record_type;
+      const payType =
+        recordType === 'teaching_payscale' || recordType === 'nt_payscale'
+          ? 'Payscale'
+          : recordType === 'ntc_payscale'
+            ? 'Consolidated'
+            : '';
+
+      if (!payType) return;
+
+      try {
+        const rows = await getPayscaleOptions({
+          pay_type: payType,
+          emp_type: employeeType,
+          designation_id: null,
+        });
+        setPayscaleOptions(Array.isArray(rows) ? rows : []);
+      } catch (_e) {
+        setPayscaleOptions([]);
+      }
+    };
+
+    fetchEditPayscaleOptions();
+  }, [editingPayscale?.pay_record_type, employeeType]);
+
+  useEffect(() => {
+    return () => {
+      if (notificationTimeoutRef.current) {
+        clearTimeout(notificationTimeoutRef.current);
+      }
+    };
+  }, []);
+
   const notify = (message, type = 'success') => {
     if (typeof setNotification === 'function') {
       setNotification({ show: true, message, type });
+
+      if (notificationTimeoutRef.current) {
+        clearTimeout(notificationTimeoutRef.current);
+      }
+
+      notificationTimeoutRef.current = setTimeout(() => {
+        setNotification({ show: false, message: '', type: '' });
+      }, 4000);
     }
   };
 
@@ -778,7 +825,18 @@ export default function Designation({ staff, setNotification, onDesignationUpdat
               {(editingPayscale.pay_record_type === 'teaching_payscale' || editingPayscale.pay_record_type === 'nt_payscale' || editingPayscale.pay_record_type === 'ntc_payscale') && (
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-1">Payscale</label>
-                  <input type="text" className="w-full rounded-lg border border-gray-300 px-3 py-2" value={payscaleEditForm.payscales_id || ''} onChange={(e) => setPayscaleEditForm((p) => ({ ...p, payscales_id: e.target.value }))} />
+                  <select
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2"
+                    value={payscaleEditForm.payscales_id || ''}
+                    onChange={(e) => setPayscaleEditForm((p) => ({ ...p, payscales_id: e.target.value }))}
+                  >
+                    <option value="">Select payscale</option>
+                    {payscaleOptions.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.payscale_title || p.title || (p.basepay ? `${p.basepay}` : p.id)}
+                      </option>
+                    ))}
+                  </select>
                 </div>
               )}
               {editingPayscale.pay_record_type === 'nt_payscale' && (
