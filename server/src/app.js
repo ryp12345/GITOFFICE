@@ -58,6 +58,7 @@ app.use('/api/institutions', institutionRoutes);
 app.use('/api/leave-rules', leaveRulesRoutes);
 app.use('/api/leaves', leaveRoutes);
 app.use('/api/leave-entitlements', leaveEntitlementRoutes);
+
 app.use('/api/combine-leaves', combineLeaveRoutes);
 app.use('/api/holidayrhs', holidayrhRoutes);
 app.use('/api/qualifications', qualificationRoutes);

@@ -1,5 +1,5 @@
 const nodemailer = require('nodemailer');
-const { smtpHost, smtpPort, smtpSecure, smtpUser, smtpPass } = require('../config');
+const { smtpHost, smtpPort, smtpSecure, smtpUser, smtpPass, smtpFrom } = require('../config');
 
 function createTransporter() {
   if (!smtpHost || !smtpUser) {
@@ -184,7 +184,7 @@ async function sendForm16UploadIssueReport(opts) {
 
   try {
     await transporter.sendMail({
-      from: `"GIT Office" <${smtpUser}>`,
+      from: `"GIT Office" <${smtpFrom}>`,
       to: toEmail,
       subject,
       html

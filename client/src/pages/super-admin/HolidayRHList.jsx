@@ -144,14 +144,18 @@ export default function SuperAdminHolidayRHListPage() {
                     ) : (
                       paginated.map((row, idx) => (
                         <tr key={row.id} className={idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{(page - 1) * PAGE_SIZE + idx + 1}</td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">{row.year}</td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{row.title}</td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
-                            {row.start ? new Date(row.start).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '-'}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">{row.day}</td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">{row.type}</td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{(page - 1) * PAGE_SIZE + idx + 1}</td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">{row.year}</td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{row.title}</td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
+                                {row.start ? new Date(row.start).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '-'}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">{row.day}</td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
+                                <span className={`px-3 py-1 text-xs font-medium rounded-full ${row.type === 'Holiday' ? 'bg-green-100 text-green-800' : 'bg-amber-100 text-amber-800'}`}>
+                                    {row.type}
+                                </span>
+                            </td>
                         </tr>
                       ))
                     )}

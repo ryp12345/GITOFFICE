@@ -1,3 +1,21 @@
+// Format date as DD-MMM-YYYY (e.g., 28-Apr-2026)
+const formatDateDMY = (value) => {
+  if (!value) return '-';
+  if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    const [year, month, day] = value.split('-');
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const monthIndex = Number(month) - 1;
+    if (monthIndex < 0 || monthIndex > 11) return '-';
+    return `${day}-${monthNames[monthIndex]}-${year}`;
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '-';
+  const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const day = String(date.getDate()).padStart(2, '0');
+  const month = monthNames[date.getMonth()];
+  const year = date.getFullYear();
+  return `${day}-${month}-${year}`;
+};
 import { useEffect, useMemo, useState } from 'react';
 import Notification from '../../../components/common/Notification';
 import Header from '../../../components/layout/Header';
@@ -266,7 +284,7 @@ export default function HolidayRHListPage() {
                           <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{(page - 1) * PAGE_SIZE + idx + 1}</td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">{row.year}</td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{row.title}</td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">{row.start ? new Date(row.start).toLocaleDateString() : '-'}</td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">{formatDateDMY(row.start)}</td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">{row.day}</td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm">
                             <span className={`px-3 py-1 text-xs font-medium rounded-full ${row.type === 'Holiday' ? 'bg-green-100 text-green-800' : 'bg-amber-100 text-amber-800'}`}>

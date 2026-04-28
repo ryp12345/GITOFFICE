@@ -135,7 +135,7 @@ export default function SuperAdminLeaveEntitlementPage() {
 
             <div className="mb-6 flex items-center justify-between">
               <div>
-                <h3 className="text-2xl font-medium text-gray-900">Establishment Section</h3>
+                <h3 className="text-2xl font-medium text-gray-900">Super Admin</h3>
                 <p className="mt-2 text-lg text-gray-700">
                   Leave Entitlement for -{' '}
                   <span className="text-blue-600 font-semibold">{year}</span>

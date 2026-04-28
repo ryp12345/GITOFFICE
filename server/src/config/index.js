@@ -23,5 +23,6 @@ module.exports = {
   smtpPort: Number(process.env.SMTP_PORT || 465),
   smtpSecure: String(process.env.SMTP_SECURE || 'true') === 'true',
   smtpUser: process.env.SMTP_USER || '',
-  smtpPass: process.env.SMTP_PASS || ''
+  smtpPass: process.env.SMTP_PASS || '',
+  smtpFrom: process.env.SMTP_FROM || 'itcell@git.edu'
 };

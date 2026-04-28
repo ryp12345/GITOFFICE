@@ -6,7 +6,8 @@ import api from '../../api/axios';
 import { getDepartments } from '../../api/departmentApi';
 import { getDesignations } from '../../api/designationApi';
 import { getInstitutions } from '../../api/institutionApi';
-
+import { getAssociations } from '../../api/associationApi';
+import { getQualifications } from '../../api/qualificationApi';
 
 export default function EstablishmentDashboard() {
   const [stats, setStats] = useState({
@@ -16,6 +17,8 @@ export default function EstablishmentDashboard() {
     institutions: null,
     teaching: null,
     nonTeaching: null,
+    associations: null,
+    qualifications: null,
   });
   const [loading, setLoading] = useState(true);
 
@@ -60,6 +63,24 @@ export default function EstablishmentDashboard() {
         const instRes = await getInstitutions();
         const instCount = Array.isArray(instRes?.data?.data) ? instRes.data.data.length : 0;
 
+        // Associations
+        let associationCount = 0;
+        try {
+          const assocRes = await getAssociations();
+          associationCount = Array.isArray(assocRes?.data?.data) ? assocRes.data.data.length : 0;
+        } catch (e) {
+          associationCount = 0;
+        }
+
+        // Qualifications
+        let qualificationCount = 0;
+        try {
+          const qualRes = await getQualifications();
+          qualificationCount = Array.isArray(qualRes?.data?.data) ? qualRes.data.data.length : 0;
+        } catch (e) {
+          qualificationCount = 0;
+        }
+
         setStats({
           staff: staffCount,
           departments: deptCount,
@@ -67,9 +88,11 @@ export default function EstablishmentDashboard() {
           institutions: instCount,
           teaching: teachingCount,
           nonTeaching: nonTeachingCount,
+          associations: associationCount,
+          qualifications: qualificationCount,
         });
       } catch (err) {
-        setStats({ staff: 0, departments: 0, designations: 0, institutions: 0, teaching: 0, nonTeaching: 0 });
+        setStats({ staff: 0, departments: 0, designations: 0, institutions: 0, teaching: 0, nonTeaching: 0, associations: 0, qualifications: 0 });
       } finally {
         setLoading(false);
       }
@@ -116,12 +139,12 @@ export default function EstablishmentDashboard() {
                 <span className="mt-2 text-green-900">Non-Teaching Staff</span>
               </div>
               <div className="rounded-lg bg-yellow-50 p-4 shadow flex flex-col items-center border border-yellow-200 min-h-[92px]">
-                <span className="text-3xl font-bold text-yellow-700">-</span>
-                <span className="mt-2 text-yellow-900">(Empty)</span>
+                <span className="text-3xl font-bold text-yellow-700">{loading || stats.associations === null ? '...' : stats.associations}</span>
+                <span className="mt-2 text-yellow-900">Associations</span>
               </div>
               <div className="rounded-lg bg-purple-50 p-4 shadow flex flex-col items-center border border-purple-200 min-h-[92px]">
-                <span className="text-3xl font-bold text-purple-700">-</span>
-                <span className="mt-2 text-purple-900">(Empty)</span>
+                <span className="text-3xl font-bold text-purple-700">{loading || stats.qualifications === null ? '...' : stats.qualifications}</span>
+                <span className="mt-2 text-purple-900">Qualifications</span>
               </div>
             </div>
 

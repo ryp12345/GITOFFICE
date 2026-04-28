@@ -24,7 +24,7 @@ import RoleRoute from './RoleRoute';
 import { useAuth } from '../context/AuthContext';
 import { getDashboardPathByRole } from '../utils/role';
 import DepartmentsPage from '../pages/establishment/Departments';
-// ...existing code...
+import DepartmentHistory from '../pages/teaching/DepartmentHistory';
 import StaffPage from '../pages/establishment/Staff';
 import StaffViewPage from '../pages/establishment/StaffViewPage';
 import { useParams } from 'react-router-dom';
@@ -86,6 +86,7 @@ export default function AppRoutes() {
         </Route>
         <Route element={<RoleRoute role="Teaching" />}>
           <Route path="/teaching" element={<TeachingDashboard />} />
+          <Route path="/teaching/department-history" element={<DepartmentHistory />} />
         </Route>
         <Route element={<RoleRoute role="Non-Teaching" />}>
           <Route path="/nonteaching" element={<NonTeachingDashboard />} />
