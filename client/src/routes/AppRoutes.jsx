@@ -35,6 +35,8 @@ import LeaveRulesPage from '../pages/establishment/leave_management/LeaveRules';
 import LeaveEntitlementPage from '../pages/establishment/leave_management/leave_entitlement';
 import StaffLeavesPage from '../pages/staff/leaves';
 import ChangePassword from '../pages/auth/ChangePassword';
+import ForgotPassword from '../pages/auth/ForgotPassword';
+import ResetPassword from '../pages/auth/ResetPassword';
 
 // StaffViewPage now fetches its own data from API using id
 function StaffViewPageWrapper() {
@@ -57,6 +59,8 @@ export default function AppRoutes() {
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
+        <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="/" element={<HomeRedirect />} />
         <Route element={<ProtectedRoute />}>
           <Route path="/change-password" element={<ChangePassword />} />

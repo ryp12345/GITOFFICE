@@ -3,7 +3,9 @@ const {
   jwtSecret,
   jwtExpiresIn,
   jwtRefreshSecret,
-  jwtRefreshExpiresIn
+  jwtRefreshExpiresIn,
+  passwordResetSecret,
+  passwordResetExpiresIn
 } = require('../config');
 
 function signAccessToken(payload) {
@@ -24,9 +26,21 @@ function verifyRefreshToken(token) {
   return jwt.verify(token, jwtRefreshSecret || jwtSecret);
 }
 
+function signPasswordResetToken(payload) {
+  return jwt.sign(payload, passwordResetSecret || jwtSecret, {
+    expiresIn: passwordResetExpiresIn
+  });
+}
+
+function verifyPasswordResetToken(token) {
+  return jwt.verify(token, passwordResetSecret || jwtSecret);
+}
+
 module.exports = {
   signAccessToken,
   signRefreshToken,
   verifyToken,
-  verifyRefreshToken
+  verifyRefreshToken,
+  signPasswordResetToken,
+  verifyPasswordResetToken
 };

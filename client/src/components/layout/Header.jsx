@@ -14,6 +14,7 @@ export default function Header() {
 
   const notificationRef = useRef(null);
   const profileRef = useRef(null);
+  const mobileMenuRef = useRef(null);
 
   const notifications = useMemo(
     () => [
@@ -47,6 +48,19 @@ export default function Header() {
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [isProfileOpen]);
+
+  useEffect(() => {
+    if (!isMenuOpen) return;
+
+    function handleClickOutside(event) {
+      if (mobileMenuRef.current && !mobileMenuRef.current.contains(event.target)) {
+        setIsMenuOpen(false);
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [isMenuOpen]);
 
   const displayName = user?.email || 'User';
   const initials = (displayName?.[0] || 'U').toUpperCase();
@@ -82,11 +96,11 @@ export default function Header() {
 
   return (
     <header className="border-b border-slate-200 bg-white shadow-sm">
-      <div className="flex h-20 w-full items-center justify-between px-4 sm:px-6 lg:px-8">
+      <div className="flex h-16 sm:h-20 w-full items-center justify-between px-3 sm:px-6 lg:px-8">
 
         <div className="flex items-center gap-3">
-          <img src="/git_logo.jpg" alt="Git logo" className="h-10 w-10 rounded-md object-contain" />
-          <h1 className="br text-xl sm:text-2xl font-bold text-slate-900">KLS-GIT</h1>
+          <img src="/git_logo.jpg" alt="Git logo" className="h-8 w-8 sm:h-10 sm:w-10 rounded-md object-contain" />
+          <h1 className="br text-lg sm:text-2xl font-bold text-slate-900">KLS-GIT</h1>
         </div>
 
         <div className="flex items-center justify-end space-x-3 relative">
@@ -118,7 +132,7 @@ export default function Header() {
             </button>
 
             {showNotifications && (
-              <div className="absolute right-0 mt-2 w-80 bg-white border border-slate-200 rounded-lg shadow-lg z-50 max-h-96 overflow-y-auto">
+              <div className="absolute right-0 mt-2 w-[calc(100vw-1.5rem)] max-w-80 bg-white border border-slate-200 rounded-lg shadow-lg z-50 max-h-96 overflow-y-auto">
                 <div className="p-4 border-b font-semibold text-slate-700">Notifications</div>
                 {notifications.length === 0 ? (
                   <div className="p-4 text-slate-500">No notifications</div>
@@ -199,7 +213,7 @@ export default function Header() {
       </div>
 
       {isMenuOpen && user && (
-        <div className="md:hidden px-4 pb-4 space-y-2 border-t border-slate-100">
+        <div ref={mobileMenuRef} className="md:hidden px-4 pb-4 space-y-2 border-t border-slate-100">
           <div className="text-sm text-slate-600 pt-3 break-all">{displayName}</div>
           <div className="inline-flex px-3 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-700">
             {user?.role || 'User'}

@@ -1,6 +1,14 @@
 const userModel = require('../models/user.model');
 const { hashPassword, comparePassword } = require('../utils/hash');
-const { signAccessToken, signRefreshToken, verifyRefreshToken } = require('../utils/jwt');
+const {
+  signAccessToken,
+  signRefreshToken,
+  verifyRefreshToken,
+  signPasswordResetToken,
+  verifyPasswordResetToken
+} = require('../utils/jwt');
+const { sendPasswordResetEmail } = require('./email.service');
+const { clientUrl } = require('../config');
 
 function buildImpersonatorContext(source) {
   if (!source?.impersonator?.id) {
@@ -110,4 +118,63 @@ async function resetPassword(userId, nextPassword) {
   return user;
 }
 
-module.exports = { register, login, refreshSession, issueSession, resetPassword };
+async function requestPasswordReset(email) {
+  const normalizedEmail = String(email || '').trim().toLowerCase();
+  const user = await userModel.findByEmail(normalizedEmail);
+
+  if (!user) {
+    return;
+  }
+
+  const token = signPasswordResetToken({
+    id: user.id,
+    email: user.email,
+    passwordHash: user.password
+  });
+
+  const resetUrl = `${clientUrl.replace(/\/$/, '')}/reset-password?token=${encodeURIComponent(token)}`;
+  await sendPasswordResetEmail({ toEmail: user.email, resetUrl });
+}
+
+async function resetPasswordWithToken(token, nextPassword) {
+  let decoded;
+
+  try {
+    decoded = verifyPasswordResetToken(token);
+  } catch (_error) {
+    const err = new Error('Invalid or expired reset token');
+    err.statusCode = 400;
+    throw err;
+  }
+
+  const user = await userModel.findByEmail(decoded.email);
+  if (!user || user.id !== decoded.id) {
+    const err = new Error('Invalid reset token');
+    err.statusCode = 400;
+    throw err;
+  }
+
+  if (decoded.passwordHash !== user.password) {
+    const err = new Error('Reset token has already been used');
+    err.statusCode = 400;
+    throw err;
+  }
+
+  if (nextPassword.length < 8) {
+    const err = new Error('Password must be at least 8 characters');
+    err.statusCode = 400;
+    throw err;
+  }
+
+  await resetPassword(user.id, nextPassword);
+}
+
+module.exports = {
+  register,
+  login,
+  refreshSession,
+  issueSession,
+  resetPassword,
+  requestPasswordReset,
+  resetPasswordWithToken
+};

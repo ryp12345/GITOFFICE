@@ -1,3 +1,49 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer base {
+	html,
+	body,
+	#root {
+		width: 100%;
+		max-width: 100%;
+		overflow-x: hidden;
+	}
+
+	*,
+	*::before,
+	*::after {
+		box-sizing: border-box;
+		min-width: 0;
+	}
+
+	img,
+	svg,
+	video,
+	canvas {
+		max-width: 100%;
+		height: auto;
+	}
+
+	input,
+	select,
+	textarea,
+	button {
+		font: inherit;
+	}
+
+	@media (max-width: 640px) {
+		input,
+		select,
+		textarea {
+			font-size: 16px;
+		}
+	}
+}
+
+@layer utilities {
+	.touch-scroll {
+		-webkit-overflow-scrolling: touch;
+	}
+}

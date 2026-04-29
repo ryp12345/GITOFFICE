@@ -75,7 +75,7 @@ function buildCalendarGrid(year, month) {
 
 // ─── sub-component: Calendar ─────────────────────────────────────────────────
 
-function LeaveCalendar({ year, month, onYearChange, onMonthChange, holidayMap, rhMap }) {
+function LeaveCalendar({ year, month, onYearChange, onMonthChange, holidayMap, rhMap, availableYears, onDateClick }) {
   const today = toDateStr(new Date());
   const grid = useMemo(() => buildCalendarGrid(year, month), [year, month]);
 
@@ -91,12 +91,14 @@ function LeaveCalendar({ year, month, onYearChange, onMonthChange, holidayMap, r
     return 'text-slate-700';
   };
 
-  const years = Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - 1 + i);
+  const years = Array.isArray(availableYears) && availableYears.length
+    ? availableYears
+    : Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - 1 + i);
 
   return (
     <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
       {/* Header row */}
-      <div className="flex items-center justify-between px-4 py-3 bg-slate-50 border-b border-slate-200">
+      <div className="flex items-center justify-between px-2 sm:px-4 py-2.5 sm:py-3 bg-slate-50 border-b border-slate-200">
         <button
           onClick={() => {
             const d = new Date(year, month - 1, 1);
@@ -109,11 +111,11 @@ function LeaveCalendar({ year, month, onYearChange, onMonthChange, holidayMap, r
           &#8249;
         </button>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5 sm:gap-2">
           <select
             value={month}
             onChange={(e) => onMonthChange(Number(e.target.value))}
-            className="text-sm font-semibold bg-transparent border-none outline-none cursor-pointer text-slate-800"
+            className="text-xs sm:text-sm font-semibold bg-transparent border-none outline-none cursor-pointer text-slate-800"
           >
             {MONTHS.map((m, i) => (
               <option key={m} value={i}>{m}</option>
@@ -122,7 +124,7 @@ function LeaveCalendar({ year, month, onYearChange, onMonthChange, holidayMap, r
           <select
             value={year}
             onChange={(e) => onYearChange(Number(e.target.value))}
-            className="text-sm font-semibold bg-transparent border-none outline-none cursor-pointer text-slate-800"
+            className="text-xs sm:text-sm font-semibold bg-transparent border-none outline-none cursor-pointer text-slate-800"
           >
             {years.map((y) => (
               <option key={y} value={y}>{y}</option>
@@ -146,7 +148,7 @@ function LeaveCalendar({ year, month, onYearChange, onMonthChange, holidayMap, r
       {/* Day-of-week headers */}
       <div className="grid grid-cols-7 border-b border-slate-100">
         {['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map((d) => (
-          <div key={d} className="py-2 text-center text-xs font-semibold text-slate-500 uppercase tracking-wide">
+          <div key={d} className="py-1.5 sm:py-2 text-center text-[10px] sm:text-xs font-semibold text-slate-500 uppercase tracking-wide">
             {d}
           </div>
         ))}
@@ -157,7 +159,7 @@ function LeaveCalendar({ year, month, onYearChange, onMonthChange, holidayMap, r
         {grid.map((week, wi) => (
           <div key={wi} className="grid grid-cols-7">
             {week.map((date, di) => {
-              if (!date) return <div key={di} className="h-16 bg-slate-50/50" />;
+              if (!date) return <div key={di} className="h-14 sm:h-16 bg-slate-50/50" />;
 
               const key = toDateStr(date);
               const isToday = key === today;
@@ -169,26 +171,35 @@ function LeaveCalendar({ year, month, onYearChange, onMonthChange, holidayMap, r
               return (
                 <div
                   key={di}
-                  className={`h-16 p-1 border-l border-slate-100 first:border-l-0 flex flex-col ${getDayStyle(date)}`}
+                  className={`h-14 sm:h-16 p-1 border-l border-slate-100 first:border-l-0 flex flex-col cursor-pointer hover:ring-1 hover:ring-blue-300 ${getDayStyle(date)}`}
+                  onClick={() => onDateClick?.(key)}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      onDateClick?.(key);
+                    }
+                  }}
                 >
                   <span
-                    className={`self-end text-xs w-6 h-6 flex items-center justify-center rounded-full font-medium
+                    className={`self-end text-[10px] sm:text-xs w-5 h-5 sm:w-6 sm:h-6 flex items-center justify-center rounded-full font-medium
                       ${isToday ? 'bg-blue-600 text-white' : ''}`}
                   >
                     {date.getDate()}
                   </span>
                   {holidayTitle && (
-                    <span className="text-[10px] leading-tight mt-auto line-clamp-2 text-red-700">
+                    <span className="text-[9px] sm:text-[10px] leading-tight mt-auto line-clamp-2 text-red-700">
                       {holidayTitle}
                     </span>
                   )}
                   {rhTitle && (
-                    <span className="text-[10px] leading-tight mt-auto line-clamp-2 text-yellow-700">
+                    <span className="text-[9px] sm:text-[10px] leading-tight mt-auto line-clamp-2 text-yellow-700">
                       {rhTitle}
                     </span>
                   )}
                   {isFTS && !holidayTitle && !rhTitle && (
-                    <span className="text-[10px] leading-tight mt-auto text-orange-600">
+                    <span className="text-[9px] sm:text-[10px] leading-tight mt-auto text-orange-600">
                       {Math.ceil(date.getDate() / 7) === 1 ? '1st Sat' : '3rd Sat'}
                     </span>
                   )}
@@ -258,6 +269,7 @@ export default function StaffLeavesPage() {
 
   const [notification, setNotification] = useState({ show: false, message: '', type: '' });
   const [holidayLoadError, setHolidayLoadError] = useState('');
+  const [isApplyModalOpen, setIsApplyModalOpen] = useState(false);
 
   const notify = (message, type = 'success') =>
     setNotification({ show: true, message, type });
@@ -340,6 +352,45 @@ export default function StaffLeavesPage() {
     return map;
   }, [holidays]);
 
+  const holidayYears = useMemo(() => {
+    const currentYear = new Date().getFullYear();
+    const years = holidays
+      .map((h) => extractDateKey(h.start || h.date || h.start_date))
+      .filter(Boolean)
+      .map((key) => Number(key.slice(0, 4)))
+      .filter((y) => Number.isFinite(y));
+
+    const set = new Set([currentYear - 1, currentYear, currentYear + 1, ...years]);
+    return Array.from(set).sort((a, b) => a - b);
+  }, [holidays]);
+
+  useEffect(() => {
+    if (!holidays.length) return;
+
+    const hasVisibleMonthData = holidays.some((h) => {
+      const key = extractDateKey(h.start || h.date || h.start_date);
+      if (!key) return false;
+      return key.startsWith(`${calYear}-${String(calMonth + 1).padStart(2, '0')}-`);
+    });
+
+    if (hasVisibleMonthData) return;
+
+    const firstHolidayKey = holidays
+      .map((h) => extractDateKey(h.start || h.date || h.start_date))
+      .filter(Boolean)
+      .sort()[0];
+
+    if (!firstHolidayKey) return;
+
+    const targetYear = Number(firstHolidayKey.slice(0, 4));
+    const targetMonth = Number(firstHolidayKey.slice(5, 7)) - 1;
+
+    if (Number.isFinite(targetYear) && Number.isFinite(targetMonth)) {
+      setCalYear(targetYear);
+      setCalMonth(targetMonth);
+    }
+  }, [holidays, calYear, calMonth]);
+
   // ── computed no-of-days ──────────────────────────────────────────────────
   const noOfDays = useMemo(() => {
     if (!form.start_date || !form.end_date) return null;
@@ -351,10 +402,47 @@ export default function StaffLeavesPage() {
     return days;
   }, [form.start_date, form.end_date, form.cl_type]);
 
+  const selectedLeaveType = useMemo(
+    () => leaveTypes.find((leaveType) => String(leaveType.id) === String(form.leave_id)),
+    [leaveTypes, form.leave_id],
+  );
+
+  const isSingleDayCL = useMemo(() => {
+    if (!selectedLeaveType || !form.start_date || !form.end_date) return false;
+
+    const shortName = String(selectedLeaveType.shortname || '').trim().toUpperCase();
+    return shortName === 'CL' && form.start_date === form.end_date;
+  }, [selectedLeaveType, form.start_date, form.end_date]);
+
+  useEffect(() => {
+    if (!isSingleDayCL && form.cl_type !== 'Full') {
+      setForm((currentForm) => ({ ...currentForm, cl_type: 'Full' }));
+    }
+  }, [isSingleDayCL, form.cl_type]);
+
   // ── form handlers ────────────────────────────────────────────────────────
   const handleChange = (e) => {
     const { name, value } = e.target;
+    if (name === 'start_date') return;
     setForm((f) => ({ ...f, [name]: value }));
+    setFormError('');
+  };
+
+  const openApplyModalForDate = (dateKey) => {
+    setForm((prev) => ({
+      ...emptyForm,
+      leave_id: prev.leave_id || '',
+      cl_type: prev.cl_type || 'Full',
+      reason: '',
+      start_date: dateKey,
+      end_date: dateKey,
+    }));
+    setFormError('');
+    setIsApplyModalOpen(true);
+  };
+
+  const closeApplyModal = () => {
+    setIsApplyModalOpen(false);
     setFormError('');
   };
 
@@ -384,6 +472,7 @@ export default function StaffLeavesPage() {
       );
       notify('Leave application submitted successfully.');
       setForm(emptyForm);
+      setIsApplyModalOpen(false);
       loadApplications();
     } catch (err) {
       const msg = err.response?.data?.message || 'Failed to submit application. Please try again.';
@@ -429,25 +518,22 @@ export default function StaffLeavesPage() {
       <div className="flex flex-1 min-h-0">
         <Sidebar />
 
-        <main className="flex-1 overflow-auto p-6 space-y-6">
-          {/* Page title */}
-          <div>
-            <h2 className="text-2xl font-semibold text-slate-900">Leave Application</h2>
-            <p className="mt-1 text-sm text-slate-500">
-              Apply for leave and view the holiday calendar for {calYear}.
-            </p>
-            {holidayLoadError ? (
-              <p className="mt-2 text-xs text-red-600">{holidayLoadError}</p>
-            ) : (
-              <p className="mt-2 text-xs text-slate-400">Holiday/RH records loaded: {Array.isArray(holidays) ? holidays.length : 0}</p>
-            )}
-          </div>
+        <main className="flex-1 overflow-auto p-3 sm:p-4 lg:p-6">
+          <div className="mx-auto w-full max-w-5xl space-y-6">
+            {/* Page title */}
+            <div>
+              <h2 className="text-2xl font-semibold text-slate-900">Leave Application</h2>
+              <p className="mt-1 text-sm text-slate-500">
+                Apply for leave and view the holiday calendar for {calYear}.
+              </p>
+              {holidayLoadError ? (
+                <p className="mt-2 text-xs text-red-600">{holidayLoadError}</p>
+              ) : (
+                <p className="mt-2 text-xs text-slate-400">Holiday/RH records loaded: {Array.isArray(holidays) ? holidays.length : 0}</p>
+              )}
+            </div>
 
-          {/* Two-column layout: calendar + form */}
-          <div className="grid grid-cols-1 xl:grid-cols-5 gap-6">
-
-            {/* Calendar (wider) */}
-            <div className="xl:col-span-3">
+            <div>
               <LeaveCalendar
                 year={calYear}
                 month={calMonth}
@@ -455,16 +541,27 @@ export default function StaffLeavesPage() {
                 onMonthChange={setCalMonth}
                 holidayMap={holidayMap}
                 rhMap={rhMap}
+                availableYears={holidayYears}
+                onDateClick={openApplyModalForDate}
               />
             </div>
 
-            {/* Application form */}
-            <div className="xl:col-span-2">
-              <div className="rounded-xl border border-slate-200 bg-white shadow-sm p-5">
-                <h3 className="text-base font-semibold text-slate-800 mb-4">Apply for Leave</h3>
+          {isApplyModalOpen && (
+            <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 p-2 sm:p-4">
+              <div className="w-full max-w-[96vw] sm:max-w-md rounded-xl bg-white shadow-xl border border-slate-200 max-h-[92vh] overflow-y-auto">
+                <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200">
+                  <h3 className="text-base font-semibold text-slate-800">Apply for Leave</h3>
+                  <button
+                    type="button"
+                    onClick={closeApplyModal}
+                    className="text-slate-500 hover:text-slate-700"
+                    aria-label="Close modal"
+                  >
+                    ✕
+                  </button>
+                </div>
 
-                <form onSubmit={handleSubmit} className="space-y-4" noValidate>
-                  {/* Leave type */}
+                <form onSubmit={handleSubmit} className="p-5 space-y-4" noValidate>
                   <div>
                     <label className="block text-sm font-medium text-slate-700 mb-1">
                       Leave Type <span className="text-red-500">*</span>
@@ -484,8 +581,7 @@ export default function StaffLeavesPage() {
                     </select>
                   </div>
 
-                  {/* Date row */}
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
                       <label className="block text-sm font-medium text-slate-700 mb-1">
                         From <span className="text-red-500">*</span>
@@ -494,8 +590,9 @@ export default function StaffLeavesPage() {
                         type="date"
                         name="start_date"
                         value={form.start_date}
-                        onChange={handleChange}
-                        className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        readOnly
+                        disabled
+                        className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-500 bg-slate-100 cursor-not-allowed"
                       />
                     </div>
                     <div>
@@ -513,29 +610,28 @@ export default function StaffLeavesPage() {
                     </div>
                   </div>
 
-                  {/* CL type (half-day option) */}
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 mb-1">Day Type</label>
-                    <select
-                      name="cl_type"
-                      value={form.cl_type}
-                      onChange={handleChange}
-                      className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    >
-                      <option value="Full">Full Day</option>
-                      <option value="First Half">First Half</option>
-                      <option value="Second Half">Second Half</option>
-                    </select>
-                  </div>
+                  {isSingleDayCL && (
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">Day Type</label>
+                      <select
+                        name="cl_type"
+                        value={form.cl_type}
+                        onChange={handleChange}
+                        className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      >
+                        <option value="Full">Full Day</option>
+                        <option value="First Half">First Half</option>
+                        <option value="Second Half">Second Half</option>
+                      </select>
+                    </div>
+                  )}
 
-                  {/* No-of-days indicator */}
                   {noOfDays !== null && (
                     <div className="text-sm text-slate-600 bg-blue-50 border border-blue-100 rounded-lg px-3 py-2">
                       Duration: <span className="font-semibold text-blue-700">{noOfDays} day{noOfDays !== 1 ? 's' : ''}</span>
                     </div>
                   )}
 
-                  {/* Reason */}
                   <div>
                     <label className="block text-sm font-medium text-slate-700 mb-1">
                       Reason <span className="text-red-500">*</span>
@@ -550,101 +646,101 @@ export default function StaffLeavesPage() {
                     />
                   </div>
 
-                  {/* Error */}
                   {formError && (
                     <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
                       {formError}
                     </p>
                   )}
 
-                  {/* Submit */}
-                  <button
-                    type="submit"
-                    disabled={submitting}
-                    className="w-full rounded-lg bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white text-sm font-medium py-2.5 transition-colors"
-                  >
-                    {submitting ? 'Submitting…' : 'Submit Application'}
-                  </button>
+                  <div className="flex items-center justify-end gap-2 pt-1">
+                    <button
+                      type="button"
+                      onClick={closeApplyModal}
+                      className="rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={submitting}
+                      className="rounded-lg bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white text-sm font-medium px-4 py-2"
+                    >
+                      {submitting ? 'Submitting…' : 'Submit Application'}
+                    </button>
+                  </div>
                 </form>
               </div>
+            </div>
+          )}
 
-              {/* Holiday list for current calendar month */}
-              <div className="mt-4 rounded-xl border border-slate-200 bg-white shadow-sm p-4">
-                <h4 className="text-sm font-semibold text-slate-700 mb-3">
-                  Holidays &amp; RH — {MONTHS[calMonth]} {calYear}
-                </h4>
-                {(() => {
-                  const monthHolidays = holidays.filter((h) => {
-                    const key = extractDateKey(h.start || h.date || h.start_date);
-                    if (!key) return false;
-                    return key.startsWith(`${calYear}-${String(calMonth + 1).padStart(2, '0')}-`);
-                  });
-                  if (monthHolidays.length === 0) {
-                    return <p className="text-xs text-slate-400">No holidays or RH this month.</p>;
-                  }
-                  return (
-                    <ul className="space-y-1.5">
-                      {monthHolidays.map((h) => (
-                        <li key={h.id} className="flex items-start gap-2 text-xs">
-                          <span
-                            className={`mt-0.5 w-2 h-2 rounded-full flex-shrink-0 ${
-                              normalizeHolidayType(h.type) === 'holiday' ? 'bg-red-400' : 'bg-yellow-400'
-                            }`}
-                          />
-                          <span className="text-slate-700 font-medium">{formatDate(extractDateKey(h.start || h.date || h.start_date))}</span>
-                          <span className="text-slate-500">{h.title}</span>
-                          <span className={`ml-auto px-1.5 py-0.5 rounded text-[10px] font-medium ${
-                            normalizeHolidayType(h.type) === 'holiday' ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700'
-                          }`}>
-                            {h.type}
-                          </span>
-                        </li>
-                      ))}
-                    </ul>
-                  );
-                })()}
+            {/* My Applications */}
+            <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+              <div className="px-5 py-4 border-b border-slate-100">
+                <h3 className="text-base font-semibold text-slate-800">My Leave Applications</h3>
               </div>
-            </div>
-          </div>
 
-          {/* My Applications */}
-          <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-            <div className="px-5 py-4 border-b border-slate-100">
-              <h3 className="text-base font-semibold text-slate-800">My Leave Applications</h3>
-            </div>
-
-            {loadingApps ? (
-              <div className="p-6 text-center text-sm text-slate-400">Loading applications…</div>
-            ) : applications.length === 0 ? (
-              <div className="p-6 text-center text-sm text-slate-400">No leave applications found.</div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm text-slate-700">
-                  <thead className="bg-slate-50 border-b border-slate-100">
-                    <tr>
-                      {['#','Leave Type','From','To','Days','Reason','Status'].map((h) => (
-                        <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap">
-                          {h}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
+              {loadingApps ? (
+                <div className="p-6 text-center text-sm text-slate-400">Loading applications…</div>
+              ) : applications.length === 0 ? (
+                <div className="p-6 text-center text-sm text-slate-400">No leave applications found.</div>
+              ) : (
+                <>
+                  <div className="sm:hidden p-3 space-y-3">
                     {applications.map((app, idx) => (
-                      <tr key={app.id} className="hover:bg-slate-50 transition-colors">
-                        <td className="px-4 py-3 text-slate-400 text-xs">{idx + 1}</td>
-                        <td className="px-4 py-3 font-medium">{app.leave_longname || app.leave_shortname || '—'}</td>
-                        <td className="px-4 py-3 whitespace-nowrap">{formatDate(app.start_date)}</td>
-                        <td className="px-4 py-3 whitespace-nowrap">{formatDate(app.end_date)}</td>
-                        <td className="px-4 py-3">{app.no_of_days ?? '—'}</td>
-                        <td className="px-4 py-3 max-w-xs truncate text-slate-500">{app.reason || '—'}</td>
-                        <td className="px-4 py-3">{statusBadge(app.status)}</td>
-                      </tr>
+                      <div key={app.id} className="rounded-lg border border-slate-200 bg-white p-3">
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="text-xs text-slate-400">#{idx + 1}</p>
+                          {statusBadge(app.status)}
+                        </div>
+                        <p className="mt-2 text-sm font-semibold text-slate-800">{app.leave_longname || app.leave_shortname || '—'}</p>
+                        <div className="mt-2 grid grid-cols-2 gap-2 text-xs text-slate-500">
+                          <div>
+                            <p className="text-slate-400">From</p>
+                            <p className="font-medium text-slate-700">{formatDate(app.start_date)}</p>
+                          </div>
+                          <div>
+                            <p className="text-slate-400">To</p>
+                            <p className="font-medium text-slate-700">{formatDate(app.end_date)}</p>
+                          </div>
+                          <div>
+                            <p className="text-slate-400">Days</p>
+                            <p className="font-medium text-slate-700">{app.no_of_days ?? '—'}</p>
+                          </div>
+                        </div>
+                        <p className="mt-2 text-xs text-slate-600 line-clamp-2">{app.reason || '—'}</p>
+                      </div>
                     ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
+                  </div>
+
+                  <div className="hidden sm:block overflow-x-auto">
+                    <table className="w-full text-sm text-slate-700">
+                    <thead className="bg-slate-50 border-b border-slate-100">
+                      <tr>
+                        {['#','Leave Type','From','To','Days','Reason','Status'].map((h) => (
+                          <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide whitespace-nowrap">
+                            {h}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {applications.map((app, idx) => (
+                        <tr key={app.id} className="hover:bg-slate-50 transition-colors">
+                          <td className="px-4 py-3 text-slate-400 text-xs">{idx + 1}</td>
+                          <td className="px-4 py-3 font-medium">{app.leave_longname || app.leave_shortname || '—'}</td>
+                          <td className="px-4 py-3 whitespace-nowrap">{formatDate(app.start_date)}</td>
+                          <td className="px-4 py-3 whitespace-nowrap">{formatDate(app.end_date)}</td>
+                          <td className="px-4 py-3">{app.no_of_days ?? '—'}</td>
+                          <td className="px-4 py-3 max-w-xs truncate text-slate-500">{app.reason || '—'}</td>
+                          <td className="px-4 py-3">{statusBadge(app.status)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  </div>
+                </>
+              )}
+            </div>
           </div>
         </main>
       </div>

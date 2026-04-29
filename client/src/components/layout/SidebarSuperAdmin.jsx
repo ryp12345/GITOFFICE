@@ -32,7 +32,7 @@ export default function SidebarSuperAdmin() {
 
   return (
     <>
-      <div className="md:hidden fixed top-0 left-0 right-0 bg-[#001f3f] text-white p-4 flex justify-between items-center z-50 shadow-lg">
+      <div className="md:hidden fixed top-16 left-0 right-0 bg-[#001f3f] text-white p-4 flex justify-between items-center z-30 shadow-lg">
         <span className="font-semibold">Menu</span>
         <button
           onClick={() => setIsMobileOpen(!isMobileOpen)}
@@ -58,7 +58,7 @@ export default function SidebarSuperAdmin() {
 
       <aside
         className={`fixed md:static top-16 left-0 h-screen md:h-auto z-40 transition-all duration-300 shadow-lg
-          ${sidebarWidth} bg-[#001f3f] text-white
+          ${sidebarWidth} max-w-[85vw] bg-[#001f3f] text-white
           ${isMobileOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
           md:min-h-full md:w-64 md:flex md:flex-col`}
       >
@@ -143,7 +143,7 @@ export default function SidebarSuperAdmin() {
                 }`}
               >
                 <span className="text-lg md:text-xl flex-shrink-0">{link.icon}</span>
-                <span className="font-medium text-sm md:text-sm">{link.name}</span>
+                {isOpen && <span className="font-medium text-sm md:text-sm">{link.name}</span>}
               </Link>
             )}
           </div>

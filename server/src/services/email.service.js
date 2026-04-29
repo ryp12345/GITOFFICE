@@ -6,7 +6,7 @@ function createTransporter() {
     return null;
   }
 
-  return nodemailer.createTransporter({
+  return nodemailer.createTransport({
     host: smtpHost,
     port: smtpPort,
     secure: smtpSecure,
@@ -196,4 +196,45 @@ async function sendForm16UploadIssueReport(opts) {
   }
 }
 
-module.exports = { sendForm16UploadIssueReport };
+async function sendPasswordResetEmail({ toEmail, resetUrl }) {
+  const transporter = createTransporter();
+
+  if (!transporter) {
+    console.warn('[Email] SMTP not configured. Password reset URL:', resetUrl);
+    return;
+  }
+
+  const html = `
+    <!DOCTYPE html>
+    <html>
+    <head><meta charset="utf-8"></head>
+    <body style="font-family:Arial,sans-serif;background:#f8fafc;margin:0;padding:0;">
+      <div style="max-width:640px;margin:24px auto;background:#fff;border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;">
+        <div style="background:#0f172a;padding:20px 24px;">
+          <h1 style="margin:0;color:#fff;font-size:20px;">Reset Your Password</h1>
+        </div>
+        <div style="padding:24px;color:#0f172a;line-height:1.6;font-size:14px;">
+          <p style="margin-top:0;">Hello,</p>
+          <p>We received a request to reset the password for your <strong>GITOFFICE</strong> account.</p>
+          <p>To proceed, please click the button below to set a new password. For your security, this link will expire shortly.</p>
+          <p style="margin:24px 0;">
+            <a href="${resetUrl}" style="display:inline-block;background:#2563eb;color:#fff;text-decoration:none;padding:10px 16px;border-radius:8px;font-weight:600;">Reset Password</a>
+          </p>
+          <p>If you did not request a password reset, please ignore this email. Your account will remain secure, and no changes will be made.</p>
+          <p>If you have any concerns, feel free to contact our support team.</p>
+          <p style="margin-bottom:0;">Thank you,<br>GITOFFICE Team</p>
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+
+  await transporter.sendMail({
+    from: `"GIT Office" <${smtpFrom}>`,
+    to: toEmail,
+    subject: '[GITOFFICE] Password Reset Request',
+    html
+  });
+}
+
+module.exports = { sendForm16UploadIssueReport, sendPasswordResetEmail };

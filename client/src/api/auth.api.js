@@ -6,3 +6,5 @@ export const refreshTokenRequest = (payload) => api.post('/auth/refresh', payloa
 export const meRequest = () => api.get('/users/me');
 export const changePasswordRequest = (payload) => api.post('/users/me/change-password', payload);
 export const verifyCurrentPasswordRequest = (payload) => api.post('/users/me/verify-password', payload);
+export const forgotPasswordRequest = (payload) => api.post('/auth/forgot-password', payload);
+export const resetPasswordRequest = (payload) => api.post('/auth/reset-password', payload);

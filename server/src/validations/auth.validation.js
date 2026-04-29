@@ -28,4 +28,30 @@ function validateRefreshPayload(req, _res, next) {
   return next();
 }
 
-module.exports = { validateLoginPayload, validateRegisterPayload, validateRefreshPayload };
+function validateForgotPasswordPayload(req, _res, next) {
+  const { email } = req.body;
+  if (!email) {
+    const err = new Error('Email is required');
+    err.statusCode = 400;
+    return next(err);
+  }
+  return next();
+}
+
+function validateResetPasswordPayload(req, _res, next) {
+  const { token, password } = req.body;
+  if (!token || !password) {
+    const err = new Error('Token and password are required');
+    err.statusCode = 400;
+    return next(err);
+  }
+  return next();
+}
+
+module.exports = {
+  validateLoginPayload,
+  validateRegisterPayload,
+  validateRefreshPayload,
+  validateForgotPasswordPayload,
+  validateResetPasswordPayload
+};

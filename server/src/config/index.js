@@ -8,10 +8,13 @@ const corsOrigins = process.env.CORS_ORIGIN
 module.exports = {
   nodeEnv: process.env.NODE_ENV || 'development',
   port: Number(process.env.PORT || 3001),
+  clientUrl: process.env.CLIENT_URL || 'http://localhost:3000',
   jwtSecret: process.env.JWT_SECRET || 'supersecret',
   jwtExpiresIn: process.env.JWT_EXPIRES || process.env.JWT_EXPIRES_IN || '1d',
   jwtRefreshSecret: process.env.JWT_REFRESH_SECRET || '',
   jwtRefreshExpiresIn: process.env.JWT_REFRESH_EXPIRES || '7d',
+  passwordResetSecret: process.env.PASSWORD_RESET_SECRET || process.env.JWT_SECRET || 'supersecret',
+  passwordResetExpiresIn: process.env.PASSWORD_RESET_EXPIRES || '30m',
   databaseUrl: process.env.DATABASE_URL || '',
   dbHost: process.env.DB_HOST || 'localhost',
   dbPort: Number(process.env.DB_PORT || 5432),

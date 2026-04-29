@@ -126,12 +126,21 @@ export default function Login() {
               <button
                 type="button"
                 onClick={() => !isSubmitting && setShowPassword(!showPassword)}
-                className="absolute right-4 top-3 text-lg hover:opacity-70 transition disabled:cursor-not-allowed"
+                className="absolute right-3 top-2.5 p-1 text-slate-500 hover:text-slate-700 transition disabled:cursor-not-allowed"
                 disabled={isSubmitting}
                 aria-label="Toggle password visibility"
                 title={showPassword ? 'Hide password' : 'Show password'}
               >
-                {showPassword ? '🙈' : '👁️'}
+                {showPassword ? (
+                  <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-5 0-9-3.5-10-7 1.152-2.849 3.062-4.849 5.364-5.95m3.252-.67A10.05 10.05 0 0112 5c5 0 9 3.5 10 7a11.442 11.442 0 01-4.123 5.177M15 12a3 3 0 00-4.243-4.243M9.88 9.88A3 3 0 0014.12 14.12M3 3l18 18" />
+                  </svg>
+                ) : (
+                  <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5s8.268 2.943 9.542 7c-1.274 4.057-5.065 7-9.542 7S3.732 16.057 2.458 12z" />
+                  </svg>
+                )}
               </button>
             </div>
           </div>
@@ -145,9 +154,11 @@ export default function Login() {
           </button>
 
           <div className="mt-2 text-center">
-            <p className="text-sm text-slate-500">Forgot password?</p>
+            <Link to="/forgot-password" className="text-sm font-medium text-blue-600 hover:text-blue-700">
+              Forgot password?
+            </Link>
           </div>
-          
+
         </form>
       </div>
     </div>

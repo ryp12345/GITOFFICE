@@ -97,7 +97,7 @@ export default function StaffSidebar() {
 
   return (
     <>
-      <div className="md:hidden fixed top-0 left-0 right-0 bg-[#001f3f] text-white p-4 flex justify-between items-center z-50 shadow-lg">
+      <div className="md:hidden fixed top-16 left-0 right-0 bg-[#001f3f] text-white p-4 flex justify-between items-center z-30 shadow-lg">
         <span className="font-semibold">Menu</span>
         <button
           onClick={() => setIsMobileOpen(!isMobileOpen)}

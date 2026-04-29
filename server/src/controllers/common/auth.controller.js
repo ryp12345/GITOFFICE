@@ -27,4 +27,25 @@ async function refresh(req, res, next) {
   }
 }
 
-module.exports = { register, login, refresh };
+async function forgotPassword(req, res, next) {
+  try {
+    await authService.requestPasswordReset(req.body?.email);
+    res.json({
+      success: true,
+      message: 'If an account exists for this email, a password reset link has been sent.'
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+async function resetPassword(req, res, next) {
+  try {
+    await authService.resetPasswordWithToken(req.body?.token, req.body?.password);
+    res.json({ success: true, message: 'Password reset successful. You can now sign in.' });
+  } catch (error) {
+    next(error);
+  }
+}
+
+module.exports = { register, login, refresh, forgotPassword, resetPassword };
