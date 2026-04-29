@@ -8,8 +8,7 @@ import SuperAdminLeaveEntitlementPage from '../pages/super-admin/LeaveEntitlemen
 import SuperAdminHolidayRHListPage from '../pages/super-admin/HolidayRHList';
 import EstablishmentDashboard from '../pages/establishment/Dashboard';
 import HODDashboard from '../pages/hod/Dashboard';
-import TeachingDashboard from '../pages/teaching/Dashboard';
-import NonTeachingDashboard from '../pages/nonteaching/Dashboard';
+import StaffDashboard from '../pages/staff/StaffDashboard';
 import AssociationsPage from '../pages/establishment/Associations';
 import DepartmentPage from '../pages/establishment/Departments';
 import DesignationsPage from '../pages/establishment/Designations';
@@ -24,7 +23,10 @@ import RoleRoute from './RoleRoute';
 import { useAuth } from '../context/AuthContext';
 import { getDashboardPathByRole } from '../utils/role';
 import DepartmentsPage from '../pages/establishment/Departments';
-import DepartmentHistory from '../pages/teaching/DepartmentHistory';
+import DepartmentHistory from '../pages/staff/DepartmentHistory';
+import DesignationPayscale from '../pages/staff/DesignationPayscale';
+import AssociationPage from '../pages/staff/AssociationPage';
+import QualificationPage from '../pages/staff/QualificationPage';
 import StaffPage from '../pages/establishment/Staff';
 import StaffViewPage from '../pages/establishment/StaffViewPage';
 import { useParams } from 'react-router-dom';
@@ -85,11 +87,18 @@ export default function AppRoutes() {
           <Route path="/hod" element={<HODDashboard />} />
         </Route>
         <Route element={<RoleRoute role="Teaching" />}>
-          <Route path="/teaching" element={<TeachingDashboard />} />
+          <Route path="/teaching" element={<StaffDashboard />} />
           <Route path="/teaching/department-history" element={<DepartmentHistory />} />
+          <Route path="/teaching/designation-payscale" element={<DesignationPayscale />} />
+          <Route path="/teaching/association" element={<AssociationPage />} />
+          <Route path="/teaching/qualification" element={<QualificationPage />} />
         </Route>
         <Route element={<RoleRoute role="Non-Teaching" />}>
-          <Route path="/nonteaching" element={<NonTeachingDashboard />} />
+          <Route path="/nonteaching" element={<StaffDashboard />} />
+          <Route path="/nonteaching/department-history" element={<DepartmentHistory />} />
+          <Route path="/nonteaching/designation-payscale" element={<DesignationPayscale />} />
+          <Route path="/nonteaching/association" element={<AssociationPage />} />
+          <Route path="/nonteaching/qualification" element={<QualificationPage />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

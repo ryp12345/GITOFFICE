@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react';
-import { getStaffDepartments } from '../../api/staffDepartmentApi';
+import { getStaffAssociations } from '../../api/staffAssociationApi';
 import { useAuth } from '../../context/AuthContext';
 import Header from '../../components/layout/Header';
-import SidebarTeaching from '../../components/layout/SidebarTeaching';
+import StaffSidebar from '../../components/layout/StaffSidebar';
 import api from '../../api/axios';
 
-export default function DepartmentHistory() {
+export default function AssociationPage() {
   const { user } = useAuth?.() || {};
-  const [departments, setDepartments] = useState([]);
+  const [associations, setAssociations] = useState([]);
   const [loading, setLoading] = useState(true);
 
   const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -57,6 +57,7 @@ export default function DepartmentHistory() {
           month: new Date().getMonth() + 1,
           day: new Date().getDate(),
         };
+
     if (!startDate || !endDate) return '-';
 
     const totalMonths =
@@ -79,16 +80,22 @@ export default function DepartmentHistory() {
     return `${String(parts.day).padStart(2, '0')}-${monthNames[monthIndex]}-${parts.year}`;
   };
 
-  const departmentRows = Array.isArray(departments)
-    ? departments.map((row) => ({
-        ...row,
-        start_date: normalizeDateValue(row?.start_date),
-        end_date: normalizeDateValue(row?.end_date),
-        duration:
-          calcDuration(normalizeDateValue(row?.start_date), normalizeDateValue(row?.end_date)) !== '-'
-            ? calcDuration(normalizeDateValue(row?.start_date), normalizeDateValue(row?.end_date))
-            : row?.duration || '-',
-      }))
+  const associationRows = Array.isArray(associations)
+    ? associations.map((row) => {
+        const startDate = normalizeDateValue(row?.start_date);
+        const endDate = normalizeDateValue(row?.end_date || row?.closing_date || row?.tenure_end_date);
+
+        return {
+          ...row,
+          association_name: row?.association_name || row?.asso_name || row?.name || '-',
+          start_date: startDate,
+          end_date: endDate,
+          duration:
+            calcDuration(startDate, endDate) !== '-'
+              ? calcDuration(startDate, endDate)
+              : row?.duration || '-',
+        };
+      })
     : [];
 
   useEffect(() => {
@@ -106,67 +113,75 @@ export default function DepartmentHistory() {
       }
     }
 
-    async function fetchDepartments() {
+    async function fetchAssociations() {
       setLoading(true);
       try {
         const staffId = await resolveStaffId();
         if (!staffId) {
-          setDepartments([]);
+          setAssociations([]);
           setLoading(false);
           return;
         }
 
-        const res = await getStaffDepartments(staffId);
-        setDepartments(res.data || []);
-      } catch (e) {
-        setDepartments([]);
+        const res = await getStaffAssociations(staffId);
+        const rows = Array.isArray(res?.data)
+          ? res.data
+          : Array.isArray(res)
+            ? res
+            : [];
+        setAssociations(rows);
+      } catch (_e) {
+        setAssociations([]);
       } finally {
         setLoading(false);
       }
     }
-    fetchDepartments();
+
+    fetchAssociations();
   }, [user?.id, user?.staff_id]);
 
   return (
     <div className="min-h-screen bg-slate-100 flex flex-col">
       <Header />
       <div className="flex flex-1 min-h-0">
-        <SidebarTeaching />
+        <StaffSidebar />
         <main className="flex-1 overflow-auto p-6">
           <div className="max-w-7xl mx-auto">
             <div className="mb-8 text-center">
-              <h2 className="text-3xl font-extrabold text-slate-900">Department History</h2>
+              <h2 className="text-3xl font-extrabold text-slate-900">My Association</h2>
             </div>
 
             <div className="overflow-hidden bg-white shadow-xl rounded-xl">
               {loading ? (
                 <div className="text-center py-10 text-gray-500">Loading...</div>
-              ) : departmentRows.length === 0 ? (
-                <div className="text-center py-10 text-gray-500">No department history found.</div>
+              ) : associationRows.length === 0 ? (
+                <div className="text-center py-10 text-gray-500">No association history found.</div>
               ) : (
                 <div className="overflow-x-auto">
-                  <table className="min-w-full">
-                    <thead className="bg-gray-100">
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-blue-600">
                       <tr>
-                        <th className="px-3 py-2 border-b text-left text-sm font-semibold text-gray-700">S.no</th>
-                        <th className="px-3 py-2 border-b text-left text-sm font-semibold text-gray-700">Department</th>
-                        <th className="px-3 py-2 border-b text-left text-sm font-semibold text-gray-700">Start Date</th>
-                        <th className="px-3 py-2 border-b text-left text-sm font-semibold text-gray-700">End Date</th>
-                        <th className="px-3 py-2 border-b text-left text-sm font-semibold text-gray-700">Duration</th>
-                        <th className="px-3 py-2 border-b text-left text-sm font-semibold text-gray-700">Status</th>
+                        <th className="px-6 py-4 text-left text-xs font-medium text-white uppercase tracking-wider">S.NO</th>
+                        <th className="px-6 py-4 text-left text-xs font-medium text-white uppercase tracking-wider">Association</th>
+                        <th className="px-6 py-4 text-left text-xs font-medium text-white uppercase tracking-wider">Start Date</th>
+                        <th className="px-6 py-4 text-left text-xs font-medium text-white uppercase tracking-wider">End Date</th>
+                        <th className="px-6 py-4 text-left text-xs font-medium text-white uppercase tracking-wider">Duration</th>
+                        <th className="px-6 py-4 text-left text-xs font-medium text-white uppercase tracking-wider">Status</th>
                       </tr>
                     </thead>
-                    <tbody>
-                      {departmentRows.map((row, idx) => (
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {associationRows.map((row, idx) => (
                         <tr key={row.id || idx} className="even:bg-gray-50">
                           <td className="px-3 py-2 border-b text-sm">{idx + 1}</td>
-                          <td className="px-3 py-2 border-b text-sm">{row.department_name || '-'}</td>
+                          <td className="px-3 py-2 border-b text-sm">{row.association_name || '-'}</td>
                           <td className="px-3 py-2 border-b text-sm">{formatDateDMY(row.start_date)}</td>
                           <td className="px-3 py-2 border-b text-sm">{formatDateDMY(row.end_date)}</td>
                           <td className="px-3 py-2 border-b text-sm">{row.duration || '-'}</td>
-                           <td className="px-6 py-4 whitespace-nowrap text-sm">
-                            <span className={`px-3 py-1 text-xs font-medium rounded-full ${row.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}>
-                              {row.status}
+                          <td className="px-6 py-4 whitespace-nowrap text-sm">
+                            <span
+                              className={`px-3 py-1 text-xs font-medium rounded-full ${row.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}
+                            >
+                              {row.status || '-'}
                             </span>
                           </td>
                         </tr>
