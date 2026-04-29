@@ -62,7 +62,19 @@ export default function StaffSidebar() {
   const isNonTeaching = isRoleMatch(user?.role, ROLE_NON_TEACHING);
 
   const links = useMemo(() => {
-    const shared = COMMON_LINKS.map((item) => ({ ...item, path: getPath(item, isTeaching) }));
+    const shared = COMMON_LINKS.map((item) => {
+      if (item.submenu) {
+        return {
+          ...item,
+          submenu: item.submenu.map((subitem) => ({
+            ...subitem,
+            path: getPath(subitem, isTeaching),
+          })),
+        };
+      }
+
+      return { ...item, path: getPath(item, isTeaching) };
+    });
 
     if (isTeaching) {
       const teachingOnly = TEACHING_ONLY_LINKS.map((item) => ({

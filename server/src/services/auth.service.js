@@ -19,6 +19,9 @@ function buildSafeUser(user, impersonator = null) {
     id: user.id,
     email: user.email,
     role: user.role,
+    fname: user.fname || null,
+    mname: user.mname || null,
+    lname: user.lname || null,
     impersonating: Boolean(impersonator),
     impersonator
   };

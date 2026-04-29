@@ -1,7 +1,15 @@
 const { pool } = require('../config/db');
 
 async function findByEmail(email) {
-  const { rows } = await pool.query('SELECT id, email, password, role, status, created_at FROM users WHERE email = $1 LIMIT 1', [email]);
+  const { rows } = await pool.query(
+    `SELECT u.id, u.email, u.password, u.role, u.status, u.created_at,
+       s.fname, s.mname, s.lname
+     FROM users u
+     LEFT JOIN staff s ON s.user_id = u.id
+     WHERE u.email = $1
+     LIMIT 1`,
+    [email]
+  );
   return rows[0] || null;
 }
 

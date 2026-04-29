@@ -1,5 +1,6 @@
 const userModel = require('../models/user.model');
 const authService = require('./auth.service');
+const { comparePassword } = require('../utils/hash');
 
 const DEFAULT_RESET_PASSWORD = 'Password@123';
 
@@ -61,4 +62,41 @@ async function stopImpersonation(actor) {
   return authService.issueSession(impersonator);
 }
 
-module.exports = { getById, listAll, impersonateUser, resetUserPassword, stopImpersonation };
+async function getAuthUserWithPassword(userId) {
+  const baseUser = await userModel.findById(userId);
+  const user = await userModel.findByEmail(baseUser?.email);
+
+  if (!user) {
+    const err = new Error('User not found');
+    err.statusCode = 404;
+    throw err;
+  }
+
+  return user;
+}
+
+async function verifyOwnCurrentPassword(userId, currentPassword) {
+  const user = await getAuthUserWithPassword(userId);
+  return comparePassword(currentPassword, user.password);
+}
+
+async function changeOwnPassword(userId, currentPassword, newPassword) {
+  const isValid = await verifyOwnCurrentPassword(userId, currentPassword);
+  if (!isValid) {
+    const err = new Error('Current password is incorrect');
+    err.statusCode = 400;
+    throw err;
+  }
+
+  await authService.resetPassword(userId, newPassword);
+}
+
+module.exports = {
+  getById,
+  listAll,
+  impersonateUser,
+  resetUserPassword,
+  stopImpersonation,
+  changeOwnPassword,
+  verifyOwnCurrentPassword
+};

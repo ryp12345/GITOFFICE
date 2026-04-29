@@ -33,6 +33,8 @@ import { useParams } from 'react-router-dom';
 import { useMemo } from 'react';
 import LeaveRulesPage from '../pages/establishment/leave_management/LeaveRules';
 import LeaveEntitlementPage from '../pages/establishment/leave_management/leave_entitlement';
+import StaffLeavesPage from '../pages/staff/leaves';
+import ChangePassword from '../pages/auth/ChangePassword';
 
 // StaffViewPage now fetches its own data from API using id
 function StaffViewPageWrapper() {
@@ -57,6 +59,7 @@ export default function AppRoutes() {
         <Route path="/register" element={<Register />} />
         <Route path="/" element={<HomeRedirect />} />
         <Route element={<ProtectedRoute />}>
+          <Route path="/change-password" element={<ChangePassword />} />
           <Route element={<RoleRoute role="Super Admin" />}>
             <Route path="/super-admin" element={<SuperAdminDashboard />} />
             <Route path="/super-admin/users" element={<SuperAdminUsersPage />} />
@@ -92,6 +95,7 @@ export default function AppRoutes() {
           <Route path="/teaching/designation-payscale" element={<DesignationPayscale />} />
           <Route path="/teaching/association" element={<AssociationPage />} />
           <Route path="/teaching/qualification" element={<QualificationPage />} />
+          <Route path="/teaching/leave-application" element={<StaffLeavesPage />} />
         </Route>
         <Route element={<RoleRoute role="Non-Teaching" />}>
           <Route path="/nonteaching" element={<StaffDashboard />} />
@@ -99,6 +103,7 @@ export default function AppRoutes() {
           <Route path="/nonteaching/designation-payscale" element={<DesignationPayscale />} />
           <Route path="/nonteaching/association" element={<AssociationPage />} />
           <Route path="/nonteaching/qualification" element={<QualificationPage />} />
+          <Route path="/nonteaching/leave-application" element={<StaffLeavesPage />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
