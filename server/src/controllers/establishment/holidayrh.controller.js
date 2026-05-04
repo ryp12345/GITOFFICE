@@ -1,11 +1,22 @@
 const HolidayRH = require('../../models/holidayrh.model');
 const { sendSuccess, sendError } = require('../../utils/response');
+const { findDepartmentByHodUserId } = require('../../models/hodDepartmentOverview.model');
 
 const allowedTypes = ['Holiday', 'RH'];
 
 exports.getAll = async (_req, res) => {
   try {
-    const rows = await HolidayRH.getAll();
+    const reqUser = _req.user || {};
+    let rows;
+
+    if (String(reqUser.role || '').toLowerCase() === 'head of department') {
+      // resolve department for this HOD user id
+      const department = await findDepartmentByHodUserId(reqUser.id);
+      const departmentId = department ? department.id : null;
+      rows = await HolidayRH.getAllForDepartment(departmentId);
+    } else {
+      rows = await HolidayRH.getAll();
+    }
     sendSuccess(res, rows);
   } catch (err) {
     sendError(res, err.message || 'Error fetching Holiday/RH list', 500);

@@ -64,6 +64,33 @@ export default function HODDepartmentOverviewPage() {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [notification, setNotification] = useState({ show: false, message: '', type: 'info' });
+  const [search, setSearch] = useState('');
+  const [page, setPage] = useState(1);
+  const PAGE_SIZE = 10;
+
+  const filtered = useMemo(() => {
+    const sorted = [...rows].sort((a, b) => {
+      const aTime = a.start_date ? new Date(a.start_date).getTime() : 0;
+      const bTime = b.start_date ? new Date(b.start_date).getTime() : 0;
+      if (bTime !== aTime) return bTime - aTime;
+      return (b.id || 0) - (a.id || 0);
+    });
+    const q = search.trim().toLowerCase();
+    if (!q) return sorted;
+    return sorted.filter(r => (
+      getHodName(r).toLowerCase().includes(q) ||
+      (r.status || '').toLowerCase().includes(q) ||
+      (r.start_date || '').toLowerCase().includes(q) ||
+      (r.end_date || '').toLowerCase().includes(q)
+    ));
+  }, [rows, search]);
+
+  const paginated = useMemo(() => {
+    const start = (page - 1) * PAGE_SIZE;
+    return filtered.slice(start, start + PAGE_SIZE);
+  }, [filtered, page]);
+
+  useEffect(() => { setPage(1); }, [search, rows]);
 
   useEffect(() => {
     const loadDepartmentOverview = async () => {
@@ -123,6 +150,13 @@ export default function HODDepartmentOverviewPage() {
               </p>
             </div>
 
+            <div className="flex items-center justify-between mb-4">
+              <div className="relative w-full sm:w-72">
+                <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search HODs..." className="w-full py-2 pl-10 pr-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500" />
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-400 absolute left-3 top-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+              </div>
+            </div>
+
             <div className="overflow-hidden bg-white shadow-xl rounded-xl">
               <div className="overflow-x-auto">
                 <table className="min-w-full divide-y divide-gray-200">
@@ -141,16 +175,16 @@ export default function HODDepartmentOverviewPage() {
                       <tr>
                         <td colSpan={6} className="px-6 py-12 text-center text-slate-500">Loading department overview...</td>
                       </tr>
-                    ) : rows.length === 0 ? (
+                    ) : filtered.length === 0 ? (
                       <tr>
                         <td colSpan={6} className="px-6 py-12 text-center text-slate-500">No HOD details found for this department.</td>
                       </tr>
                     ) : (
-                      rows.map((row, index) => {
+                      paginated.map((row, index) => {
                         const isActive = String(row?.status || '').toLowerCase() === 'active';
                         return (
                           <tr key={`${row.staff_id || row.user_id || index}-${row.start_date || index}`} className={isActive ? 'bg-white' : 'bg-slate-100'}>
-                            <td className="px-6 py-4 text-sm font-medium text-slate-900">{index + 1}</td>
+                            <td className="px-6 py-4 text-sm font-medium text-slate-900">{(page - 1) * PAGE_SIZE + index + 1}</td>
                             <td className="px-6 py-4 text-sm text-slate-700">{getHodName(row)}</td>
                             <td className="px-6 py-4 text-sm text-slate-700">{formatDate(row.start_date)}</td>
                             <td className="px-6 py-4 text-sm text-slate-700">{formatDate(row.end_date)}</td>
@@ -167,7 +201,29 @@ export default function HODDepartmentOverviewPage() {
                   </tbody>
                 </table>
               </div>
-            </div>
+              </div>
+              {/* Pagination Controls */}
+              {filtered.length > PAGE_SIZE && (
+                <div className="flex justify-end items-center gap-2 px-6 pt-4">
+                  <button
+                    className="px-3 py-1 rounded border border-gray-300 bg-white text-gray-700 disabled:opacity-50"
+                    onClick={() => setPage(p => Math.max(1, p - 1))}
+                    disabled={page === 1}
+                  >
+                    Prev
+                  </button>
+                  <span className="text-sm text-gray-700">
+                    Page {page} of {Math.ceil(filtered.length / PAGE_SIZE)}
+                  </span>
+                  <button
+                    className="px-3 py-1 rounded border border-gray-300 bg-white text-gray-700 disabled:opacity-50"
+                    onClick={() => setPage(p => Math.min(Math.ceil(filtered.length / PAGE_SIZE), p + 1))}
+                    disabled={page === Math.ceil(filtered.length / PAGE_SIZE)}
+                  >
+                    Next
+                  </button>
+                </div>
+              )}
           </div>
         </main>
       </div>

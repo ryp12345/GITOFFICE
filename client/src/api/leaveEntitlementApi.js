@@ -20,6 +20,14 @@ export const getLeaveEntitlements = async ({ year, departmentId }, token) => {
   });
 };
 
+export const getLeaveEntitlementsForHod = async ({ year }, token) => {
+  const params = { year };
+  return axios.get('/leave-entitlements/hod', {
+    params,
+    headers: tokenHeaders(token),
+  });
+};
+
 export const updateLeaveEntitlement = async (payload, token) => {
   return axios.patch('/leave-entitlements', payload, {
     headers: tokenHeaders(token),

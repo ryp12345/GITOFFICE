@@ -20,6 +20,8 @@ import { useEffect, useMemo, useState } from 'react';
 import Notification from '../../../components/common/Notification';
 import Header from '../../../components/layout/Header';
 import Sidebar from '../../../components/layout/Sidebar';
+// Allow injecting a different sidebar (e.g., SidebarHOD) when rendering for HODs.
+// Usage: <HolidayRHListPage SidebarComponent={SidebarHOD} />
 import { useAuth } from '../../../context/AuthContext';
 import {
   createHolidayRH,
@@ -43,8 +45,8 @@ const getWeekday = (dateText) => {
   return date.toLocaleDateString('en-US', { weekday: 'long' });
 };
 
-export default function HolidayRHListPage() {
-  const { token } = useAuth?.() || {};
+export default function HolidayRHListPage({ SidebarComponent = Sidebar }) {
+  const { token, user } = useAuth?.() || {};
   const [rows, setRows] = useState([]);
   const [search, setSearch] = useState('');
   const [yearFilter, setYearFilter] = useState('all');
@@ -202,7 +204,7 @@ export default function HolidayRHListPage() {
     <div className="min-h-screen bg-slate-100 flex flex-col">
       <Header />
       <div className="flex flex-1 min-h-0">
-        <Sidebar />
+        <SidebarComponent />
         <main className="flex-1 overflow-auto p-6">
           <div className="max-w-7xl mx-auto">
             <Notification
@@ -243,15 +245,17 @@ export default function HolidayRHListPage() {
                 </select>
               </div>
 
-              <button
-                onClick={openCreate}
-                className="flex items-center justify-center w-full px-6 py-3 font-medium text-white transition-all duration-300 transform rounded-lg shadow-lg bg-blue-600 hover:bg-blue-700 hover:-translate-y-1 hover:scale-105 sm:w-auto"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" />
-                </svg>
-                Add Holiday/RH
-              </button>
+              {String(user?.role || '').toLowerCase() === 'establishment' && (
+                <button
+                  onClick={openCreate}
+                  className="flex items-center justify-center w-full px-6 py-3 font-medium text-white transition-all duration-300 transform rounded-lg shadow-lg bg-blue-600 hover:bg-blue-700 hover:-translate-y-1 hover:scale-105 sm:w-auto"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" />
+                  </svg>
+                  Add Holiday/RH
+                </button>
+              )}
             </div>
 
             <div className="mb-10 overflow-hidden bg-white shadow-xl rounded-xl">
@@ -293,24 +297,28 @@ export default function HolidayRHListPage() {
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium">
                             <div className="flex items-center justify-center space-x-2">
-                              <button
-                                onClick={() => openEdit(row)}
-                                className="p-2 text-white transition-colors duration-200 bg-blue-600 rounded-lg hover:bg-blue-700"
-                                title="Edit"
-                              >
-                                <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                                </svg>
-                              </button>
-                              <button
-                                onClick={() => remove(row.id)}
-                                className="p-2 text-white transition-colors duration-200 bg-red-600 rounded-lg hover:bg-red-700"
-                                title="Delete"
-                              >
-                                <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                </svg>
-                              </button>
+                              {String(user?.role || '').toLowerCase() === 'establishment' && (
+                                <>
+                                  <button
+                                    onClick={() => openEdit(row)}
+                                    className="p-2 text-white transition-colors duration-200 bg-blue-600 rounded-lg hover:bg-blue-700"
+                                    title="Edit"
+                                  >
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                    </svg>
+                                  </button>
+                                  <button
+                                    onClick={() => remove(row.id)}
+                                    className="p-2 text-white transition-colors duration-200 bg-red-600 rounded-lg hover:bg-red-700"
+                                    title="Delete"
+                                  >
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                    </svg>
+                                  </button>
+                                </>
+                              )}
                             </div>
                           </td>
                         </tr>

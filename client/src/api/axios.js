@@ -2,7 +2,7 @@ import axios from 'axios';
 
 const configuredApiUrl = import.meta.env.VITE_API_URL?.trim();
 const runtimeHost = typeof window !== 'undefined' ? window.location.hostname : 'localhost';
-const baseURL = configuredApiUrl || `http://${runtimeHost}:3001/api`;
+const baseURL = configuredApiUrl || `http://${runtimeHost}:3004/api`;
 
 const api = axios.create({ baseURL });
 

@@ -6,6 +6,23 @@ const HolidayRH = {
     return result.rows;
   },
 
+  // Return holiday/rh rows that are either global (department_id IS NULL)
+  // or explicitly assigned to the given department. If the column
+  // `department_id` does not exist in the schema, fall back to global list.
+  async getAllForDepartment(departmentId) {
+    if (!departmentId) return this.getAll();
+    try {
+      const q = 'SELECT * FROM holidayrhs WHERE department_id IS NULL OR department_id = $1 ORDER BY year DESC, "start" ASC, id DESC';
+      const result = await pool.query(q, [departmentId]);
+      return result.rows;
+    } catch (err) {
+      if (/column "department_id"|department_id/i.test(String(err.message || ''))) {
+        return this.getAll();
+      }
+      throw err;
+    }
+  },
+
   async getById(id) {
     const result = await pool.query('SELECT * FROM holidayrhs WHERE id = $1', [id]);
     return result.rows[0];

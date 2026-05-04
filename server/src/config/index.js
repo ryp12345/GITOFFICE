@@ -1,14 +1,14 @@
 require('dotenv').config();
 
-const defaultCorsOrigins = ['http://localhost:3000', 'http://127.0.0.1:3000'];
+const defaultCorsOrigins = ['http://localhost:3003', 'http://127.0.0.1:3003'];
 const corsOrigins = process.env.CORS_ORIGIN
   ? process.env.CORS_ORIGIN.split(',').map((origin) => origin.trim()).filter(Boolean)
   : defaultCorsOrigins;
 
 module.exports = {
   nodeEnv: process.env.NODE_ENV || 'development',
-  port: Number(process.env.PORT || 3001),
-  clientUrl: process.env.CLIENT_URL || 'http://localhost:3000',
+  port: Number(process.env.PORT || 3004),
+  clientUrl: process.env.CLIENT_URL || 'http://localhost:3003',
   jwtSecret: process.env.JWT_SECRET || 'supersecret',
   jwtExpiresIn: process.env.JWT_EXPIRES || process.env.JWT_EXPIRES_IN || '1d',
   jwtRefreshSecret: process.env.JWT_REFRESH_SECRET || '',

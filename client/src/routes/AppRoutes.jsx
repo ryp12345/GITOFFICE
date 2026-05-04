@@ -10,6 +10,8 @@ import EstablishmentDashboard from '../pages/establishment/Dashboard';
 import HODDashboard from '../pages/hod/Dashboard';
 import HODDepartmentOverviewPage from '../pages/hod/DepartmentOverview';
 import HODMyStaffPage from '../pages/hod/MyStaff';
+import HODLeaveEntitlementPage from '../pages/hod/LeaveEntitlement';
+import SidebarHOD from '../components/layout/SidebarHOD';
 import StaffDashboard from '../pages/staff/StaffDashboard';
 import AssociationsPage from '../pages/establishment/Associations';
 import DepartmentPage from '../pages/establishment/Departments';
@@ -96,6 +98,8 @@ export default function AppRoutes() {
           <Route path="/hod" element={<HODDashboard />} />
           <Route path="/hod/department-overview" element={<HODDepartmentOverviewPage />} />
           <Route path="/hod/my-staff" element={<HODMyStaffPage />} />
+          <Route path="/hod/leave-entitlement" element={<HODLeaveEntitlementPage />} />
+          <Route path="/hod/holidays" element={<HolidayRHListPage SidebarComponent={SidebarHOD} />} />
         </Route>
         <Route element={<RoleRoute role="Teaching" />}>
           <Route path="/teaching" element={<StaffDashboard />} />
