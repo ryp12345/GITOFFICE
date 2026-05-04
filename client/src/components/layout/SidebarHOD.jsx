@@ -10,8 +10,8 @@ export default function SidebarHOD() {
 
   const links = [
     { name: 'Dashboard', path: '/hod', icon: '📊' },
-    { name: 'Department Overview', path: '/hod/department', icon: '🏢' },
-    { name: 'My Staff', path: '/hod/staff', icon: '👥' },
+    { name: 'Department Overview', path: '/hod/department-overview', icon: '🏢' },
+    { name: 'My Staff', path: '/hod/my-staff', icon: '👥' },
     {
       name: 'Leave Management',
       icon: '🌿',

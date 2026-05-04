@@ -71,6 +71,8 @@ const departmentRoutes = require('./routes/department.routes');
 app.use('/api/departments', departmentRoutes);
 const staffRoutes = require('./routes/staff.routes');
 app.use('/api/staff', staffRoutes);
+const hodRoutes = require('./routes/hod.routes');
+app.use('/api/hod', hodRoutes);
 
 app.use(errorMiddleware);
 

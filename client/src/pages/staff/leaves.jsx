@@ -44,6 +44,18 @@ function normalizeHolidayType(type) {
   return String(type || '').trim().toLowerCase();
 }
 
+function normalizeLeaveStatus(status) {
+  return String(status || '').trim().toLowerCase();
+}
+
+function isRhLeaveType(leaveType) {
+  const shortName = String(leaveType?.shortname || '').trim().toUpperCase();
+  if (shortName === 'RH') return true;
+
+  const longName = String(leaveType?.longname || '').trim().toLowerCase();
+  return longName === 'restricted holiday';
+}
+
 function toHolidayArray(payload) {
   if (Array.isArray(payload)) return payload;
   if (Array.isArray(payload?.data)) return payload.data;
@@ -402,10 +414,24 @@ export default function StaffLeavesPage() {
     return days;
   }, [form.start_date, form.end_date, form.cl_type]);
 
-  const selectedLeaveType = useMemo(
-    () => leaveTypes.find((leaveType) => String(leaveType.id) === String(form.leave_id)),
-    [leaveTypes, form.leave_id],
+  const activeLeaveTypes = useMemo(
+    () => leaveTypes.filter((leaveType) => normalizeLeaveStatus(leaveType?.status) === 'active'),
+    [leaveTypes],
   );
+
+  const selectedLeaveType = useMemo(
+    () => activeLeaveTypes.find((leaveType) => String(leaveType.id) === String(form.leave_id)),
+    [activeLeaveTypes, form.leave_id],
+  );
+
+  const selectableLeaveTypes = useMemo(() => {
+    const isRhDate = Boolean(form.start_date && rhMap[form.start_date]);
+
+    return activeLeaveTypes.filter((leaveType) => {
+      if (!isRhLeaveType(leaveType)) return true;
+      return isRhDate;
+    });
+  }, [activeLeaveTypes, form.start_date, rhMap]);
 
   const isSingleDayCL = useMemo(() => {
     if (!selectedLeaveType || !form.start_date || !form.end_date) return false;
@@ -419,6 +445,14 @@ export default function StaffLeavesPage() {
       setForm((currentForm) => ({ ...currentForm, cl_type: 'Full' }));
     }
   }, [isSingleDayCL, form.cl_type]);
+
+  useEffect(() => {
+    if (!form.leave_id) return;
+    const exists = selectableLeaveTypes.some((leaveType) => String(leaveType.id) === String(form.leave_id));
+    if (!exists) {
+      setForm((currentForm) => ({ ...currentForm, leave_id: '' }));
+    }
+  }, [selectableLeaveTypes, form.leave_id]);
 
   // ── form handlers ────────────────────────────────────────────────────────
   const handleChange = (e) => {
@@ -573,7 +607,7 @@ export default function StaffLeavesPage() {
                       className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
                     >
                       <option value="">— Select leave type —</option>
-                      {leaveTypes.map((lt) => (
+                      {selectableLeaveTypes.map((lt) => (
                         <option key={lt.id} value={lt.id}>
                           {lt.longname} ({lt.shortname})
                         </option>

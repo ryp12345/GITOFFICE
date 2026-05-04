@@ -8,6 +8,8 @@ import SuperAdminLeaveEntitlementPage from '../pages/super-admin/LeaveEntitlemen
 import SuperAdminHolidayRHListPage from '../pages/super-admin/HolidayRHList';
 import EstablishmentDashboard from '../pages/establishment/Dashboard';
 import HODDashboard from '../pages/hod/Dashboard';
+import HODDepartmentOverviewPage from '../pages/hod/DepartmentOverview';
+import HODMyStaffPage from '../pages/hod/MyStaff';
 import StaffDashboard from '../pages/staff/StaffDashboard';
 import AssociationsPage from '../pages/establishment/Associations';
 import DepartmentPage from '../pages/establishment/Departments';
@@ -92,6 +94,8 @@ export default function AppRoutes() {
         </Route>
         <Route element={<RoleRoute role="Head of Department" />}>
           <Route path="/hod" element={<HODDashboard />} />
+          <Route path="/hod/department-overview" element={<HODDepartmentOverviewPage />} />
+          <Route path="/hod/my-staff" element={<HODMyStaffPage />} />
         </Route>
         <Route element={<RoleRoute role="Teaching" />}>
           <Route path="/teaching" element={<StaffDashboard />} />
