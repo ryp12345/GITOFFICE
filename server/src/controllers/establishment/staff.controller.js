@@ -3,6 +3,17 @@ const userModel = require('../../models/user.model');
 const CasteCategory = require('../../models/castecategory.model');
 const { pool } = require('../../config/db');
 
+// GET /api/staff/statistics
+async function getStatistics(req, res, next) {
+  try {
+    const { start_date, end_date } = req.query;
+    const data = await staffService.getStatistics({ start_date, end_date });
+    res.json({ success: true, data });
+  } catch (err) {
+    next(err);
+  }
+}
+
 async function checkEmail(req, res, next) {
   try {
     const current = String(req.query.current_email || '').trim();
@@ -147,6 +158,7 @@ module.exports = {
   checkEmail,
   create,
   list,
+  getStatistics,
   remove,
   getDesignationsByEmployeeType,
   getCasteCategoriesByReligion,

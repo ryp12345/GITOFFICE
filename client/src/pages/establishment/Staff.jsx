@@ -660,6 +660,14 @@ export default function StaffPage() {
                 >
                   Bulk Upload Form 16
                 </button>
+                <button
+                  type="button"
+                  onClick={() => navigate('/establishment/staff/statistics')}
+                  className="flex items-center justify-center w-full px-6 py-3 font-medium text-white transition-all duration-300 transform rounded-lg shadow-lg bg-green-600 hover:bg-green-700 hover:-translate-y-1 hover:scale-105 sm:w-auto"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-2a4 4 0 014-4h6m-6 0V7m0 4H7" /></svg>
+                  Generate Statistics
+                </button>
               </div>
             </div>
 

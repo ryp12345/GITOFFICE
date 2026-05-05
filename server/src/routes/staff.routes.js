@@ -17,6 +17,7 @@ router.get('/checkemailid', staffController.checkEmail);
 router.get('/employee/designations', staffController.getDesignationsByEmployeeType);
 router.get('/getcastecategory_list', staffController.getCasteCategoriesByReligion);
 router.get('/getstaffpay_list', staffController.getStaffPayList);
+router.get('/statistics', staffController.getStatistics);
 router.get('/', staffController.list);
 router.post('/', staffController.create);
 router.use('/', staffAssociationRoutes);

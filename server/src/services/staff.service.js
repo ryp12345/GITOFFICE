@@ -1,3 +1,59 @@
+// Statistics for staff by designation, payscale, gender, religion
+async function getStatistics({ start_date, end_date }) {
+  // Build WHERE clause for date filtering
+  let dateFilter = '';
+  const params = [];
+  if (start_date && end_date) {
+    dateFilter = `AND ds.start_date <= $1 AND (ds.end_date IS NULL OR ds.end_date >= $2)`;
+    params.push(end_date, start_date);
+  } else if (start_date) {
+    dateFilter = `AND ds.start_date >= $1 AND (ds.end_date IS NULL OR ds.end_date >= $1)`;
+    params.push(start_date);
+  } else if (end_date) {
+    dateFilter = `AND ds.start_date <= $1 AND (ds.end_date IS NULL OR ds.end_date >= $1)`;
+    params.push(end_date);
+  } else {
+    // Match Laravel default behavior when no date filters are provided.
+    dateFilter = `AND (ds.end_date IS NULL OR ds.end_date >= CURRENT_DATE)`;
+  }
+
+  // Only these designations
+  const allowedDesignations = ['Professor', 'Assistant Professor', 'Associate Professor'];
+  const allowedDesignationsSql = allowedDesignations.map((_, i) => `$${params.length + i + 1}`).join(', ');
+  params.push(...allowedDesignations);
+
+  const sql = `
+    SELECT
+      d.design_name,
+      d.isvacational,
+      CASE WHEN LOWER(COALESCE(d.isvacational::text, '0')) IN ('1', 'true', 't', 'yes', 'vacational') THEN 'Vacational' ELSE 'Non-Vacational' END AS designation_type,
+      tp.payscale_title,
+      tp.basepay,
+      tp.maxpay,
+      SUM(CASE WHEN LOWER(COALESCE(s.gender, '')) = 'male' AND r.religion_name = 'Hindu' THEN 1 ELSE 0 END) AS hindu_male_count,
+      SUM(CASE WHEN LOWER(COALESCE(s.gender, '')) = 'female' AND r.religion_name = 'Hindu' THEN 1 ELSE 0 END) AS hindu_female_count,
+      SUM(CASE WHEN LOWER(COALESCE(s.gender, '')) = 'male' AND r.religion_name = 'Islam' THEN 1 ELSE 0 END) AS islam_male_count,
+      SUM(CASE WHEN LOWER(COALESCE(s.gender, '')) = 'female' AND r.religion_name = 'Islam' THEN 1 ELSE 0 END) AS islam_female_count,
+      SUM(CASE WHEN LOWER(COALESCE(s.gender, '')) = 'male' AND r.religion_name = 'Jainism' THEN 1 ELSE 0 END) AS jainism_male_count,
+      SUM(CASE WHEN LOWER(COALESCE(s.gender, '')) = 'female' AND r.religion_name = 'Jainism' THEN 1 ELSE 0 END) AS jainism_female_count,
+      SUM(CASE WHEN LOWER(COALESCE(s.gender, '')) = 'male' AND r.religion_name = 'Christian' THEN 1 ELSE 0 END) AS christian_male_count,
+      SUM(CASE WHEN LOWER(COALESCE(s.gender, '')) = 'female' AND r.religion_name = 'Christian' THEN 1 ELSE 0 END) AS christian_female_count,
+      SUM(CASE WHEN LOWER(COALESCE(s.gender, '')) = 'male' THEN 1 ELSE 0 END) AS total_male_count,
+      SUM(CASE WHEN LOWER(COALESCE(s.gender, '')) = 'female' THEN 1 ELSE 0 END) AS total_female_count
+    FROM staff s
+    JOIN designation_staff ds ON ds.staff_id = s.id AND ds.status = 'active' ${dateFilter}
+    JOIN designations d ON d.id = ds.designation_id
+    JOIN teaching_payscales tp ON tp.id = d.id
+    JOIN castecategories cc ON cc.id = s.castecategory_id
+    JOIN religions r ON r.id = s.religion_id
+    WHERE d.design_name IN (${allowedDesignationsSql})
+    GROUP BY d.design_name, d.isvacational, tp.payscale_title, tp.basepay, tp.maxpay
+    ORDER BY d.design_name, tp.payscale_title
+  `;
+  const { rows } = await pool.query(sql, params);
+  return rows;
+}
+
 const { pool } = require('../config/db');
 const { hashPassword } = require('../utils/hash');
 
@@ -1611,6 +1667,7 @@ async function deleteLicTransaction(staffId, licId, transactionId) {
 }
 
 module.exports = {
+  getStatistics,
   listAll,
   create,
   remove,
