@@ -2,19 +2,60 @@ const { pool } = require('../config/db');
 const { hashPassword } = require('../utils/hash');
 
 async function listAll() {
-  const sql = `
-    SELECT s.*,
-      (SELECT a.asso_name FROM association_staff ast JOIN associations a ON a.id = ast.association_id WHERE ast.staff_id = s.id AND ast.status = 'active' ORDER BY ast.id DESC LIMIT 1) AS association_name,
-      (SELECT d.dept_name FROM department_staff dst JOIN departments d ON d.id = dst.department_id WHERE dst.staff_id = s.id AND dst.status = 'active' ORDER BY dst.id DESC LIMIT 1) AS department_name,
-      (SELECT des.design_name FROM designation_staff dst2 JOIN designations des ON des.id = dst2.designation_id WHERE dst2.staff_id = s.id AND dst2.status = 'active' ORDER BY dst2.id DESC LIMIT 1) AS designation_name,
-      (SELECT i.name FROM institution_staff ist JOIN institutions i ON i.id = ist.institution_id WHERE ist.staff_id = s.id AND ist.status = 'active' ORDER BY ist.id DESC LIMIT 1) AS institution_name,
-      (SELECT et.employee_type FROM employee_types et WHERE et.staff_id = s.id AND et.status = 'active' ORDER BY et.id DESC LIMIT 1) AS emp_type_name
-    FROM staff s
-    ORDER BY s.created_at DESC, s.id DESC
-  `;
+  // Get all staff
+  const sql = `SELECT * FROM staff ORDER BY created_at DESC, id DESC`;
+  const { rows: staffRows } = await pool.query(sql);
 
-  const { rows } = await pool.query(sql);
-  return rows;
+  // Get all associations, departments, designations, employee types for all staff
+  const [associationRes, departmentRes, designationRes, empTypeRes] = await Promise.all([
+    pool.query(`
+      SELECT ast.*, a.asso_name
+      FROM association_staff ast
+      JOIN associations a ON a.id = ast.association_id
+      ORDER BY ast.staff_id, ast.id DESC
+    `),
+    pool.query(`
+      SELECT dst.*, d.dept_name, d.dept_shortname
+      FROM department_staff dst
+      JOIN departments d ON d.id = dst.department_id
+      ORDER BY dst.staff_id, dst.id DESC
+    `),
+    pool.query(`
+      SELECT dst2.*, des.design_name
+      FROM designation_staff dst2
+      JOIN designations des ON des.id = dst2.designation_id
+      ORDER BY dst2.staff_id, dst2.id DESC
+    `),
+    pool.query(`
+      SELECT * FROM employee_types WHERE status = 'active' ORDER BY staff_id, id DESC
+    `)
+  ]);
+
+  // Group by staff_id
+  const groupByStaff = (rows) => {
+    const map = {};
+    for (const row of rows) {
+      if (!map[row.staff_id]) map[row.staff_id] = [];
+      map[row.staff_id].push(row);
+    }
+    return map;
+  };
+  const associationsMap = groupByStaff(associationRes.rows);
+  const departmentsMap = groupByStaff(departmentRes.rows);
+  const designationsMap = groupByStaff(designationRes.rows);
+  const empTypeMap = groupByStaff(empTypeRes.rows);
+
+  // Attach arrays and employee type to each staff
+  for (const staff of staffRows) {
+    staff.associations = associationsMap[staff.id] || [];
+    staff.departments = departmentsMap[staff.id] || [];
+    staff.designations = designationsMap[staff.id] || [];
+    // Attach latest active employee type (if any)
+    const empTypes = empTypeMap[staff.id] || [];
+    staff.employee_type = empTypes.length > 0 ? empTypes[0].employee_type : null;
+  }
+
+  return staffRows;
 }
 
 async function create(payload) {

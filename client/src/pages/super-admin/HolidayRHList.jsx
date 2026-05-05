@@ -128,7 +128,7 @@ export default function SuperAdminHolidayRHListPage() {
                       <th className="px-6 py-4 text-left text-xs font-medium text-white uppercase tracking-wider">Title</th>
                       <th className="px-6 py-4 text-left text-xs font-medium text-white uppercase tracking-wider">Holiday RH Date</th>
                       <th className="px-6 py-4 text-left text-xs font-medium text-white uppercase tracking-wider">Day</th>
-                      <th className="px-6 py-4 text-left text-xs font-medium text-white uppercase tracking-wider">Type</th>
+                      <th className="px-6 py-4 text-left text-xs font-medium text-white uppercase tracking-wider rounded-tr-xl">Type</th>
                     </tr>
                   </thead>
 

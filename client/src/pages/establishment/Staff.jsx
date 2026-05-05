@@ -157,42 +157,14 @@ export default function StaffPage() {
         const mapped = Array.isArray(data)
           ? data.map((r) => {
               const name = `${r.fname || ''} ${r.mname || ''} ${r.lname || ''}`.replace(/\s+/g, ' ').trim();
-
-              const getPivotFirst = (record, paths, keys) => {
-                for (const p of paths) {
-                  const val = record?.[p];
-                  if (Array.isArray(val) && val.length) {
-                    for (const k of keys) if (val[0]?.[k]) return val[0][k];
-                  }
-                  if (val && typeof val === 'object') {
-                    for (const k of keys) if (val[k]) return val[k];
-                  }
-                }
-                return null;
-              };
-
-              const deptLookup = getNameById(localDepartments, r.departments_id || r.department_id || r.dept_id || r.department || r.department_name || '', 'dept_name');
-              const pivotDept = getPivotFirst(r, ['departments', 'department_staff', 'department'], ['dept_name', 'name', 'department_name']);
-              const department_name = deptLookup !== '-' ? deptLookup : pivotDept || r.department_name || r.dept_name || r.department || '-';
-
-              const desigLookup = getNameById(localDesignations, r.designations_id || r.designation_id || r.designation || r.design_name || '', 'design_name');
-              const pivotDesig = getPivotFirst(r, ['designations', 'designation_staff', 'designation'], ['design_name', 'name', 'designation_name']);
-              const designation_name = desigLookup !== '-' ? desigLookup : pivotDesig || r.designation_name || r.design_name || r.designation || '-';
-
-              const assoLookup = getNameById(localAssociations, r.associations_id || r.association_id || r.association || r.asso_name || '', 'asso_name');
-              const pivotAsso = getPivotFirst(r, ['associations', 'association_staff', 'association'], ['asso_name', 'name', 'association_name']);
-              const association_name = assoLookup !== '-' ? assoLookup : pivotAsso || r.association_name || r.asso_name || r.association || '-';
-
-              const institution_name = r.institution_name || r.institution || r.inst_name || r.name || '';
-
               return {
                 id: r.id,
                 name,
                 employee_type: r.employee_type || r.emp_type || (r.emp_type_name || '-') ,
-                department_name,
-                designation_name,
-                association_name,
-                institution_name: institution_name || '-',
+                departments: Array.isArray(r.departments) ? r.departments : [],
+                designations: Array.isArray(r.designations) ? r.designations : [],
+                associations: Array.isArray(r.associations) ? r.associations : [],
+                institution_name: r.institution_name || r.institution || r.inst_name || r.name || '-',
                 email: r.email || (r.emailUser ? `${r.emailUser}@git.edu` : ''),
                 pay_type: r.pay_type || '',
                 fixed_pay: r.fixed_pay || '',
@@ -720,9 +692,50 @@ export default function StaffPage() {
                           <td className="px-6 py-4 text-sm text-gray-900">{(page - 1) * PAGE_SIZE + idx + 1}</td>
                           <td className="px-6 py-4 text-sm font-medium text-gray-900">{row.name}</td>
                           <td className="px-6 py-4 text-sm text-gray-700">{row.employee_type}</td>
-                          <td className="px-6 py-4 text-sm text-gray-700">{row.department_name}</td>
-                          <td className="px-6 py-4 text-sm text-gray-700">{row.designation_name}</td>
-                          <td className="px-6 py-4 text-sm text-gray-700">{row.association_name}</td>
+                          <td className="px-6 py-4 text-sm text-gray-700 whitespace-pre-line">
+                            {Array.isArray(row.departments)
+                              ? row.departments
+                                  .filter((d) => d.status === 'active')
+                                  .map((d) => d.dept_shortname || d.dept_name || d.name)
+                                  .join('\n')
+                              : row.department_name}
+                            {/* Retired/Transferred/Resigned/Expired logic */}
+                            {Array.isArray(row.associations) && row.associations.some(
+                              (a) => ['Retired', 'Transfered', 'Resigned', 'Expired'].includes(a.asso_name) && a.status === 'active') && (() => {
+                                const latestInactive = Array.isArray(row.departments)
+                                  ? row.departments
+                                      .filter((d) => d.status === 'inactive')
+                                      .sort((a, b) => new Date(b.updated_at || b.created_at) - new Date(a.updated_at || a.created_at))[0]
+                                  : null;
+                                return latestInactive ? <span>\n{latestInactive.dept_shortname || latestInactive.dept_name || latestInactive.name}</span> : null;
+                              })()}
+                          </td>
+                          <td className="px-6 py-4 text-sm text-gray-700 whitespace-pre-line">
+                            {Array.isArray(row.designations)
+                              ? row.designations
+                                  .filter((d) => d.status === 'active')
+                                  .map((d) => d.design_name || d.name)
+                                  .join('\n')
+                              : row.designation_name}
+                            {/* Retired/Transferred/Resigned/Expired logic */}
+                            {Array.isArray(row.associations) && row.associations.some(
+                              (a) => ['Retired', 'Transfered', 'Resigned', 'Expired'].includes(a.asso_name) && a.status === 'active') && (() => {
+                                const latestInactive = Array.isArray(row.designations)
+                                  ? row.designations
+                                      .filter((d) => d.status === 'inactive')
+                                      .sort((a, b) => new Date(b.updated_at || b.created_at) - new Date(a.updated_at || a.created_at))[0]
+                                  : null;
+                                return latestInactive ? <span>\n{latestInactive.design_name || latestInactive.name}</span> : null;
+                              })()}
+                          </td>
+                          <td className="px-6 py-4 text-sm text-gray-700 whitespace-pre-line">
+                            {Array.isArray(row.associations)
+                              ? row.associations
+                                  .filter((a) => a.status === 'active')
+                                  .map((a) => a.asso_name || a.name)
+                                  .join('\n')
+                              : row.association_name}
+                          </td>
                           <td className="px-6 py-4 text-sm text-gray-700">
                             <div className="flex items-center gap-2">
                               <button
