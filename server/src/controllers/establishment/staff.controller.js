@@ -1,3 +1,21 @@
+// GET /api/staff/filter
+async function filter(req, res, next) {
+  try {
+    const filters = {
+      departments: req.query.departments ? (Array.isArray(req.query.departments) ? req.query.departments : [req.query.departments]) : [],
+      associations: req.query.associations ? (Array.isArray(req.query.associations) ? req.query.associations : [req.query.associations]) : [],
+      designations: req.query.designations ? (Array.isArray(req.query.designations) ? req.query.designations : [req.query.designations]) : [],
+      religion_id: req.query.religion_id || 'all',
+      castecategory_id: req.query.castecategory_id || 'all',
+      gender: req.query.gender || 'all',
+      employee_type: req.query.employee_type || 'all',
+    };
+    const data = await staffService.filterStaff(filters);
+    res.json({ success: true, data });
+  } catch (err) {
+    next(err);
+  }
+}
 const staffService = require('../../services/staff.service');
 const userModel = require('../../models/user.model');
 const CasteCategory = require('../../models/castecategory.model');
@@ -165,4 +183,5 @@ module.exports = {
   getStaffPayList,
   getById,
   update,
+  filter,
 };

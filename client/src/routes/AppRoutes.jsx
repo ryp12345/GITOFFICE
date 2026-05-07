@@ -34,6 +34,7 @@ import QualificationPage from '../pages/staff/QualificationPage';
 import StaffPage from '../pages/establishment/Staff';
 import StaffViewPage from '../pages/establishment/StaffViewPage';
 import StaffStatisticsPage from '../pages/establishment/StaffStatistics';
+import StaffInformation from '../pages/establishment/StaffInformation';
 import { useParams } from 'react-router-dom';
 import { useMemo } from 'react';
 import LeaveRulesPage from '../pages/establishment/leave_management/LeaveRules';
@@ -93,6 +94,7 @@ export default function AppRoutes() {
             {/* RemunerationHeadsPage removed */}
               <Route path="/staff" element={<StaffPage />} />
               <Route path="/establishment/staff/statistics" element={<StaffStatisticsPage />} />
+              <Route path="/establishment/staff-information" element={<StaffInformation />} />
               <Route path="/establishment/staff/:id" element={<StaffViewPageWrapper />} />
           </Route>
         </Route>

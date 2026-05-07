@@ -120,18 +120,20 @@ export default function StaffStatisticsPage() {
               type={notification.type}
               onClose={() => setNotification({ show: false, message: '', type: 'success' })}
             />
-            <div className="mb-8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-              <div>
-                <h1 className="text-3xl font-bold text-gray-900 mb-1">Staff Statistics</h1>
-                <p className="text-gray-600">Grouped by Designation, Payscale, Gender, Religion</p>
+            <div className="mb-8 flex flex-col sm:flex-row sm:items-center gap-4">
+              <div className="sm:order-2 flex-1 text-center">
+                <h1 className="text-3xl font-bold text-gray-900 mb-1 text-center">Staff Statistics</h1>
+                <p className="text-gray-600 text-center">Grouped by Designation, Payscale, Gender, Religion</p>
               </div>
-              <button
-                onClick={() => navigate('/staff')}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg shadow hover:bg-blue-700"
-                type="button"
-              >
-                ← Back to Staff
-              </button>
+              <div className="sm:order-1 w-full sm:w-auto flex justify-start">
+                <button
+                  onClick={() => navigate('/staff')}
+                  className="inline-block bg-blue-100 text-blue-700 px-4 py-2 rounded hover:bg-blue-200 transition"
+                  type="button"
+                >
+                  ← Back to Staff
+                </button>
+              </div>
             </div>
             <div className="flex flex-wrap gap-4 items-end mb-6 justify-between">
               <form onSubmit={handleFilter} className="flex flex-wrap gap-4 items-end">

@@ -1,3 +1,55 @@
+// Filter staff by multiple criteria (departments, associations, designations, religion, caste, gender, employee type)
+async function filterStaff(filters) {
+  // Build base query
+  let sql = `SELECT s.*, u.email,
+    (SELECT STRING_AGG(DISTINCT d.dept_name, ', ') FROM department_staff ds JOIN departments d ON d.id = ds.department_id WHERE ds.staff_id = s.id AND ds.status = 'active') AS departments_list,
+    (SELECT STRING_AGG(DISTINCT a.asso_name, ', ') FROM association_staff ast JOIN associations a ON a.id = ast.association_id WHERE ast.staff_id = s.id AND ast.status = 'active') AS asso_name,
+    (SELECT STRING_AGG(DISTINCT des.design_name, ', ') FROM designation_staff dst2 JOIN designations des ON des.id = dst2.designation_id WHERE dst2.staff_id = s.id AND dst2.status = 'active') AS designations_list
+    FROM staff s
+    LEFT JOIN users u ON u.id = s.user_id
+    WHERE 1=1`;
+  const params = [];
+
+  // Department filter
+  if (filters.departments && filters.departments.length && filters.departments[0] !== 'all') {
+    sql += ` AND s.id IN (SELECT staff_id FROM department_staff WHERE department_id = ANY($${params.length + 1}::int[]))`;
+    params.push(filters.departments.map(Number));
+  }
+  // Association filter
+  if (filters.associations && filters.associations.length && filters.associations[0] !== 'all') {
+    sql += ` AND s.id IN (SELECT staff_id FROM association_staff WHERE association_id = ANY($${params.length + 1}::int[]))`;
+    params.push(filters.associations.map(Number));
+  }
+  // Designation filter
+  if (filters.designations && filters.designations.length && filters.designations[0] !== 'all') {
+    sql += ` AND s.id IN (SELECT staff_id FROM designation_staff WHERE designation_id = ANY($${params.length + 1}::int[]))`;
+    params.push(filters.designations.map(Number));
+  }
+  // Religion filter
+  if (filters.religion_id && filters.religion_id !== 'all') {
+    sql += ` AND s.religion_id = $${params.length + 1}`;
+    params.push(Number(filters.religion_id));
+  }
+  // Caste Category filter
+  if (filters.castecategory_id && filters.castecategory_id !== 'all') {
+    sql += ` AND s.castecategory_id = $${params.length + 1}`;
+    params.push(Number(filters.castecategory_id));
+  }
+  // Gender filter
+  if (filters.gender && filters.gender !== 'all') {
+    sql += ` AND LOWER(s.gender) = $${params.length + 1}`;
+    params.push(filters.gender.toLowerCase());
+  }
+  // Employee type filter
+  if (filters.employee_type && filters.employee_type !== 'all') {
+    sql += ` AND s.id IN (SELECT staff_id FROM employee_types WHERE LOWER(employee_type) = $${params.length + 1} AND status = 'active')`;
+    params.push(filters.employee_type.toLowerCase());
+  }
+
+  sql += ' ORDER BY s.created_at DESC, s.id DESC';
+  const { rows } = await pool.query(sql, params);
+  return rows;
+}
 // Statistics for staff by designation, payscale, gender, religion
 async function getStatistics({ start_date, end_date }) {
   // Build WHERE clause for date filtering
@@ -1713,4 +1765,5 @@ module.exports = {
   listLicTransactions,
   createLicTransaction,
   deleteLicTransaction,
+  filterStaff,
 };
