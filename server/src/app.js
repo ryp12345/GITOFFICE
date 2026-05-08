@@ -76,6 +76,10 @@ app.use('/api/hod', hodRoutes);
 const jobsRoutes = require('./routes/jobs.routes');
 app.use('/api/jobs', jobsRoutes);
 
+// Biometric routes (daily/monthly)
+const biometricRoutes = require('./routes/biometric.routes');
+app.use('/api/biometric', biometricRoutes);
+
 app.use(errorMiddleware);
 
 module.exports = app;

@@ -26,10 +26,21 @@ export default function SidebarEstablishment() {
         { name: 'Leave Calendar', path: '/leave-management/calendar' }
       ]
     },
+
     { name: 'Qualifications', path: '/qualifications', icon: '🎓' },
     { name: 'Religions & Castes', path: '/religions', icon: '🛐' },
     // Remuneration Heads removed
-    { name: 'Staff', path: '/staff', icon: '👥' }
+    { name: 'Staff', path: '/staff', icon: '👥' },
+     {
+      name: 'BIOMETRIC',
+      path: '/biometric',
+      icon: '🔏',
+      submenu: [
+        { name: 'Daily Data', path: '/biometric/daily' },
+        { name: 'Monthly Data', path: '/biometric/monthly' },
+        { name: 'Muster', path: '/biometric/muster' }
+      ]
+    }
   ];
 
   return (
