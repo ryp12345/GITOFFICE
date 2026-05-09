@@ -181,8 +181,202 @@ async function getDailyBiometric(dateStr) {
   } catch (e) {
     console.warn('Failed to enrich biometric combinedData with departments', e && e.message);
   }
+  // Build entryLogsByDept from combinedData
+  const entryLogsByDept = {};
+  (combinedData || []).forEach((it) => {
+    const dept = it.DepartmentName || 'Unknown';
+    entryLogsByDept[dept] = (entryLogsByDept[dept] || 0) + 1;
+  });
 
-  return { combinedData, entry_exit };
+  // Prepare present codes set from entry_exit.employeePunchLogs
+  const presentCodes = new Set(Object.keys(entry_exit.employeePunchLogs || {}).map((c) => String(c)));
+
+  // Compute missing and leave buckets by querying Postgres for eligible staff not present
+  let leaveLogsByDept = {};
+  let missingLogsByDept = {};
+  let TotalLeave = 0;
+  let Totalmissing = 0;
+
+  try {
+    const assocNames = ['Confirmed', 'Probationary', 'Contractual', 'Promotional Probationary', 'Temporary (non teaching)'];
+    const sql = `WITH eligible_staff AS (
+      SELECT s.id, s.employeecode::text AS employeecode,
+        (SELECT STRING_AGG(d.dept_shortname, ', ') FROM department_staff ds JOIN departments d ON d.id = ds.department_id WHERE ds.staff_id = s.id AND ds.status = 'active') AS dept_shortnames,
+        EXISTS (
+          SELECT 1 FROM leave_staff_applications lsa WHERE lsa.staff_id = s.id AND lsa.start <= $1 AND lsa.end >= $1 AND lsa.appl_status != 'rejected'
+        ) AS on_leave
+      FROM staff s
+      WHERE s.id IN (
+        SELECT staff_id FROM association_staff WHERE status = 'active' AND association_id IN (
+          SELECT id FROM associations WHERE asso_name = ANY($2::text[])
+        )
+      )
+    )
+    SELECT employeecode, dept_shortnames, on_leave FROM eligible_staff WHERE COALESCE(employeecode, '') <> ''`;
+
+    const res = await pgPool.query(sql, [dateParam, assocNames]);
+    const staffRows = res.rows || [];
+    for (const r of staffRows) {
+      const code = String(r.employeecode || '').trim();
+      if (!code || presentCodes.has(code)) continue;
+      const dept = r.dept_shortnames || 'Unknown';
+      if (r.on_leave) {
+        TotalLeave++;
+        leaveLogsByDept[dept] = (leaveLogsByDept[dept] || 0) + 1;
+      } else {
+        Totalmissing++;
+        missingLogsByDept[dept] = (missingLogsByDept[dept] || 0) + 1;
+      }
+    }
+  } catch (e) {
+    console.warn('Failed to compute missing/leave buckets from Postgres', e && e.message);
+  }
+
+  const Totalpresent = (combinedData || []).length;
+
+  return { combinedData, entry_exit, entryLogsByDept, leaveLogsByDept, missingLogsByDept, Totalpresent, TotalLeave, Totalmissing };
 }
 
 module.exports = { getDailyBiometric };
+
+async function getMonthlyForEmployee(empcode, monthParam, yearParam) {
+  const month = Number(monthParam) || (new Date().getMonth() + 1);
+  const year = Number(yearParam) || new Date().getFullYear();
+  const tableName = `DeviceLogs_${month}_${year}`;
+  const mysqlPool = mysql.createPool(SECONDARY_DB);
+  const conn = await mysqlPool.getConnection();
+  try {
+    const firstDay = new Date(year, month - 1, 1).toISOString().slice(0, 10);
+    const lastDay = new Date(year, month, 0).toISOString().slice(0, 10);
+
+    // Fetch logs for the employee for the month (join devices/employees for device name)
+    const [rows] = await conn.query(
+      `SELECT l.LogDate, l.LogDate_Date, l.LogDate_Time, d.DeviceFname as DeviceFName, e.EmployeeName, l.EmployeeCode, l.DeviceLogId
+       FROM \`${tableName}\` l
+       JOIN devices d ON l.DeviceId = d.DeviceId
+       JOIN employees e ON l.EmployeeCode = e.EmployeeCode
+       WHERE l.LogDate_Date BETWEEN ? AND ? AND l.EmployeeCode = ?
+       ORDER BY l.LogDate ASC`,
+      [firstDay, lastDay, String(empcode)]
+    );
+
+    // Group by date and build entry/exit/duration
+    const logsByDate = {};
+    for (const r of rows) {
+      const d = r.LogDate_Date;
+      if (!logsByDate[d]) logsByDate[d] = [];
+      logsByDate[d].push(r);
+    }
+
+    const employeeLogs = {};
+    for (const [dateKey, arr] of Object.entries(logsByDate)) {
+      const sorted = arr.sort((a, b) => new Date(a.LogDate) - new Date(b.LogDate));
+      const entryLog = sorted[0] || null;
+      const exitLog = sorted.length > 1 ? sorted[sorted.length - 1] : null;
+      let totalSeconds = 0;
+      for (let i = 0; i < sorted.length - 1; i += 2) {
+        const e = sorted[i];
+        const x = sorted[i + 1];
+        if (e && x) {
+          const diff = (new Date(x.LogDate).getTime() - new Date(e.LogDate).getTime()) / 1000;
+          if (diff > 0) totalSeconds += diff;
+        }
+      }
+      employeeLogs[dateKey] = {
+        entryLog,
+        exitLog,
+        entryDevice: entryLog ? entryLog.DeviceFName : null,
+        exitDevice: exitLog ? exitLog.DeviceFName : null,
+        duration: totalSeconds > 0 ? new Date(totalSeconds * 1000).toISOString().substr(11, 8) : null,
+      };
+    }
+
+    // Build logsByEmployee format similar to Laravel (array of raw logs per employee)
+    const logsByEmployee = {};
+    logsByEmployee[String(empcode)] = rows.map(r => ({ ...r }));
+
+    // Compute missing dates by comparing all distinct dates in month vs dates where this employee has logs
+    let missingDates = [];
+    try {
+      const [dates] = await conn.query(`SELECT DISTINCT LogDate_Date FROM \`${tableName}\` ORDER BY LogDate_Date`);
+      const presentDates = new Set(rows.map(r => r.LogDate_Date));
+      for (const drow of dates) {
+        const d = drow.LogDate_Date;
+        if (!presentDates.has(d)) missingDates.push(d);
+      }
+    } catch (e) {
+      // ignore if table missing
+    }
+
+    // Filter missingDates: remove Sundays and holidays and leave-applications for this staff
+    let filteredMissing = [];
+    try {
+      // find staff id from postgres
+      const staffRes = await pgPool.query(`SELECT id FROM staff WHERE employeecode::text = $1 LIMIT 1`, [String(empcode)]);
+      const staffId = staffRes.rows[0] ? staffRes.rows[0].id : null;
+      for (const md of missingDates) {
+        const dow = new Date(md).getDay(); // 0=Sun
+        if (dow === 0) continue; // skip Sunday
+        // check holidayrh
+        const hol = await pgPool.query(`SELECT 1 FROM holidayrh WHERE start = $1 AND type = 'Holiday' LIMIT 1`, [md]);
+        if (hol.rows.length > 0) continue;
+        // check leave application
+        if (staffId) {
+          const leaveQ = await pgPool.query(`SELECT 1 FROM leave_staff_applications WHERE staff_id = $1 AND start <= $2 AND end >= $2 AND appl_status != 'rejected' LIMIT 1`, [staffId, md]);
+          if (leaveQ.rows.length > 0) continue;
+        }
+        filteredMissing.push(md);
+      }
+    } catch (e) {
+      filteredMissing = missingDates;
+    }
+
+    // fetch employees list for dropdown (eligible staff)
+    let employees = [];
+    try {
+      const assocNames = ['Confirmed', 'Probationary', 'Contractual', 'Promotional Probationary', 'Temporary (non teaching)'];
+      const empSql = `SELECT s.id, s.employeecode, s.fname, s.mname, s.lname FROM staff s WHERE s.id IN (SELECT staff_id FROM association_staff WHERE status = 'active' AND association_id IN (SELECT id FROM associations WHERE asso_name = ANY($1::text[]))) ORDER BY s.fname`;
+      const ers = await pgPool.query(empSql, [assocNames]);
+      employees = ers.rows || [];
+    } catch (e) {
+      employees = [];
+    }
+
+    // averageDurations: compute per selected employee total seconds / workdays
+    const averageDurations = {};
+    try {
+      // compute total seconds and days
+      let totalSeconds = 0;
+      let workDays = 0;
+      for (const [d, log] of Object.entries(employeeLogs)) {
+        if (log.duration) {
+          const parts = log.duration.split(':');
+          const secs = (Number(parts[0]) * 3600) + (Number(parts[1]) * 60) + Number(parts[2]);
+          totalSeconds += secs;
+          workDays++;
+        }
+      }
+      averageDurations[String(empcode)] = workDays > 0 ? new Date(Math.floor(totalSeconds / workDays) * 1000).toISOString().substr(11, 8) : null;
+    } catch (e) {
+      // ignore
+    }
+
+    return {
+      employeeLogs,
+      averageDurations,
+      logsByEmployee,
+      missinglog_array: filteredMissing,
+      employees,
+      currentMonth: month,
+      currentYear: year,
+      selectedEmployee: employees.find(e => String(e.employeecode) === String(empcode)) || null,
+      empcode: empcode,
+    };
+
+  } finally {
+    try { conn.release(); } catch (e) {}
+    try { await mysqlPool.end(); } catch (e) {}
+  }
+}
+
+module.exports.getMonthlyForEmployee = getMonthlyForEmployee;

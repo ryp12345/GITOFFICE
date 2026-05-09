@@ -1,4 +1,4 @@
-const { getDailyBiometric } = require('../services/biometric.service');
+const { getDailyBiometric, getMonthlyForEmployee } = require('../services/biometric.service');
 
 async function daily(req, res, next) {
   try {
@@ -11,3 +11,18 @@ async function daily(req, res, next) {
 }
 
 module.exports = { daily };
+
+async function monthly(req, res, next) {
+  try {
+    const emp = req.query.employee || req.query.emp || req.body.employee;
+    const month = req.query.month || req.body.month;
+    const year = req.query.year || req.body.year;
+    if (!emp) return res.status(400).json({ error: 'employee query param required' });
+    const data = await getMonthlyForEmployee(emp, month, year);
+    res.json(data);
+  } catch (err) {
+    next(err);
+  }
+}
+
+module.exports.monthly = monthly;
