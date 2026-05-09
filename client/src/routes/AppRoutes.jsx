@@ -20,6 +20,8 @@ import InstitutionsPage from '../pages/establishment/Institutions';
 import QualificationsPage from '../pages/establishment/Qualifications';
 import ReligionsPage from '../pages/establishment/Religions';
 import CasteCategoriesPage from '../pages/establishment/CasteCategories';
+import DailyDataPage from '../pages/establishment/biometric/DailyData';
+import MonthlyDataPage from '../pages/establishment/biometric/MonthlyData';
 import LeavesPage from '../pages/establishment/leave_management/Leaves';
 import HolidayRHListPage from '../pages/establishment/leave_management/HolidayRHList';
 import ProtectedRoute from './ProtectedRoute';
@@ -87,6 +89,8 @@ export default function AppRoutes() {
             <Route path="/religions" element={<ReligionsPage />} />
             <Route path="/caste-categories" element={<CasteCategoriesPage />} />
             <Route path="/religions-and-castes" element={<ReligionsPage />} />
+            <Route path="/biometric/daily" element={<DailyDataPage />} />
+            <Route path="/biometric/monthly" element={<MonthlyDataPage />} />
               <Route path="/leave-management/leaves" element={<LeavesPage />} />
               <Route path="/leave-management/entitlement" element={<LeaveEntitlementPage />} />
               <Route path="/leave-management/holiday-rh" element={<HolidayRHListPage />} />
