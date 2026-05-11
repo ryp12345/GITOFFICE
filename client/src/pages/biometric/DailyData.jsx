@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import Header from '../../../components/layout/Header';
-import Sidebar from '../../../components/layout/Sidebar';
-import api from '../../../api/axios';
+import Header from '../../components/layout/Header';
+import Sidebar from '../../components/layout/Sidebar';
+import api from '../../api/axios';
 import Chart from 'chart.js/auto';
 
 export default function DailyDataPage() {

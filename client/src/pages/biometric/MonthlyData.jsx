@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState, useRef } from 'react';
 import Chart from 'chart.js/auto';
-import Header from '../../../components/layout/Header';
-import Sidebar from '../../../components/layout/Sidebar';
-import api from '../../../api/axios';
+import Header from '../../components/layout/Header';
+import Sidebar from '../../components/layout/Sidebar';
+import api from '../../api/axios';
 
 export default function MonthlyDataPage() {
   const [employees, setEmployees] = useState([]);

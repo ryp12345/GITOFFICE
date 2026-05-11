@@ -31,7 +31,7 @@ export default function SidebarEstablishment() {
     { name: 'Religions & Castes', path: '/religions', icon: '🛐' },
     // Remuneration Heads removed
     { name: 'Staff', path: '/staff', icon: '👥' },
-     {
+    {
       name: 'BIOMETRIC',
       path: '/biometric',
       icon: '🔏',

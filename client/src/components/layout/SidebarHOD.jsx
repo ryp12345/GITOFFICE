@@ -21,7 +21,16 @@ export default function SidebarHOD() {
         { name: 'Leave Application', path: '/hod/leave-application', icon: '🌿' }
       ]
     },
-
+     {
+      name: 'BIOMETRIC',
+      path: '/biometric',
+      icon: '🔏',
+      submenu: [
+        { name: 'Daily Data', path: '/biometric/daily' },
+        { name: 'Monthly Data', path: '/biometric/monthly' },
+        { name: 'Muster', path: '/biometric/muster' }
+      ]
+    }
   ];
 
   const toggleSubmenu = (index) => {

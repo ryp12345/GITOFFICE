@@ -26,7 +26,16 @@ export default function SidebarSuperAdmin() {
       ]
     },
     { name: 'Coordinators', path: '/super-admin/coordinators', icon: '🤝' },
-    { name: 'Biometric', path: '/super-admin/biometric', icon: '🖐️' },
+    {
+      name: 'BIOMETRIC',
+      path: '/biometric',
+      icon: '🔏',
+      submenu: [
+        { name: 'Daily Data', path: '/biometric/daily' },
+        { name: 'Monthly Data', path: '/biometric/monthly' },
+        { name: 'Muster', path: '/biometric/muster' }
+      ]
+    }
 
   ];
 

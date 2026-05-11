@@ -20,8 +20,8 @@ import InstitutionsPage from '../pages/establishment/Institutions';
 import QualificationsPage from '../pages/establishment/Qualifications';
 import ReligionsPage from '../pages/establishment/Religions';
 import CasteCategoriesPage from '../pages/establishment/CasteCategories';
-import DailyDataPage from '../pages/establishment/biometric/DailyData';
-import MonthlyDataPage from '../pages/establishment/biometric/MonthlyData';
+import DailyDataPage from '../pages/biometric/DailyData';
+import MonthlyDataPage from '../pages/biometric/MonthlyData';
 import LeavesPage from '../pages/establishment/leave_management/Leaves';
 import HolidayRHListPage from '../pages/establishment/leave_management/HolidayRHList';
 import ProtectedRoute from './ProtectedRoute';
@@ -78,6 +78,10 @@ export default function AppRoutes() {
             <Route path="/super-admin/coordinators" element={<SuperAdminCoordinatorsPage />} />
             <Route path="/super-admin/leave-management/entitlement" element={<SuperAdminLeaveEntitlementPage />} />
             <Route path="/super-admin/leave-management/holiday-rh" element={<SuperAdminHolidayRHListPage />} />
+
+            <Route path="/biometric/daily" element={<DailyDataPage />} />
+            <Route path="/biometric/monthly" element={<MonthlyDataPage />} />
+
           </Route>
           <Route element={<RoleRoute role="Establishment" />}>
             <Route path="/establishment" element={<EstablishmentDashboard />} />
@@ -107,6 +111,10 @@ export default function AppRoutes() {
           <Route path="/hod/department-overview" element={<HODDepartmentOverviewPage />} />
           <Route path="/hod/my-staff" element={<HODMyStaffPage />} />
           <Route path="/hod/leave-entitlement" element={<HODLeaveEntitlementPage />} />
+
+
+
+
           <Route path="/hod/holidays" element={<HolidayRHListPage SidebarComponent={SidebarHOD} />} />
         </Route>
         <Route element={<RoleRoute role="Teaching" />}>
