@@ -5,7 +5,7 @@ import api from '../../api/axios';
 import Chart from 'chart.js/auto';
 import { getMyStaff } from '../../api/hodApi';
 import { useAuth } from '../../context/AuthContext';
-import { isRoleMatch, ROLE_HOD } from '../../utils/role';
+import { isRoleMatch, ROLE_HOD, ROLE_TEACHING, ROLE_NON_TEACHING } from '../../utils/role';
 
 export default function DailyDataPage() {
   const [attendance, setAttendance] = useState([]);
@@ -28,10 +28,12 @@ export default function DailyDataPage() {
   const PAGE_SIZE = 10;
 
   const { user } = useAuth();
+  const isStaff = Boolean(user && (isRoleMatch(user.role, ROLE_TEACHING) || isRoleMatch(user.role, ROLE_NON_TEACHING) || user.staff_id));
   const endpointPrefix = '/biometric';
   const [hodEmployeeCodes, setHodEmployeeCodes] = useState(new Set());
   const [staffFetchError, setStaffFetchError] = useState('');
   const [departmentId, setDepartmentId] = useState(null);
+  const [staffEmployeeCode, setStaffEmployeeCode] = useState(null);
 
   const sumValues = (obj) => Object.values(obj || {}).reduce((s, v) => s + (Number(v) || 0), 0);
 
@@ -97,6 +99,31 @@ export default function DailyDataPage() {
   };
 
   useEffect(() => {
+    let mounted = true;
+    async function resolveMyEmployeeCode() {
+      if (!user) return;
+      try {
+        if (user.staff_id) {
+          const res = await api.get(`/staff/${user.staff_id}`);
+          const s = res?.data?.data || res?.data || null;
+          const code = s?.employeecode ?? s?.EmployeeCode ?? s?.biometric_code ?? null;
+          if (mounted && code) setStaffEmployeeCode(String(code));
+          return;
+        }
+
+        if (user.id) {
+          const listRes = await api.get('/staff');
+          const rows = Array.isArray(listRes?.data?.data) ? listRes.data.data : Array.isArray(listRes?.data) ? listRes.data : [];
+          const row = rows.find(r => Number(r.user_id) === Number(user.id));
+          const code = row?.employeecode ?? row?.EmployeeCode ?? row?.biometric_code ?? null;
+          if (mounted && code) setStaffEmployeeCode(String(code));
+        }
+      } catch (e) {
+        // ignore
+      }
+    }
+    resolveMyEmployeeCode();
+
     async function fetchAttendance() {
       // If HOD, wait until departmentId (from getMyStaff) is resolved to avoid unscoped requests
       if (user && isRoleMatch(user.role, ROLE_HOD) && departmentId == null && !staffFetchError) {
@@ -145,6 +172,9 @@ export default function DailyDataPage() {
               return ec && hodEmployeeCodes.has(String(ec));
             });
           }
+          if (user && (isRoleMatch(user.role, ROLE_TEACHING) || isRoleMatch(user.role, ROLE_NON_TEACHING)) && staffEmployeeCode) {
+            filteredRows = filteredRows.filter(r => String(r.EmployeeCode || r.employeecode || r.biometric_code || '').trim() === String(staffEmployeeCode).trim());
+          }
           setAttendance(filteredRows);
           await applyChartAndTotals(payload, filteredRows, date);
         } else {
@@ -155,6 +185,9 @@ export default function DailyDataPage() {
               const ec = (r.EmployeeCode || r.employeecode || r.biometric_code || '');
               return ec && hodEmployeeCodes.has(String(ec));
             });
+          }
+          if (user && (isRoleMatch(user.role, ROLE_TEACHING) || isRoleMatch(user.role, ROLE_NON_TEACHING)) && staffEmployeeCode) {
+            filteredRows = filteredRows.filter(r => String(r.EmployeeCode || r.employeecode || r.biometric_code || '').trim() === String(staffEmployeeCode).trim());
           }
           setAttendance(filteredRows);
           await applyChartAndTotals(payload, filteredRows, date);
@@ -167,7 +200,8 @@ export default function DailyDataPage() {
     }
 
     fetchAttendance();
-  }, [user, date, hodEmployeeCodes, departmentId]);
+    return () => { mounted = false; };
+  }, [user, date, hodEmployeeCodes, departmentId, staffEmployeeCode]);
 
   // Fetch HOD staff mapping so we can scope daily results to the HOD's department
   useEffect(() => {
@@ -361,9 +395,15 @@ export default function DailyDataPage() {
   };
 
   const filtered = useMemo(() => {
+    const scoped = (isStaff && staffEmployeeCode)
+      ? attendance.filter(r => {
+          const code = String(r.EmployeeCode || r.employeeCode || r.EmployeeCode || '').trim();
+          return code && code === String(staffEmployeeCode).trim();
+        })
+      : attendance;
     const q = search.trim().toLowerCase();
-    if (!q) return attendance;
-    return attendance.filter(r => (
+    if (!q) return scoped;
+    return scoped.filter(r => (
       (r.EmployeeName || r.full_name || r.employeeName || r.EmployeeCode || '').toString().toLowerCase().includes(q) ||
       (r.DepartmentName || r.department || '').toString().toLowerCase().includes(q)
     ));
@@ -397,6 +437,7 @@ export default function DailyDataPage() {
           <div className="min-h-full rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
             <h2 className="text-2xl font-semibold text-slate-900">Biometric - Daily Data</h2>
             <div className="mt-6">
+              {!isStaff && (
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
                 <div className="flex items-center gap-3">
                   <div className="flex items-center gap-2 bg-blue-50 px-4 py-2 rounded-lg">
@@ -459,8 +500,10 @@ export default function DailyDataPage() {
                   }} className="h-10 inline-flex items-center justify-center px-6 min-w-[140px] bg-blue-600 text-white rounded-lg">Search</button>
                 </div>
               </div>
+              )}
 
               {/* Chart and Missing button */}
+              {!isStaff && (
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
                 <div className="col-span-2 bg-white p-4 rounded shadow">
                   <canvas ref={chartRef} id="biometricChart" />
@@ -529,6 +572,7 @@ export default function DailyDataPage() {
                   </div>
                 </div>
               </div>
+              )}
 
               <div className="overflow-x-auto">
                 <table className="min-w-full divide-y divide-gray-200">

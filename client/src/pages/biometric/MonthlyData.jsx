@@ -5,7 +5,7 @@ import Sidebar from '../../components/layout/Sidebar';
 import api from '../../api/axios';
 import { getMyStaff } from '../../api/hodApi';
 import { useAuth } from '../../context/AuthContext';
-import { isRoleMatch, ROLE_HOD } from '../../utils/role';
+import { isRoleMatch, ROLE_HOD, ROLE_TEACHING, ROLE_NON_TEACHING } from '../../utils/role';
 
 export default function MonthlyDataPage() {
   const [employees, setEmployees] = useState([]);
@@ -31,6 +31,55 @@ export default function MonthlyDataPage() {
     async function fetchEmployees() {
       try {
         let list = [];
+        // If the logged-in user is a staff (teaching or non-teaching), show only their own record
+        if (user && (isRoleMatch(user.role, ROLE_TEACHING) || isRoleMatch(user.role, ROLE_NON_TEACHING))) {
+          try {
+            if (user.staff_id) {
+              const res = await api.get(`/staff/${user.staff_id}`);
+              const s = res?.data?.data || res?.data || null;
+              if (s) {
+                const normalized = [{
+                  id: s.id || s.staff_id || null,
+                  EmployeeCode: s.employeecode != null ? String(s.employeecode) : (s.EmployeeCode ? String(s.EmployeeCode) : ''),
+                  employeecode: s.employeecode != null ? String(s.employeecode) : (s.EmployeeCode ? String(s.EmployeeCode) : ''),
+                  fname: s.fname || '',
+                  mname: s.mname || '',
+                  lname: s.lname || '',
+                  full_name: [s.fname, s.mname, s.lname].filter(Boolean).join(' ').trim(),
+                  ...s
+                }];
+                list = normalized;
+                setEmployees(list);
+                if (normalized[0]?.EmployeeCode) setSelectedEmployee(normalized[0].EmployeeCode);
+                setStaffFetchError('');
+                return;
+              }
+            }
+            // fallback: fetch staff list and find by user_id
+            const resList = await api.get('/staff');
+            const rows = Array.isArray(resList?.data?.data) ? resList.data.data : Array.isArray(resList?.data) ? resList.data : [];
+            const row = rows.find(r => Number(r.user_id) === Number(user.id));
+            if (row) {
+              const normalized = [{
+                id: row.id || row.staff_id || null,
+                EmployeeCode: row.employeecode != null ? String(row.employeecode) : (row.EmployeeCode ? String(row.EmployeeCode) : ''),
+                employeecode: row.employeecode != null ? String(row.employeecode) : (row.EmployeeCode ? String(row.EmployeeCode) : ''),
+                fname: row.fname || '',
+                mname: row.mname || '',
+                lname: row.lname || '',
+                full_name: [row.fname, row.mname, row.lname].filter(Boolean).join(' ').trim(),
+                ...row
+              }];
+              list = normalized;
+              setEmployees(list);
+              if (normalized[0]?.EmployeeCode) setSelectedEmployee(normalized[0].EmployeeCode);
+              setStaffFetchError('');
+              return;
+            }
+          } catch (err) {
+            console.error('Failed to resolve staff for MonthlyData (staff user):', err);
+          }
+        }
         if (user && isRoleMatch(user.role, ROLE_HOD)) {
             const res = await getMyStaff();
             const payload = res?.data?.data || res?.data || {};

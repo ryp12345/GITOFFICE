@@ -18,13 +18,20 @@ const COMMON_LINKS = [
       { name: 'Leave List', teachingPath: '/teaching/leave-list', nonTeachingPath: '/nonteaching/leave-list' },
     ],
   },
+  {
+    name: 'BIOMETRIC',
+    icon: '🔏',
+    submenu: [
+      { name: 'Daily Data', teachingPath: '/teaching/biometric/daily', nonTeachingPath: '/nonteaching/biometric/daily' },
+      { name: 'Monthly Data', teachingPath: '/teaching/biometric/monthly', nonTeachingPath: '/nonteaching/biometric/monthly' },
+    ]
+  },
 //   {
 //     name: 'Professional Activities',
 //     teachingPath: '/teaching/professional-activities',
 //     nonTeachingPath: '/nonteaching/professional-activities',
 //     icon: '📚'
 //   },
-  { name: 'Biometric', teachingPath: '/teaching/biometric', nonTeachingPath: '/nonteaching/biometric', icon: '🖐️' }
 ];
 
 const TEACHING_ONLY_LINKS = [

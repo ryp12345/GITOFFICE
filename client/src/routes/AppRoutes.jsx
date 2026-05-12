@@ -8,6 +8,7 @@ import SuperAdminLeaveEntitlementPage from '../pages/super-admin/LeaveEntitlemen
 import SuperAdminHolidayRHListPage from '../pages/super-admin/HolidayRHList';
 import EstablishmentDashboard from '../pages/establishment/Dashboard';
 import HODDashboard from '../pages/hod/Dashboard';
+import PrincipalDeanDashboard from '../pages/PrincipalDean/Dashboard';
 import HODDepartmentOverviewPage from '../pages/hod/DepartmentOverview';
 import HODMyStaffPage from '../pages/hod/MyStaff';
 import HODLeaveEntitlementPage from '../pages/hod/LeaveEntitlement';
@@ -124,6 +125,18 @@ export default function AppRoutes() {
           <Route path="/biometric/monthly" element={<MonthlyDataPage />} />
           <Route path="/biometric/muster" element={<MusterPage />} />
         </Route>
+        <Route element={<RoleRoute role="Principal" />}>
+          <Route path="/principal" element={<PrincipalDeanDashboard />} />
+          <Route path="/principal/biometric/daily" element={<DailyDataPage />} />
+          <Route path="/principal/biometric/monthly" element={<MonthlyDataPage />} />
+          <Route path="/principal/biometric/muster" element={<MusterPage />} />
+        </Route>
+        <Route element={<RoleRoute role="Dean" />}>
+          <Route path="/dean" element={<PrincipalDeanDashboard />} />
+          <Route path="/dean/biometric/daily" element={<DailyDataPage />} />
+          <Route path="/dean/biometric/monthly" element={<MonthlyDataPage />} />
+          <Route path="/dean/biometric/muster" element={<MusterPage />} />
+        </Route>
         <Route element={<RoleRoute role="Teaching" />}>
           <Route path="/teaching" element={<StaffDashboard />} />
           <Route path="/teaching/department-history" element={<DepartmentHistory />} />
@@ -131,6 +144,8 @@ export default function AppRoutes() {
           <Route path="/teaching/association" element={<AssociationPage />} />
           <Route path="/teaching/qualification" element={<QualificationPage />} />
           <Route path="/teaching/leave-application" element={<StaffLeavesPage />} />
+          <Route path="/teaching/biometric/daily" element={<DailyDataPage />} />
+          <Route path="/teaching/biometric/monthly" element={<MonthlyDataPage />} />
         </Route>
         <Route element={<RoleRoute role="Non-Teaching" />}>
           <Route path="/nonteaching" element={<StaffDashboard />} />
@@ -139,6 +154,8 @@ export default function AppRoutes() {
           <Route path="/nonteaching/association" element={<AssociationPage />} />
           <Route path="/nonteaching/qualification" element={<QualificationPage />} />
           <Route path="/nonteaching/leave-application" element={<StaffLeavesPage />} />
+          <Route path="/nonteaching/biometric/daily" element={<DailyDataPage />} />
+          <Route path="/nonteaching/biometric/monthly" element={<MonthlyDataPage />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
