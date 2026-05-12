@@ -20,12 +20,12 @@ function formatDurationFromSeconds(totalSeconds) {
   return `${hours} hrs ${minutes} mins`;
 }
 
-async function buildEntryExitForDate(month, year, date) {
+async function buildEntryExitForDate(month, year, date, allowedCodes = null) {
   const tableName = `DeviceLogs_${month}_${year}`;
   const mysqlPool = mysql.createPool(SECONDARY_DB);
   const conn = await mysqlPool.getConnection();
   try {
-    const [rows] = await conn.query(
+    const [rowsRaw] = await conn.query(
       `SELECT l.LogDate, l.LogDate_Date, l.EmployeeCode, d.DeviceFname as DeviceFName, e.EmployeeName
        FROM \`${tableName}\` l
        JOIN devices d ON l.DeviceId = d.DeviceId
@@ -34,6 +34,11 @@ async function buildEntryExitForDate(month, year, date) {
        ORDER BY l.EmployeeCode, l.LogDate ASC`,
       [date]
     );
+
+    let rows = rowsRaw;
+    if (allowedCodes && allowedCodes.size > 0) {
+      rows = rowsRaw.filter(r => allowedCodes.has(String(r.EmployeeCode)));
+    }
 
     const logsByEmp = {};
     for (const r of rows) {
@@ -104,7 +109,7 @@ async function buildEntryExitForDate(month, year, date) {
   }
 }
 
-async function getDailyBiometric(dateStr) {
+async function getDailyBiometric(dateStr, departmentId = null) {
   const date = new Date(dateStr || new Date().toISOString().slice(0, 10));
   const month = date.getMonth() + 1;
   const year = date.getFullYear();
@@ -143,7 +148,22 @@ async function getDailyBiometric(dateStr) {
     try { await mysqlPool.end(); } catch (e) {}
   }
 
-  const entry_exit = await buildEntryExitForDate(month, year, dateParam);
+  // If departmentId provided, resolve employee codes for that department so we can
+  // compute entry/exit counts only for those employees and filter combinedData.
+  let deptCodes = null;
+  if (departmentId) {
+    try {
+      const depRes = await pgPool.query(
+        `SELECT s.employeecode::text AS employeecode FROM staff s JOIN department_staff ds ON ds.staff_id = s.id WHERE ds.department_id = $1 AND LOWER(COALESCE(ds.status,'active')) = 'active'`,
+        [departmentId]
+      );
+      deptCodes = new Set((depRes.rows || []).map(r => String(r.employeecode)));
+    } catch (e) {
+      console.warn('Failed to resolve department employee codes', e && e.message);
+    }
+  }
+
+  const entry_exit = await buildEntryExitForDate(month, year, dateParam, deptCodes);
 
   // Enrich combinedData with department shortnames from Postgres staff tables
   try {
@@ -177,6 +197,10 @@ async function getDailyBiometric(dateStr) {
         const key = String(item.EmployeeCode);
         if (map[key]) item.DepartmentName = map[key];
       }
+      // If departmentId filter provided, restrict combinedData to only those employee codes
+      if (departmentId && deptCodes && deptCodes.size > 0) {
+        combinedData = combinedData.filter(cd => deptCodes.has(String(cd.EmployeeCode)));
+      }
     }
   } catch (e) {
     console.warn('Failed to enrich biometric combinedData with departments', e && e.message);
@@ -199,7 +223,8 @@ async function getDailyBiometric(dateStr) {
 
   try {
     const assocNames = ['Confirmed', 'Probationary', 'Contractual', 'Promotional Probationary', 'Temporary (non teaching)'];
-    const sql = `WITH eligible_staff AS (
+    // If departmentId provided, only consider eligible staff from that department
+    let sql = `WITH eligible_staff AS (
       SELECT s.id, s.employeecode::text AS employeecode,
         (SELECT STRING_AGG(d.dept_shortname, ', ') FROM department_staff ds JOIN departments d ON d.id = ds.department_id WHERE ds.staff_id = s.id AND ds.status = 'active') AS dept_shortnames,
         EXISTS (
@@ -213,8 +238,30 @@ async function getDailyBiometric(dateStr) {
       )
     )
     SELECT employeecode, dept_shortnames, on_leave FROM eligible_staff WHERE COALESCE(employeecode, '') <> ''`;
+    const params = [dateParam, assocNames];
+    if (departmentId) {
+      // restrict eligible_staff to department
+      sql = `WITH eligible_staff AS (
+        SELECT s.id, s.employeecode::text AS employeecode,
+          (SELECT STRING_AGG(d.dept_shortname, ', ') FROM department_staff ds JOIN departments d ON d.id = ds.department_id WHERE ds.staff_id = s.id AND ds.status = 'active') AS dept_shortnames,
+          EXISTS (
+            SELECT 1 FROM leave_staff_applications lsa WHERE lsa.staff_id = s.id AND lsa.start <= $1 AND lsa.end >= $1 AND lsa.appl_status != 'rejected'
+          ) AS on_leave
+        FROM staff s
+        WHERE s.id IN (
+          SELECT staff_id FROM department_staff WHERE department_id = $3 AND LOWER(COALESCE(status,'active')) = 'active'
+        )
+        AND s.id IN (
+          SELECT staff_id FROM association_staff WHERE status = 'active' AND association_id IN (
+            SELECT id FROM associations WHERE asso_name = ANY($2::text[])
+          )
+        )
+      )
+      SELECT employeecode, dept_shortnames, on_leave FROM eligible_staff WHERE COALESCE(employeecode, '') <> ''`;
+      params.push(departmentId);
+    }
 
-    const res = await pgPool.query(sql, [dateParam, assocNames]);
+    const res = await pgPool.query(sql, params);
     const staffRows = res.rows || [];
     for (const r of staffRows) {
       const code = String(r.employeecode || '').trim();
@@ -238,6 +285,80 @@ async function getDailyBiometric(dateStr) {
 }
 
 module.exports = { getDailyBiometric };
+
+async function getMuster(monthParam, yearParam) {
+  const month = Number(monthParam) || (new Date().getMonth() + 1);
+  const year = Number(yearParam) || new Date().getFullYear();
+  const tableName = `DeviceLogs_${month}_${year}`;
+
+  const mysqlPool = mysql.createPool(SECONDARY_DB);
+  const conn = await mysqlPool.getConnection();
+  try {
+    // distinct days
+    let logDates = [];
+    try {
+      const [rows] = await conn.query(`SELECT DISTINCT DAY(LogDate_Date) as LogDate FROM \`${tableName}\` ORDER BY LogDate`);
+      logDates = rows.map(r => ({ LogDate: r.LogDate }));
+    } catch (e) {
+      logDates = [];
+    }
+
+    // staffData from Postgres (eligible staff with active departments and leave applications in month)
+    let staffData = [];
+    try {
+      const assocNames = ['Confirmed', 'Probationary', 'Contractual', 'Promotional Probationary', 'Temporary (non teaching)'];
+      const sql = `SELECT s.id, s.employeecode, s.fname, s.mname, s.lname, STRING_AGG(d.dept_shortname, ', ') AS active_departments
+                   FROM staff s
+                   JOIN department_staff ds ON ds.staff_id = s.id
+                   JOIN departments d ON d.id = ds.department_id
+                   WHERE ds.status = 'active' AND s.id IN (SELECT staff_id FROM association_staff WHERE status = 'active' AND association_id IN (SELECT id FROM associations WHERE asso_name = ANY($1::text[])))
+                   GROUP BY s.id, s.employeecode, s.fname, s.mname, s.lname`;
+      const res = await pgPool.query(sql, [assocNames]);
+      staffData = (res.rows || []).map(r => ({
+        id: r.id,
+        staffname: [r.fname, r.mname, r.lname].filter(Boolean).join(' '),
+        EmployeeCode: r.employeecode != null ? String(r.employeecode) : '',
+        active_departments: r.active_departments || '',
+        leave_staff_applications: []
+      }));
+
+      // attach leave applications for the month range
+      const startDate = `${year}-${String(month).padStart(2,'0')}-01`;
+      const endDate = `${year}-${String(month).padStart(2,'0')}-31`;
+      for (const s of staffData) {
+        try {
+          const leaveSql = `SELECT l.*, la.shortname, la.start, la.end FROM leave_staff_applications la WHERE la.staff_id = $1 AND la.appl_status != 'rejected' AND la.start >= $2 AND la.end <= $3`;
+          const lr = await pgPool.query(leaveSql, [s.id, startDate, endDate]);
+          s.leave_staff_applications = lr.rows || [];
+        } catch (e) {
+          s.leave_staff_applications = [];
+        }
+      }
+    } catch (e) {
+      staffData = [];
+    }
+
+    // log data associative from MySQL: EmployeeCode -> [days]
+    let logDataAssociative = {};
+    try {
+      const [logrows] = await conn.query(`SELECT DISTINCT EmployeeCode, DAY(LogDate_Date) AS LogDate_Date FROM \`${tableName}\` WHERE LogDate_Date IS NOT NULL ORDER BY EmployeeCode, LogDate_Date`);
+      for (const r of logrows) {
+        const code = String(r.EmployeeCode || '');
+        if (!logDataAssociative[code]) logDataAssociative[code] = [];
+        logDataAssociative[code].push(Number(r.LogDate_Date));
+      }
+    } catch (e) {
+      logDataAssociative = {};
+    }
+
+    return { log_dates: logDates, staffData, logDataAssociative, currentMonth: month, currentYear: year };
+  } finally {
+    try { conn.release(); } catch (e) {}
+    try { await mysqlPool.end(); } catch (e) {}
+  }
+}
+
+module.exports.getMuster = getMuster;
 
 async function getMonthlyForEmployee(empcode, monthParam, yearParam) {
   const month = Number(monthParam) || (new Date().getMonth() + 1);

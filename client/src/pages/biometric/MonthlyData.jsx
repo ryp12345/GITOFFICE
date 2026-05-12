@@ -3,9 +3,13 @@ import Chart from 'chart.js/auto';
 import Header from '../../components/layout/Header';
 import Sidebar from '../../components/layout/Sidebar';
 import api from '../../api/axios';
+import { getMyStaff } from '../../api/hodApi';
+import { useAuth } from '../../context/AuthContext';
+import { isRoleMatch, ROLE_HOD } from '../../utils/role';
 
 export default function MonthlyDataPage() {
   const [employees, setEmployees] = useState([]);
+  const [staffFetchError, setStaffFetchError] = useState('');
   const [selectedEmployee, setSelectedEmployee] = useState('');
   const [month, setMonth] = useState(new Date().getMonth() + 1);
   const [year, setYear] = useState(new Date().getFullYear());
@@ -20,14 +24,47 @@ export default function MonthlyDataPage() {
   const canvasRef = useRef(null);
   const chartInstance = useRef(null);
 
+  const { user } = useAuth();
+  const endpointPrefix = '/biometric';
+
   useEffect(() => {
     async function fetchEmployees() {
       try {
-        const res = await api.get('/staff');
-        const list = Array.isArray(res?.data?.data) ? res.data.data : Array.isArray(res?.data) ? res.data : [];
+        let list = [];
+        if (user && isRoleMatch(user.role, ROLE_HOD)) {
+            const res = await getMyStaff();
+            const payload = res?.data?.data || res?.data || {};
+            // payload may be an object: { department, teachingStaff: [], nonTeachingStaff: [] }
+            if (Array.isArray(payload)) {
+              list = payload;
+            } else if (payload && (Array.isArray(payload.teachingStaff) || Array.isArray(payload.nonTeachingStaff))) {
+              const teach = Array.isArray(payload.teachingStaff) ? payload.teachingStaff : [];
+              const nonteach = Array.isArray(payload.nonTeachingStaff) ? payload.nonTeachingStaff : [];
+              // normalize shape to match /staff responses: ensure EmployeeCode and name fields
+              list = [...teach, ...nonteach].map((r) => ({
+                id: r.staff_id || r.id || null,
+                EmployeeCode: r.employeecode != null ? String(r.employeecode) : (r.employeecode ? String(r.employeecode) : ''),
+                employeecode: r.employeecode != null ? String(r.employeecode) : '',
+                fname: r.fname || '',
+                mname: r.mname || '',
+                lname: r.lname || '',
+                full_name: [r.fname, r.mname, r.lname].filter(Boolean).join(' ').trim(),
+                ...r
+              }));
+            } else {
+              list = [];
+            }
+        } else {
+          const res = await api.get('/staff');
+          list = Array.isArray(res?.data?.data) ? res.data.data : Array.isArray(res?.data) ? res.data : [];
+        }
         setEmployees(list);
+        setStaffFetchError('');
       } catch (e) {
+        console.error('Failed to load staff for MonthlyData:', e);
         setEmployees([]);
+        const msg = e?.response?.data?.message || e.message || 'Failed to fetch staff';
+        setStaffFetchError(msg);
       }
     }
     fetchEmployees();
@@ -38,7 +75,7 @@ export default function MonthlyDataPage() {
     if (!selectedEmployee) return alert('Select employee');
     setLoading(true);
     try {
-      const res = await api.get('/biometric/monthly', { params: { employee: selectedEmployee, month, year } });
+      const res = await api.get(`${endpointPrefix}/monthly`, { params: { employee: selectedEmployee, month, year } });
       const data = res?.data || {};
       // Laravel returns: employeeLogs, averageDurations, logsByEmployee, missinglog_array, selectedEmployee
       setMonthlyData(data);
@@ -169,6 +206,9 @@ export default function MonthlyDataPage() {
 
             <form onSubmit={submit} className="mt-4 flex flex-wrap gap-3 items-center">
               <label className="font-bold">Select Employee:</label>
+              {staffFetchError && (
+                <div className="w-full text-sm text-red-600 mt-2">{staffFetchError}</div>
+              )}
               <select value={selectedEmployee} onChange={(e) => setSelectedEmployee(e.target.value)} className="border p-2 rounded">
                 <option value="">Select Employee</option>
                 {employees.sort((a,b)=> (a.fname||'').localeCompare(b.fname||'')).map((emp, idx) => (

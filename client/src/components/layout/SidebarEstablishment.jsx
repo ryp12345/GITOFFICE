@@ -33,12 +33,12 @@ export default function SidebarEstablishment() {
     { name: 'Staff', path: '/staff', icon: '👥' },
     {
       name: 'BIOMETRIC',
-      path: '/biometric',
+      path: '/establishment/biometric',
       icon: '🔏',
       submenu: [
-        { name: 'Daily Data', path: '/biometric/daily' },
-        { name: 'Monthly Data', path: '/biometric/monthly' },
-        { name: 'Muster', path: '/biometric/muster' }
+        { name: 'Daily Data', path: '/establishment/biometric/daily' },
+        { name: 'Monthly Data', path: '/establishment/biometric/monthly' },
+        { name: 'Muster', path: '/establishment/biometric/muster' }
       ]
     }
   ];

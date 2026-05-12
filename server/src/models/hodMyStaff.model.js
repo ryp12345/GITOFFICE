@@ -14,6 +14,7 @@ async function findDepartmentStaffByDepartmentId(departmentId) {
         s.fname,
         s.mname,
         s.lname,
+        COALESCE(s.employeecode::text, '') AS employeecode,
         s.contactno,
         COALESCE(et.employee_type, '') AS employee_type,
         COALESCE(des.design_name, '') AS designation_name,

@@ -1,9 +1,11 @@
 const { getDailyBiometric, getMonthlyForEmployee } = require('../services/biometric.service');
+const { getMuster } = require('../services/biometric.service');
 
 async function daily(req, res, next) {
   try {
     const date = req.query.date || new Date().toISOString().slice(0, 10);
-    const data = await getDailyBiometric(date);
+    const departmentId = req.query.department_id ? Number(req.query.department_id) : null;
+    const data = await getDailyBiometric(date, departmentId);
     res.json(data);
   } catch (err) {
     next(err);
@@ -11,6 +13,19 @@ async function daily(req, res, next) {
 }
 
 module.exports = { daily };
+
+async function muster(req, res, next) {
+  try {
+    const month = req.query.month || req.body.month || (() => { const d = new Date(); return d.getMonth() + 1; })();
+    const year = req.query.year || req.body.year || (() => { const d = new Date(); return d.getFullYear(); })();
+    const data = await getMuster(Number(month), Number(year));
+    res.json(data);
+  } catch (err) {
+    next(err);
+  }
+}
+
+module.exports.muster = muster;
 
 async function monthly(req, res, next) {
   try {

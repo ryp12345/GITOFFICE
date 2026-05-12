@@ -3,6 +3,9 @@ import Header from '../../components/layout/Header';
 import Sidebar from '../../components/layout/Sidebar';
 import api from '../../api/axios';
 import Chart from 'chart.js/auto';
+import { getMyStaff } from '../../api/hodApi';
+import { useAuth } from '../../context/AuthContext';
+import { isRoleMatch, ROLE_HOD } from '../../utils/role';
 
 export default function DailyDataPage() {
   const [attendance, setAttendance] = useState([]);
@@ -23,6 +26,12 @@ export default function DailyDataPage() {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const PAGE_SIZE = 10;
+
+  const { user } = useAuth();
+  const endpointPrefix = '/biometric';
+  const [hodEmployeeCodes, setHodEmployeeCodes] = useState(new Set());
+  const [staffFetchError, setStaffFetchError] = useState('');
+  const [departmentId, setDepartmentId] = useState(null);
 
   const sumValues = (obj) => Object.values(obj || {}).reduce((s, v) => s + (Number(v) || 0), 0);
 
@@ -89,9 +98,15 @@ export default function DailyDataPage() {
 
   useEffect(() => {
     async function fetchAttendance() {
+      // If HOD, wait until departmentId (from getMyStaff) is resolved to avoid unscoped requests
+      if (user && isRoleMatch(user.role, ROLE_HOD) && departmentId == null && !staffFetchError) {
+        return;
+      }
       try {
         setLoading(true);
-        const res = await api.get('/biometric/daily', { params: { date } });
+        const params = { date };
+        if (user && isRoleMatch(user.role, ROLE_HOD) && departmentId) params.department_id = departmentId;
+        const res = await api.get(`${endpointPrefix}/daily`, { params });
         const payload = res?.data || {};
         // DEBUG: log backend payload to help diagnose missing totals
         try { console.debug && console.debug('BIOMETRIC_PAYLOAD_FETCH', payload); } catch (e) {}
@@ -123,12 +138,26 @@ export default function DailyDataPage() {
               durations: entryExit.durations && code ? (entryExit.durations[code] ?? d.durations ?? d.duration ?? null) : (d.durations || d.duration || null),
             };
           });
-          setAttendance(rows);
-          await applyChartAndTotals(payload, rows, date);
+          let filteredRows = rows;
+          if (user && isRoleMatch(user.role, ROLE_HOD) && hodEmployeeCodes && hodEmployeeCodes.size > 0) {
+            filteredRows = rows.filter(r => {
+              const ec = (r.EmployeeCode || r.employeecode || r.biometric_code || '');
+              return ec && hodEmployeeCodes.has(String(ec));
+            });
+          }
+          setAttendance(filteredRows);
+          await applyChartAndTotals(payload, filteredRows, date);
         } else {
           const rows = Array.isArray(payload.data) ? payload.data : Array.isArray(payload) ? payload : [];
-          setAttendance(rows);
-          await applyChartAndTotals(payload, rows, date);
+          let filteredRows = rows;
+          if (user && isRoleMatch(user.role, ROLE_HOD) && hodEmployeeCodes && hodEmployeeCodes.size > 0) {
+            filteredRows = rows.filter(r => {
+              const ec = (r.EmployeeCode || r.employeecode || r.biometric_code || '');
+              return ec && hodEmployeeCodes.has(String(ec));
+            });
+          }
+          setAttendance(filteredRows);
+          await applyChartAndTotals(payload, filteredRows, date);
         }
       } catch (e) {
         setAttendance([]);
@@ -138,7 +167,36 @@ export default function DailyDataPage() {
     }
 
     fetchAttendance();
-  }, []);
+  }, [user, date, hodEmployeeCodes, departmentId]);
+
+  // Fetch HOD staff mapping so we can scope daily results to the HOD's department
+  useEffect(() => {
+    async function fetchHodStaff() {
+      if (!user || !isRoleMatch(user.role, ROLE_HOD)) return;
+      try {
+        const res = await getMyStaff();
+        const payload = res?.data?.data || res?.data || {};
+        let list = [];
+        if (Array.isArray(payload)) list = payload;
+        else if (payload && (Array.isArray(payload.teachingStaff) || Array.isArray(payload.nonTeachingStaff))) {
+          const teach = Array.isArray(payload.teachingStaff) ? payload.teachingStaff : [];
+          const nonteach = Array.isArray(payload.nonTeachingStaff) ? payload.nonTeachingStaff : [];
+          list = [...teach, ...nonteach];
+        }
+        const codes = new Set(list.map(r => String(r.employeecode != null ? r.employeecode : (r.EmployeeCode || r.EmployeeCode))).filter(Boolean));
+        setHodEmployeeCodes(codes);
+        // set department id if returned by API payload
+        const dept = payload.department || res?.data?.department || null;
+        if (dept && dept.id) setDepartmentId(Number(dept.id));
+        setStaffFetchError('');
+      } catch (err) {
+        console.error('Failed to load HOD staff for DailyData:', err);
+        setHodEmployeeCodes(new Set());
+        setStaffFetchError(err?.response?.data?.message || err.message || 'Failed to fetch HOD staff');
+      }
+    }
+    fetchHodStaff();
+  }, [user]);
 
   // Render chart when chartData changes
   useEffect(() => {
@@ -183,13 +241,16 @@ export default function DailyDataPage() {
     const { updateState = true } = options;
     let list = [];
     try {
-
-      const res = await api.get('/biometric/missing', { params: { date: selectedDate } });
+      const missingParams = { date: selectedDate };
+      if (user && isRoleMatch(user.role, ROLE_HOD) && departmentId) missingParams.department_id = departmentId;
+      const res = await api.get(`${endpointPrefix}/missing`, { params: missingParams });
       const data = res?.data || [];
       list = Array.isArray(data) ? data : (data.data || []);
     } catch (e) {
       try {
-        const res2 = await api.get('/biometric/missing_logs', { params: { date: selectedDate } });
+        const missingParams2 = { date: selectedDate };
+        if (user && isRoleMatch(user.role, ROLE_HOD) && departmentId) missingParams2.department_id = departmentId;
+        const res2 = await api.get(`${endpointPrefix}/missing_logs`, { params: missingParams2 });
         const data2 = res2?.data || [];
         list = Array.isArray(data2) ? data2 : (data2.data || []);
       } catch (err) {
@@ -216,7 +277,9 @@ export default function DailyDataPage() {
     if ((!list || list.length === 0)) {
       try {
         // Get daily biometric combinedData (employees who have logs)
-        const dailyResp = await api.get('/biometric/daily', { params: { date: selectedDate } });
+        const dailyParams = { date: selectedDate };
+        if (user && isRoleMatch(user.role, ROLE_HOD) && departmentId) dailyParams.department_id = departmentId;
+        const dailyResp = await api.get(`${endpointPrefix}/daily`, { params: dailyParams });
         const dailyData = dailyResp?.data || {};
         const combined = Array.isArray(dailyData.combinedData) ? dailyData.combinedData : (dailyData.data && Array.isArray(dailyData.data.combinedData) ? dailyData.data.combinedData : []);
 
@@ -358,10 +421,10 @@ export default function DailyDataPage() {
                   <div className="relative w-full sm:w-72 md:w-80">
                     <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-full h-10 px-3 border border-gray-300 rounded-lg" />
                   </div>
-                  <button onClick={async () => {
+                    <button onClick={async () => {
                     setLoading(true);
                     try {
-                      const res = await api.get('/biometric/daily', { params: { date } });
+                      const res = await api.get(`${endpointPrefix}/daily`, { params: { date } });
                       const payload = res?.data || {};
                       // DEBUG: log payload for date search
                       try { console.debug && console.debug('BIOMETRIC_PAYLOAD_SEARCH', payload); } catch (e) {}

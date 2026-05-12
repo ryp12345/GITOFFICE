@@ -28,12 +28,12 @@ export default function SidebarSuperAdmin() {
     { name: 'Coordinators', path: '/super-admin/coordinators', icon: '🤝' },
     {
       name: 'BIOMETRIC',
-      path: '/biometric',
+      path: '/super-admin/biometric',
       icon: '🔏',
       submenu: [
-        { name: 'Daily Data', path: '/biometric/daily' },
-        { name: 'Monthly Data', path: '/biometric/monthly' },
-        { name: 'Muster', path: '/biometric/muster' }
+        { name: 'Daily Data', path: '/super-admin/biometric/daily' },
+        { name: 'Monthly Data', path: '/super-admin/biometric/monthly' },
+        { name: 'Muster', path: '/super-admin/biometric/muster' }
       ]
     }
 
