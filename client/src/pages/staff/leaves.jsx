@@ -3,6 +3,7 @@ import Notification from '../../components/common/Notification';
 import Header from '../../components/layout/Header';
 import Sidebar from '../../components/layout/Sidebar';
 import { useAuth } from '../../context/AuthContext';
+import { ROLE_NON_TEACHING, isRoleMatch } from '../../utils/role';
 import axios from '../../api/axios';
 import { getHolidayRHList } from '../../api/holidayrhApi';
 
@@ -46,6 +47,103 @@ function normalizeHolidayType(type) {
 
 function normalizeLeaveStatus(status) {
   return String(status || '').trim().toLowerCase();
+}
+
+function normalizeVacationType(value) {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (!normalized) return '';
+  if (['1', 'true', 't', 'yes', 'vacational'].includes(normalized)) return 'vacational';
+  if (normalized.includes('non')) return 'non-vacational';
+  if (normalized.includes('vacational')) return 'vacational';
+  return normalized;
+}
+
+function isSelectableLeaveType(leaveType) {
+  const shortName = String(leaveType?.shortname || '').trim().toUpperCase();
+  if (!shortName) return true;
+  if (shortName === 'ML') return false;
+  if (shortName.includes('SPECIAL MEDICAL')) return false;
+  if (shortName.startsWith('SML')) return false;
+  return true;
+}
+
+function normalizeEmployeeType(value) {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (!normalized) return '';
+  if (normalized.includes('non')) return 'non-teaching';
+  if (normalized.includes('teach')) return 'teaching';
+  return normalized;
+}
+
+function normalizeMemberStatus(value) {
+  const raw = String(value ?? '').trim().toLowerCase();
+  if (raw === '1' || raw === 'true') return 'active';
+  return raw;
+}
+
+function pickDepartmentId(record) {
+  return Number(
+    record?.department_id
+    ?? record?.dept_id
+    ?? record?.deptId
+    ?? record?.departmentId
+    ?? record?.association_id
+    ?? record?.associationId
+    ?? 0,
+  ) || null;
+}
+
+function pickDepartmentIds(record) {
+  if (Array.isArray(record?.department_ids)) {
+    return record.department_ids.map((id) => Number(id)).filter(Boolean);
+  }
+
+  const single = pickDepartmentId(record);
+  return single ? [single] : [];
+}
+
+function isActiveMember(record) {
+  const statusCandidates = [
+    record?.status,
+    record?.member_status,
+    record?.association_status,
+    record?.designation_status,
+    record?.staff_status,
+    record?.user_status,
+  ];
+
+  const hasAnyStatus = statusCandidates.some(
+    (status) => status !== undefined && status !== null && String(status).trim() !== '',
+  );
+
+  // Backend now enforces active department_staff membership.
+  // If status fields are not present in payload, do not filter out the row here.
+  if (!hasAnyStatus) return true;
+
+  return statusCandidates.some((status) => normalizeMemberStatus(status) === 'active');
+}
+
+function getStaffOptionId(record) {
+  return Number(record?.id ?? record?.staff_id ?? record?.staffId ?? record?.user_id ?? 0) || null;
+}
+
+function getStaffOptionLabel(record) {
+  const fullName = [record?.fname, record?.mname, record?.lname]
+    .filter(Boolean)
+    .join(' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  if (fullName) return fullName;
+
+  return String(
+    record?.staffname
+    || record?.name
+    || record?.full_name
+    || record?.display_name
+    || record?.email
+    || '',
+  ).trim();
 }
 
 function isRhLeaveType(leaveType) {
@@ -256,10 +354,15 @@ const emptyForm = {
   end_date: '',
   cl_type: 'Full',
   reason: '',
+  alternate: '',
+  additional_alternate: '',
 };
 
 export default function StaffLeavesPage() {
   const { user, token } = useAuth?.() || {};
+
+  const requesterStaffId = Number(user?.staff_id || user?.id || 0) || null;
+  const isNonTeachingUser = isRoleMatch(user?.role, ROLE_NON_TEACHING);
 
   // calendar state
   const today = new Date();
@@ -269,6 +372,8 @@ export default function StaffLeavesPage() {
   // data
   const [holidays, setHolidays] = useState([]);
   const [leaveTypes, setLeaveTypes] = useState([]);
+  const [alternateOptions, setAlternateOptions] = useState([]);
+  const [employeeVacationType, setEmployeeVacationType] = useState('');
 
   // application list
   const [applications, setApplications] = useState([]);
@@ -325,7 +430,7 @@ export default function StaffLeavesPage() {
     if (!user?.id) return;
     setLoadingApps(true);
     try {
-      const r = await axios.get('/leave-applications', {
+      const r = await axios.get('/leave-calendar/applications', {
         params: { staff_id: user.id },
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
@@ -337,6 +442,47 @@ export default function StaffLeavesPage() {
   }, [user?.id, token]);
 
   useEffect(() => { loadApplications(); }, [loadApplications]);
+
+  useEffect(() => {
+    if (!requesterStaffId) {
+      setEmployeeVacationType('');
+      return;
+    }
+
+    axios.get(`/staff/${requesterStaffId}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
+      .then((response) => {
+        const staff = response?.data?.data || null;
+        setEmployeeVacationType(
+          normalizeVacationType(
+            staff?.designation_type
+            || staff?.isvacational
+            || staff?.vacation_type,
+          ),
+        );
+      })
+      .catch(() => setEmployeeVacationType(''));
+  }, [requesterStaffId, token]);
+
+  // fetch alternate staff options for current user
+  useEffect(() => {
+    if (!requesterStaffId) return;
+
+    const employeeType = isNonTeachingUser ? 'non-teaching' : 'teaching';
+
+    axios.get('/leave-calendar/alternate-staff', {
+      params: {
+        staff_id: requesterStaffId,
+        employee_type: employeeType,
+        same_department: 1,
+        active_only: 1,
+      },
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
+      .then((r) => setAlternateOptions(r.data?.data || []))
+      .catch(() => setAlternateOptions([]));
+  }, [requesterStaffId, isNonTeachingUser, token]);
 
   // ── build holiday / RH maps keyed by date string ─────────────────────────
   const holidayMap = useMemo(() => {
@@ -372,36 +518,10 @@ export default function StaffLeavesPage() {
       .map((key) => Number(key.slice(0, 4)))
       .filter((y) => Number.isFinite(y));
 
-    const set = new Set([currentYear - 1, currentYear, currentYear + 1, ...years]);
+    const defaultRange = Array.from({ length: 11 }, (_, i) => currentYear - 5 + i);
+    const set = new Set([...defaultRange, ...years]);
     return Array.from(set).sort((a, b) => a - b);
   }, [holidays]);
-
-  useEffect(() => {
-    if (!holidays.length) return;
-
-    const hasVisibleMonthData = holidays.some((h) => {
-      const key = extractDateKey(h.start || h.date || h.start_date);
-      if (!key) return false;
-      return key.startsWith(`${calYear}-${String(calMonth + 1).padStart(2, '0')}-`);
-    });
-
-    if (hasVisibleMonthData) return;
-
-    const firstHolidayKey = holidays
-      .map((h) => extractDateKey(h.start || h.date || h.start_date))
-      .filter(Boolean)
-      .sort()[0];
-
-    if (!firstHolidayKey) return;
-
-    const targetYear = Number(firstHolidayKey.slice(0, 4));
-    const targetMonth = Number(firstHolidayKey.slice(5, 7)) - 1;
-
-    if (Number.isFinite(targetYear) && Number.isFinite(targetMonth)) {
-      setCalYear(targetYear);
-      setCalMonth(targetMonth);
-    }
-  }, [holidays, calYear, calMonth]);
 
   // ── computed no-of-days ──────────────────────────────────────────────────
   const noOfDays = useMemo(() => {
@@ -415,14 +535,60 @@ export default function StaffLeavesPage() {
   }, [form.start_date, form.end_date, form.cl_type]);
 
   const activeLeaveTypes = useMemo(
-    () => leaveTypes.filter((leaveType) => normalizeLeaveStatus(leaveType?.status) === 'active'),
-    [leaveTypes],
+    () => leaveTypes.filter(
+      (leaveType) => {
+        if (normalizeLeaveStatus(leaveType?.status) !== 'active') return false;
+        if (!isSelectableLeaveType(leaveType)) return false;
+
+        const leaveVacationType = normalizeVacationType(leaveType?.vacation_type);
+        if (employeeVacationType && leaveVacationType && leaveVacationType !== employeeVacationType) {
+          return false;
+        }
+
+        return true;
+      },
+    ),
+    [leaveTypes, employeeVacationType],
   );
 
   const selectedLeaveType = useMemo(
     () => activeLeaveTypes.find((leaveType) => String(leaveType.id) === String(form.leave_id)),
     [activeLeaveTypes, form.leave_id],
   );
+
+  const filteredAlternateOptions = useMemo(() => {
+    const expectedType = isNonTeachingUser ? 'non-teaching' : 'teaching';
+    const requesterDepartmentIds = pickDepartmentIds(user);
+
+    return alternateOptions
+      .filter((option) => {
+        const optionId = getStaffOptionId(option);
+        if (!optionId) return false;
+        if (requesterStaffId && optionId === requesterStaffId) return false;
+        if (!isActiveMember(option)) return false;
+
+        const optionType = normalizeEmployeeType(
+          option?.employee_type
+          || option?.employeeType
+          || option?.staff_type
+          || option?.staffType
+          || option?.role,
+        );
+
+        if (optionType && optionType !== expectedType) return false;
+
+        const optionDepartmentIds = pickDepartmentIds(option);
+        if (
+          requesterDepartmentIds.length
+          && !optionDepartmentIds.some((departmentId) => requesterDepartmentIds.includes(departmentId))
+        ) {
+          return false;
+        }
+
+        return Boolean(getStaffOptionLabel(option));
+      })
+      .sort((a, b) => getStaffOptionLabel(a).localeCompare(getStaffOptionLabel(b), undefined, { sensitivity: 'base' }));
+  }, [alternateOptions, isNonTeachingUser, requesterStaffId, user]);
 
   const selectableLeaveTypes = useMemo(() => {
     const isRhDate = Boolean(form.start_date && rhMap[form.start_date]);
@@ -453,6 +619,20 @@ export default function StaffLeavesPage() {
       setForm((currentForm) => ({ ...currentForm, leave_id: '' }));
     }
   }, [selectableLeaveTypes, form.leave_id]);
+
+  useEffect(() => {
+    const alternateExists = filteredAlternateOptions.some((option) => String(getStaffOptionId(option)) === String(form.alternate));
+    const additionalAlternateExists = filteredAlternateOptions.some((option) => String(getStaffOptionId(option)) === String(form.additional_alternate));
+
+    if (form.alternate && !alternateExists) {
+      setForm((currentForm) => ({ ...currentForm, alternate: '' }));
+      return;
+    }
+
+    if (form.additional_alternate && !additionalAlternateExists) {
+      setForm((currentForm) => ({ ...currentForm, additional_alternate: '' }));
+    }
+  }, [filteredAlternateOptions, form.alternate, form.additional_alternate]);
 
   // ── form handlers ────────────────────────────────────────────────────────
   const handleChange = (e) => {
@@ -493,7 +673,7 @@ export default function StaffLeavesPage() {
     setSubmitting(true);
     try {
       await axios.post(
-        '/leave-applications',
+        '/leave-calendar/applications',
         {
           staff_id: user?.id,
           leave_id: Number(form.leave_id),
@@ -501,6 +681,9 @@ export default function StaffLeavesPage() {
           end_date: form.end_date,
           cl_type: form.cl_type,
           reason: form.reason.trim(),
+          no_of_days: noOfDays,
+          alternate: form.alternate || null,
+          additional_alternate: form.additional_alternate || null,
         },
         { headers: token ? { Authorization: `Bearer ${token}` } : {} },
       );
@@ -562,9 +745,7 @@ export default function StaffLeavesPage() {
               </p>
               {holidayLoadError ? (
                 <p className="mt-2 text-xs text-red-600">{holidayLoadError}</p>
-              ) : (
-                <p className="mt-2 text-xs text-slate-400">Holiday/RH records loaded: {Array.isArray(holidays) ? holidays.length : 0}</p>
-              )}
+              ) : null}
             </div>
 
             <div>
@@ -665,6 +846,48 @@ export default function StaffLeavesPage() {
                       Duration: <span className="font-semibold text-blue-700">{noOfDays} day{noOfDays !== 1 ? 's' : ''}</span>
                     </div>
                   )}
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">
+                        Alternate staff
+                      </label>
+                      <select
+                        name="alternate"
+                        value={form.alternate}
+                        onChange={handleChange}
+                        className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      >
+                        <option value="">— Select alternate —</option>
+                        {filteredAlternateOptions.map((a) => {
+                          const optionId = getStaffOptionId(a);
+                          const label = getStaffOptionLabel(a);
+                          if (!optionId || !label) return null;
+                          return <option key={optionId} value={optionId}>{label}</option>;
+                        })}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">
+                        Additional alternate
+                      </label>
+                      <select
+                        name="additional_alternate"
+                        value={form.additional_alternate}
+                        onChange={handleChange}
+                        className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      >
+                        <option value="">— Select additional alternate —</option>
+                        {filteredAlternateOptions.map((a) => {
+                          const optionId = getStaffOptionId(a);
+                          const label = getStaffOptionLabel(a);
+                          if (!optionId || !label) return null;
+                          return <option key={optionId} value={optionId}>{label}</option>;
+                        })}
+                      </select>
+                    </div>
+                  </div>
 
                   <div>
                     <label className="block text-sm font-medium text-slate-700 mb-1">

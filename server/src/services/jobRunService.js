@@ -3,7 +3,7 @@ try {
   scheduledJobRun = require('../models/scheduled_job_run.model');
 } catch (e) {
   // Fallback: provide no-op implementations so scheduling logic can run without DB
-  console.warn('scheduled_job_run.model not found — job run persistence disabled');
+  //console.warn('scheduled_job_run.model not found — job run persistence disabled');
   scheduledJobRun = {
     createRun: async ({ job_name, status = 'running', meta = null } = {}) => ({ id: null, job_name, status, meta }),
     finishRun: async (id, { status = 'success', meta = null } = {}) => null,

@@ -16,7 +16,9 @@ async function inactivatePreviousYear(tx = null) {
     }
 
     const [result] = await sequelize.query(
-      `UPDATE leave_staff_entitlements SET status = 'inactive' WHERE year = :year AND status = 'active'`,
+      `UPDATE leave_staff_entitlements
+       SET status = 'inactive', updated_at = NOW()
+       WHERE year = :year AND status = 'active'`,
       { replacements: { year }, transaction: localTx }
     );
 
@@ -47,13 +49,20 @@ async function upsertMonthlyClEntitlement(tx = null, staffId, leaveId, year, mon
     const selectSql = `SELECT * FROM leave_staff_entitlements WHERE staff_id = :staffId AND leave_id = :leaveId AND year = :year LIMIT 1`;
     const [rows] = await sequelize.query(selectSql, { replacements: { staffId, leaveId, year }, transaction: localTx });
 
+    // load leave to respect max_entitlement cap
+    const [leaveRows] = await sequelize.query('SELECT max_entitlement FROM leaves WHERE id = :leaveId LIMIT 1', { replacements: { leaveId }, transaction: localTx });
+    const leaveMax = (leaveRows && leaveRows[0] && Number(leaveRows[0].max_entitlement)) || 0;
+
     const monthKeys = [null,'jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'];
     const monthKey = monthKeys[month] || 'jan';
 
     if (!rows || rows.length === 0) {
       const monthlyGrantLog = {};
       monthKeys.slice(1).forEach((k) => monthlyGrantLog[k] = 0);
-      monthlyGrantLog[monthKey] = grant;
+
+      // compute grant respecting max_entitlement
+      const grantToApply = Math.min(Math.max(Number(grant) || 0, 0), leaveMax);
+      monthlyGrantLog[monthKey] = grantToApply;
 
       const insertSql = `INSERT INTO leave_staff_entitlements (staff_id, leave_id, year, entitled_curr_year, monthly_grant_log, wef, status)
         VALUES (:staffId, :leaveId, :year, :entitled, :monthly_grant_log, :wef, 'active')`;
@@ -63,7 +72,7 @@ async function upsertMonthlyClEntitlement(tx = null, staffId, leaveId, year, mon
           staffId,
           leaveId,
           year,
-          entitled: grant,
+          entitled: grantToApply,
           monthly_grant_log: JSON.stringify(monthlyGrantLog),
           wef: `${year}-01-01`,
         },
@@ -73,9 +82,14 @@ async function upsertMonthlyClEntitlement(tx = null, staffId, leaveId, year, mon
       const row = rows[0];
       let monthlyGrantLog = {};
       try { monthlyGrantLog = row.monthly_grant_log ? JSON.parse(row.monthly_grant_log) : {}; } catch(_) { monthlyGrantLog = {} }
-      monthlyGrantLog[monthKey] = (monthlyGrantLog[monthKey] || 0) + grant;
 
-      const newEntitled = (row.entitled_curr_year || 0) + grant;
+      const currentEntitled = Number(row.entitled_curr_year || 0);
+      const remainingEntitlement = Math.max(leaveMax - currentEntitled, 0);
+      const grantToApply = Math.min(Math.max(Number(grant) || 0, 0), remainingEntitlement);
+
+      monthlyGrantLog[monthKey] = (monthlyGrantLog[monthKey] || 0) + grantToApply;
+
+      const newEntitled = currentEntitled + grantToApply;
       const updateSql = `UPDATE leave_staff_entitlements SET entitled_curr_year = :entitled, monthly_grant_log = :monthly_grant_log WHERE id = :id`;
       await sequelize.query(updateSql, {
         replacements: { entitled: newEntitled, monthly_grant_log: JSON.stringify(monthlyGrantLog), id: row.id },

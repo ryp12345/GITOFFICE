@@ -165,6 +165,18 @@ exports.cancelApplication = async (req, res) => {
   }
 };
 
+exports.getApplicationsByStaff = async (req, res) => {
+  try {
+    const userId = Number(req.query.staff_id);
+    if (!userId) return sendError(res, 'staff_id is required', 400);
+
+    const data = await LeaveCalendar.getApplicationsByStaffUserId(userId);
+    sendSuccess(res, data);
+  } catch (err) {
+    sendError(res, err.message || 'Failed to load leave applications', err.statusCode || 500);
+  }
+};
+
 exports.getAlternateStaff = async (req, res) => {
   try {
     const staffId = Number(req.query.staff_id);

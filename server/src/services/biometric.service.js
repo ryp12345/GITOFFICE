@@ -429,27 +429,69 @@ async function getMonthlyForEmployee(empcode, monthParam, yearParam) {
       // ignore if table missing
     }
 
-    // Filter missingDates: remove Sundays and holidays and leave-applications for this staff
+    // Filter missingDates: remove Sundays, holidays and leave-applications for this staff.
+    // 1st/3rd Saturdays are retained for UI highlighting.
     let filteredMissing = [];
+    let leaveDates = new Set();
     try {
       // find staff id from postgres
       const staffRes = await pgPool.query(`SELECT id FROM staff WHERE employeecode::text = $1 LIMIT 1`, [String(empcode)]);
       const staffId = staffRes.rows[0] ? staffRes.rows[0].id : null;
-      for (const md of missingDates) {
-        const dow = new Date(md).getDay(); // 0=Sun
-        if (dow === 0) continue; // skip Sunday
-        // check holidayrh
-        const hol = await pgPool.query(`SELECT 1 FROM holidayrh WHERE start = $1 AND type = 'Holiday' LIMIT 1`, [md]);
-        if (hol.rows.length > 0) continue;
-        // check leave application
-        if (staffId) {
-          const leaveQ = await pgPool.query(`SELECT 1 FROM leave_staff_applications WHERE staff_id = $1 AND start <= $2 AND end >= $2 AND appl_status != 'rejected' LIMIT 1`, [staffId, md]);
-          if (leaveQ.rows.length > 0) continue;
+
+      // fetch holiday dates for selected month (Holiday type only)
+      const holidayRes = await pgPool.query(
+        `SELECT start FROM holidayrh WHERE start BETWEEN $1 AND $2 AND type = 'Holiday'`,
+        [firstDay, lastDay]
+      );
+      const holidayDates = new Set(
+        (holidayRes.rows || [])
+          .map((r) => {
+            if (!r || !r.start) return null;
+            if (r.start instanceof Date) return r.start.toISOString().slice(0, 10);
+            return String(r.start).slice(0, 10);
+          })
+          .filter(Boolean)
+      );
+
+      // fetch leave ranges for selected staff and expand to per-day leave dates
+      if (staffId) {
+        const leaveRes = await pgPool.query(
+          `SELECT start, "end" FROM leave_staff_applications WHERE staff_id = $1 AND appl_status != 'rejected' AND start <= $3 AND "end" >= $2`,
+          [staffId, firstDay, lastDay]
+        );
+        const monthStart = new Date(`${firstDay}T00:00:00Z`);
+        const monthEnd = new Date(`${lastDay}T00:00:00Z`);
+        for (const row of leaveRes.rows || []) {
+          const leaveStartRaw = row && row.start ? String(row.start).slice(0, 10) : null;
+          const leaveEndRaw = row && row.end ? String(row.end).slice(0, 10) : null;
+          if (!leaveStartRaw || !leaveEndRaw) continue;
+          const leaveStart = new Date(`${leaveStartRaw}T00:00:00Z`);
+          const leaveEnd = new Date(`${leaveEndRaw}T00:00:00Z`);
+          if (Number.isNaN(leaveStart.getTime()) || Number.isNaN(leaveEnd.getTime())) continue;
+
+          const from = leaveStart > monthStart ? leaveStart : monthStart;
+          const to = leaveEnd < monthEnd ? leaveEnd : monthEnd;
+          if (from > to) continue;
+
+          for (let d = new Date(from); d <= to; d.setUTCDate(d.getUTCDate() + 1)) {
+            leaveDates.add(d.toISOString().slice(0, 10));
+          }
         }
+      }
+
+      for (const md of missingDates) {
+        const mdDate = new Date(`${String(md).slice(0, 10)}T00:00:00Z`);
+        if (Number.isNaN(mdDate.getTime())) continue;
+        const dow = mdDate.getUTCDay(); // 0=Sun
+        if (dow === 0) continue; // skip Sunday
+
+        const mdIso = String(md).slice(0, 10);
+        if (holidayDates.has(mdIso)) continue;
         filteredMissing.push(md);
       }
     } catch (e) {
       filteredMissing = missingDates;
+      leaveDates = new Set();
     }
 
     // fetch employees list for dropdown (eligible staff)
@@ -487,6 +529,7 @@ async function getMonthlyForEmployee(empcode, monthParam, yearParam) {
       averageDurations,
       logsByEmployee,
       missinglog_array: filteredMissing,
+      leave_dates: Array.from(leaveDates).sort(),
       employees,
       currentMonth: month,
       currentYear: year,

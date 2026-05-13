@@ -2,18 +2,22 @@ const fs = require('fs');
 const path = require('path');
 const { Sequelize, DataTypes } = require('sequelize');
 
-// Use DATABASE_URL if provided, otherwise default to sqlite for local/dev use
-const databaseUrl = process.env.DATABASE_URL || null;
+// Prefer app config (DATABASE_URL or DB_* env vars) to connect to Postgres.
+const appConfig = require('../config');
 let sequelize;
-if (databaseUrl) {
-  sequelize = new Sequelize(databaseUrl, { logging: false });
-} else {
-  const storage = process.env.SQLITE_STORAGE || 'server_dev.sqlite';
-  sequelize = new Sequelize({
-    dialect: 'sqlite',
-    storage,
+if (appConfig.databaseUrl) {
+  sequelize = new Sequelize(appConfig.databaseUrl, { logging: false });
+} else if (appConfig.dbHost && appConfig.dbUser) {
+  sequelize = new Sequelize(appConfig.dbName, appConfig.dbUser, appConfig.dbPass, {
+    host: appConfig.dbHost,
+    port: appConfig.dbPort,
+    dialect: 'postgres',
     logging: false,
   });
+} else {
+  // fallback to sqlite for local/dev when no DB config provided
+  const storage = process.env.SQLITE_STORAGE || 'server_dev.sqlite';
+  sequelize = new Sequelize({ dialect: 'sqlite', storage, logging: false });
 }
 
 const db = {};

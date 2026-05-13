@@ -16,6 +16,7 @@ export default function MonthlyDataPage() {
   const [loading, setLoading] = useState(false);
   const [monthlyData, setMonthlyData] = useState(null);
   const [missingDates, setMissingDates] = useState([]);
+  const [leaveDates, setLeaveDates] = useState([]);
   const [logsByEmployee, setLogsByEmployee] = useState({});
   const [tableSearch, setTableSearch] = useState('');
   const [tablePage, setTablePage] = useState(1);
@@ -131,6 +132,23 @@ export default function MonthlyDataPage() {
       // Recompute missing dates client-side to avoid incorrect server results:
       const serverMissing = Array.isArray(data.missinglog_array) ? data.missinglog_array : [];
       const empLogs = data.employeeLogs || {};
+      let holidayDateSet = new Set();
+      try {
+        const holRes = await api.get('/holidayrhs');
+        const holPayload = Array.isArray(holRes?.data?.data)
+          ? holRes.data.data
+          : Array.isArray(holRes?.data)
+            ? holRes.data
+            : [];
+        holidayDateSet = new Set(
+          holPayload
+            .filter((h) => String(h?.type || '').toLowerCase() === 'holiday')
+            .map((h) => String(h?.start || h?.holidayrh_date || '').slice(0, 10))
+            .filter(Boolean)
+        );
+      } catch (_holidayErr) {
+        holidayDateSet = new Set();
+      }
       // build set of employee log keys normalized to ISO YYYY-MM-DD
       const empLogKeys = new Set(Object.keys(empLogs || {}).map(k => {
         const kd = new Date(k);
@@ -144,6 +162,8 @@ export default function MonthlyDataPage() {
         if (dt.getDay() === 0) return false;
         // normalize to ISO for comparison
         const iso = dt.toISOString().slice(0,10);
+        // exclude holidays from holidayrh table
+        if (holidayDateSet.has(iso)) return false;
         if (empLogKeys.has(iso)) return false;
         // some servers return different formats; also check formatted key
         const formatted = `${String(dt.getDate()).padStart(2,'0')}-${dt.toLocaleString('default',{month:'short'})}-${dt.getFullYear()}`;
@@ -151,10 +171,12 @@ export default function MonthlyDataPage() {
         return true;
       });
       setMissingDates(filteredMissing);
+      setLeaveDates(Array.isArray(data.leave_dates) ? data.leave_dates : []);
       setLogsByEmployee(data.logsByEmployee || {});
     } catch (err) {
       setMonthlyData(null);
       setMissingDates([]);
+      setLeaveDates([]);
       setLogsByEmployee({});
     } finally {
       setLoading(false);
@@ -199,13 +221,34 @@ export default function MonthlyDataPage() {
     return `${hours}:${minutes}:${seconds}`;
   };
 
+  const isFirstOrThirdSaturday = (value) => {
+    if (!value) return false;
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime()) || d.getDay() !== 6) return false;
+    const weekOfMonth = Math.floor((d.getDate() - 1) / 7) + 1;
+    return weekOfMonth === 1 || weekOfMonth === 3;
+  };
+
+  const isOnLeaveDate = (value) => {
+    if (!value) return false;
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return false;
+    const iso = d.toISOString().slice(0, 10);
+    return leaveDates.includes(iso);
+  };
+
   useEffect(() => {
     if (!monthlyData || !monthlyData.employeeLogs) {
       if (chartInstance.current) { chartInstance.current.destroy(); chartInstance.current = null; }
       return;
     }
     const labels = Object.keys(monthlyData.employeeLogs).sort((a,b) => new Date(a) - new Date(b));
-    const labelsFormatted = labels.map(d => formatDate(d));
+    const selectedMonthLabel = new Date(year, month - 1).toLocaleString('default', { month: 'long' });
+    const labelsFormatted = labels.map((d) => {
+      const dt = new Date(d);
+      if (Number.isNaN(dt.getTime())) return d;
+      return String(dt.getDate());
+    });
     const dataVals = labels.map(d => {
       const dur = monthlyData.employeeLogs[d].duration; // 'HH:MM:SS'
       if (!dur) return 0;
@@ -236,13 +279,13 @@ export default function MonthlyDataPage() {
             beginAtZero: true,
             title: { display: true, text: 'Work Duration (Hours)' }
           },
-          x: { title: { display: true, text: 'Date' }, ticks: { autoSkip: false, maxRotation: 0 } }
+          x: { title: { display: true, text: `Date (${selectedMonthLabel} ${year})` }, ticks: { autoSkip: false, maxRotation: 0 } }
         }
       }
     });
 
     return () => { if (chartInstance.current) { chartInstance.current.destroy(); chartInstance.current = null; } };
-  }, [monthlyData]);
+  }, [monthlyData, month, year]);
 
   return (
     <div className="min-h-screen bg-slate-100 flex flex-col">
@@ -310,11 +353,22 @@ export default function MonthlyDataPage() {
                                   <tr className="text-left text-sm font-semibold text-gray-700"><th className="px-3 py-2 border-b">Date</th></tr>
                                 </thead>
                                 <tbody>
-                                  {(missingDates || []).map((d,i)=> (
-                                      <tr key={i} className={i % 2 === 0 ? 'bg-white' : 'bg-slate-50'}>
-                                        <td className="px-3 py-2 border-b">{formatDate(d)}</td>
+                                  {(missingDates || []).map((d,i)=> {
+                                    const highlightSaturday = isFirstOrThirdSaturday(d);
+                                    const highlightLeave = isOnLeaveDate(d);
+                                    const rowClass = highlightLeave
+                                      ? 'bg-emerald-100'
+                                      : (highlightSaturday
+                                        ? 'bg-amber-100'
+                                        : (i % 2 === 0 ? 'bg-white' : 'bg-slate-50'));
+                                    return (
+                                      <tr key={i} className={rowClass}>
+                                        <td className={`px-3 py-2 border-b ${highlightLeave ? 'font-semibold text-emerald-900' : (highlightSaturday ? 'font-semibold text-amber-900' : '')}`}>
+                                          {formatDate(d)}{highlightLeave ? ' (On Leave)' : (highlightSaturday ? ' (1st/3rd Sat)' : '')}
+                                        </td>
                                       </tr>
-                                    ))}
+                                    );
+                                  })}
                                 </tbody>
                               </table>
                             </div>
