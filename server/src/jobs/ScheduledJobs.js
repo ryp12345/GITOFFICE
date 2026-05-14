@@ -4,6 +4,18 @@ const jobRunService = require('../services/jobRunService');
 const staffModel = require('../models/staff.model');
 const leaveModel = require('../models/leave.model');
 const { pool } = require('../config/db');
+const mysql = require('mysql2/promise');
+
+const SECONDARY_DB = {
+  host: process.env.DB_SECONDARY_HOST || '127.0.0.1',
+  port: Number(process.env.DB_SECONDARY_PORT || 3306),
+  user: process.env.DB_SECONDARY_USERNAME || 'root',
+  password: process.env.DB_SECONDARY_PASSWORD || '',
+  database: process.env.DB_SECONDARY_DATABASE || undefined,
+  waitForConnections: true,
+  connectionLimit: 10,
+  queueLimit: 0,
+};
 
 async function yearly_leave_entitlements(context = {}) {
   console.log('Running job: yearly_leave_entitlements');
@@ -190,7 +202,7 @@ async function yearly_leave_entitlements(context = {}) {
             }
           } else {
             const max_ent = (l.shortname || '').toUpperCase() === 'CL' ? await check_dorCL(st.id, l) : Number(l.max_entitlement) || 0;
-            await pool.query('INSERT INTO leave_staff_entitlements (year, staff_id, leave_id, entitled_curr_year, accumulated, total_encashed, wef, status, created_at, updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,\'active\', NOW(), NOW())', [year, st.id, l.id, max_ent, accumulated, total_encashable, `${year}-01-01`]);
+            await pool.query('INSERT INTO leave_staff_entitlements (year, staff_id, leave_id, entitled_curr_year, accumulated, total_encashed, wef, status, created_at, updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,\'active\', NOW(), NOW())', [year, st.id, l.id, Number(l.max_entitlement) || 0, accumulated, total_encashable, `${year}-01-01`]);
           }
         }
       }
@@ -256,7 +268,7 @@ async function yearly_leave_entitlements(context = {}) {
             }
           }
           const total_encashable = rule && String(rule.encashable || '').toLowerCase() === 'yes' ? (pre.total_encashed || 0) + (pre.encashed_curr_year || 0) : 0;
-          await pool.query('INSERT INTO leave_staff_entitlements (year, staff_id, leave_id, entitled_curr_year, accumulated, total_encashed, wef, status, created_at, updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,\'active\', NOW(), NOW())', [year, st.id, l.id, max_entitlement, accumulated, total_encashable, `${year}-01-01`]);
+          await pool.query('INSERT INTO leave_staff_entitlements (year, staff_id, leave_id, entitled_curr_year, accumulated, total_encashed, wef, status, created_at, updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,\'active\', NOW(), NOW())', [year, st.id, l.id, max_entitlement, accumulated, pre.total_encashed || 0, `${year}-01-01`]);
         }
       }
     }
@@ -683,24 +695,55 @@ async function halfyearlyEL() {
 
       let applied = 0;
 
+      const getDatePartsInTz = (dateValue, timeZone) => {
+        const parts = new Intl.DateTimeFormat('en-US', {
+          timeZone,
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+        }).formatToParts(new Date(dateValue));
+
+        const yearPart = Number(parts.find((p) => p.type === 'year')?.value || 0);
+        const monthPart = Number(parts.find((p) => p.type === 'month')?.value || 1);
+        const dayPart = Number(parts.find((p) => p.type === 'day')?.value || 1);
+
+        return { year: yearPart, month: monthPart, day: dayPart };
+      };
+
       for (const st of staffRows) {
         const { rows: entRows } = await client.query(
-          'SELECT * FROM leave_staff_entitlements WHERE staff_id = $1 AND leave_id = $2 ORDER BY id LIMIT 1',
-          [st.id, leave.id]
+          'SELECT * FROM leave_staff_entitlements WHERE staff_id = $1 AND leave_id = $2 AND year = $3 AND status = $4 ORDER BY id LIMIT 1',
+          [st.id, leave.id, year, 'active']
         );
         if (!entRows || entRows.length === 0) continue;
         const ent = entRows[0];
 
-        const dor = st.date_of_superanuation ? new Date(st.date_of_superanuation).getFullYear() : null;
-        let max_entitlement_full = Number(leave.max_entitlement) || 0;
+        const dor = st.date_of_superanuation ? new Date(st.date_of_superanuation).getUTCFullYear() : null;
+        const safeNumber = (v, fallback = 0) => {
+          const n = Number(v);
+          return Number.isFinite(n) ? n : fallback;
+        };
+
+        let max_entitlement_full;
         if (dor === year && st.date_of_superanuation) {
-          const retirementDate = new Date(st.date_of_superanuation);
-          const firstOfJul = new Date(`${year}-07-01`);
-          const noOfDaysRemaining = Math.floor(Math.abs(retirementDate - firstOfJul) / (1000 * 60 * 60 * 24));
-          max_entitlement_full = Math.ceil(noOfDaysRemaining * (Number(leave.max_entitlement) || 0) / 365);
+          // Retiring: prorated from July 1 to retirement date
+          const tz = 'Asia/Kolkata';
+          const r = getDatePartsInTz(st.date_of_superanuation, tz);
+          const retirementUTC = Date.UTC(r.year, r.month - 1, r.day);
+          const firstOfJulUTC = Date.UTC(year, 6, 1);
+          const noOfDaysRemaining = Math.abs(Math.floor((retirementUTC - firstOfJulUTC) / (1000 * 60 * 60 * 24)));
+          const base = safeNumber(leave.max_entitlement, 0);
+          const calc = Math.ceil(noOfDaysRemaining * base / 365);
+          max_entitlement_full = Number.isFinite(calc) ? calc : 0;
+        } else {
+          // Non-retiring: allocate HALF (July portion) matching January allocation
+          // Comment: EL for vacational staff is 1/2 in Jan and 1/2 in July
+          max_entitlement_full = Math.ceil(safeNumber(leave.max_entitlement, 0) / 2);
         }
 
-        const newEntitled = (Number(ent.entitled_curr_year) || 0) + max_entitlement_full;
+        const current = safeNumber(ent.entitled_curr_year, 0);
+        const newEntitled = Math.round(current + max_entitlement_full);
+
         await client.query('UPDATE leave_staff_entitlements SET entitled_curr_year = $1, updated_at = NOW() WHERE id = $2', [newEntitled, ent.id]);
         applied++;
       }
@@ -730,14 +773,31 @@ async function sendMissingPunchesEmail() {
   const year = now.getFullYear();
 
   try {
-    // fetch device logs table for current month/year
+    // Fetch device logs from secondary biometric DB (Laravel uses mysql2 connection).
     const deviceTable = `DeviceLogs_${month}_${year}`;
     let loggedEmployeeCodes = [];
     try {
-      const { rows: logRows } = await pool.query(`SELECT EmployeeCode FROM ${deviceTable} WHERE LogDate_Date = $1`, [date]);
-      loggedEmployeeCodes = logRows.map(r => r.employeecode || r.EmployeeCode || r.employeeCode);
+      const mysqlPool = mysql.createPool(SECONDARY_DB);
+      const conn = await mysqlPool.getConnection();
+      try {
+        const [logRows] = await conn.query(
+          `SELECT EmployeeCode FROM \`${deviceTable}\` WHERE LogDate_Date = ?`,
+          [date]
+        );
+        loggedEmployeeCodes = (logRows || []).map((r) => String(r.EmployeeCode));
+      } finally {
+        try { conn.release(); } catch (_) {}
+        await mysqlPool.end();
+      }
     } catch (e) {
-      console.warn('Could not query device logs table:', e && e.message);
+      // Backward-compatible fallback in case secondary DB is not configured.
+      console.warn('Could not query secondary biometric logs DB, falling back to primary DB:', e && e.message);
+      try {
+        const { rows: logRows } = await pool.query(`SELECT EmployeeCode FROM ${deviceTable} WHERE LogDate_Date = $1`, [date]);
+        loggedEmployeeCodes = (logRows || []).map((r) => String(r.employeecode || r.EmployeeCode || r.employeeCode));
+      } catch (inner) {
+        console.warn('Could not query device logs table from primary DB fallback:', inner && inner.message);
+      }
     }
 
     const missingSql = `SELECT DISTINCT staff.id, departments.dept_shortname, staff.EmployeeCode, users.email, CONCAT(staff.fname, ' ', COALESCE(staff.mname, ''), ' ', staff.lname) AS full_name
@@ -750,7 +810,7 @@ async function sendMissingPunchesEmail() {
     const { rows: allStaff } = await pool.query(missingSql);
     const missing = [];
     for (const s of allStaff) {
-      const empCode = s.employeecode || s.EmployeeCode || s.EmployeeCode;
+      const empCode = String(s.employeecode || s.EmployeeCode || s.employeeCode || '');
       if (loggedEmployeeCodes.includes(empCode)) continue;
       const { rows: leaveRows } = await pool.query('SELECT 1 FROM leave_staff_applications WHERE start <= $1 AND "end" >= $1 AND appl_status NOT IN (\'rejected\', \'cancelled\') AND staff_id = $2 LIMIT 1', [date, s.id]);
       if (leaveRows && leaveRows.length > 0) continue;

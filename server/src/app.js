@@ -80,6 +80,9 @@ app.use('/api/jobs', jobsRoutes);
 const biometricRoutes = require('./routes/biometric.routes');
 app.use('/api/biometric', biometricRoutes);
 
+const leaveCalendarRoutes = require('./routes/leave_calendar.routes');
+app.use('/api/leave-calendar', leaveCalendarRoutes);
+
 app.use(errorMiddleware);
 
 module.exports = app;

@@ -289,14 +289,33 @@ async function cancelLeaveApplication(applicationId) {
   return rows[0] || null;
 }
 
-async function getAlternateStaffOptions(userId) {
+async function getActiveAdditionalDesignationIdsForStaff(staffId) {
+  const { rows } = await pool.query(
+    `
+      SELECT ds.designation_id
+      FROM designation_staff ds
+      JOIN designations d ON d.id = ds.designation_id
+      WHERE ds.staff_id = $1
+        AND LOWER(COALESCE(ds.status, 'active')) = 'active'
+        AND d.isadditional = 1
+    `,
+    [staffId]
+  );
+  return rows.map((row) => Number(row.designation_id)).filter(Boolean);
+}
+
+async function getAlternateStaffOptions(userId, employeeTypeHint = null) {
   const requesterStaffId = await resolveStaffIdFromUserId(userId);
   if (!requesterStaffId) return [];
 
   const requesterDepartmentIds = await getActiveDepartmentIdsForStaff(requesterStaffId);
   if (!requesterDepartmentIds.length) return [];
 
-  const requesterEmployeeType = await getActiveEmployeeTypeForStaff(requesterStaffId);
+  // Resolve employee type from DB; fall back to the hint provided by the client
+  // (which is derived from the user's role when no DB record exists).
+  const dbEmployeeType = await getActiveEmployeeTypeForStaff(requesterStaffId);
+  const requesterEmployeeType = dbEmployeeType
+    || (employeeTypeHint ? employeeTypeHint.toLowerCase() : null);
 
   const conditions = [
     's.id <> $1',
@@ -310,7 +329,17 @@ async function getAlternateStaffOptions(userId) {
     values.push(requesterEmployeeType);
   }
 
-  const { rows } = await pool.query(
+  const lateralEt = `
+    LEFT JOIN LATERAL (
+      SELECT et1.employee_type
+      FROM employee_types et1
+      WHERE et1.staff_id = s.id
+        AND LOWER(COALESCE(et1.status, 'active')) = 'active'
+      ORDER BY et1.id DESC
+      LIMIT 1
+    ) et ON true`;
+
+  const { rows: deptRows } = await pool.query(
     `
       SELECT
         s.id,
@@ -319,25 +348,70 @@ async function getAlternateStaffOptions(userId) {
         s.mname,
         s.lname,
         COALESCE(et.employee_type, '') AS employee_type,
-        ARRAY_AGG(DISTINCT ds.department_id) FILTER (WHERE ds.department_id IS NOT NULL) AS department_ids
+        ARRAY_AGG(DISTINCT ds.department_id) FILTER (WHERE ds.department_id IS NOT NULL) AS department_ids,
+        MIN(d.dept_name) AS department_name,
+        MIN(d.dept_name) AS group_label
       FROM staff s
       JOIN department_staff ds ON ds.staff_id = s.id
-      LEFT JOIN LATERAL (
-        SELECT et1.employee_type
-        FROM employee_types et1
-        WHERE et1.staff_id = s.id
-          AND LOWER(COALESCE(et1.status, 'active')) = 'active'
-        ORDER BY et1.id DESC
-        LIMIT 1
-      ) et ON true
+      LEFT JOIN departments d ON d.id = ds.department_id
+      ${lateralEt}
       WHERE ${conditions.join(' AND ')}
       GROUP BY s.id, s.user_id, s.fname, s.mname, s.lname, et.employee_type
-      ORDER BY s.fname ASC, s.mname ASC, s.lname ASC, s.id ASC
+      ORDER BY MIN(d.dept_name) ASC NULLS LAST, s.fname ASC, s.mname ASC, s.lname ASC, s.id ASC
     `,
     values
   );
 
-  return rows || [];
+  // ── additional designation peers (e.g. Principal, Dean) ─────────────────
+  // If the requester holds an additional designation, also include other staff
+  // who hold the same additional designation(s), regardless of department.
+  const additionalDesignationIds = await getActiveAdditionalDesignationIdsForStaff(requesterStaffId);
+
+  let designationRows = [];
+  if (additionalDesignationIds.length) {
+    const { rows } = await pool.query(
+      `
+        SELECT
+          s.id,
+          s.user_id,
+          s.fname,
+          s.mname,
+          s.lname,
+          COALESCE(et.employee_type, '') AS employee_type,
+          ARRAY_AGG(DISTINCT ds_dept.department_id) FILTER (WHERE ds_dept.department_id IS NOT NULL) AS department_ids,
+          MIN(d_dept.dept_name) AS department_name,
+          dsgn.design_name AS group_label
+        FROM staff s
+        JOIN designation_staff dsgn_s ON dsgn_s.staff_id = s.id
+        JOIN designations dsgn ON dsgn.id = dsgn_s.designation_id
+        LEFT JOIN department_staff ds_dept ON ds_dept.staff_id = s.id
+          AND LOWER(COALESCE(ds_dept.status, 'active')) = 'active'
+        LEFT JOIN departments d_dept ON d_dept.id = ds_dept.department_id
+        ${lateralEt}
+        WHERE s.id <> $1
+          AND dsgn_s.designation_id = ANY($2::bigint[])
+          AND LOWER(COALESCE(dsgn_s.status, 'active')) = 'active'
+          AND dsgn.isadditional = 1
+        GROUP BY s.id, s.user_id, s.fname, s.mname, s.lname, et.employee_type, dsgn.design_name
+        ORDER BY dsgn.design_name ASC, s.fname ASC, s.mname ASC, s.lname ASC, s.id ASC
+      `,
+      [requesterStaffId, additionalDesignationIds]
+    );
+    designationRows = rows;
+  }
+
+  // Merge: dept staff first, then designation peers override if the same staff
+  // already appears (so they show under their designation group, not dept group).
+  // The `is_designation_peer` flag tells the client to skip dept/type filters.
+  const merged = new Map();
+  for (const row of deptRows) {
+    merged.set(row.id, { ...row, is_designation_peer: false });
+  }
+  for (const row of designationRows) {
+    merged.set(row.id, { ...row, is_designation_peer: true });
+  }
+
+  return Array.from(merged.values());
 }
 
 module.exports = {

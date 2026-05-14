@@ -146,6 +146,17 @@ function getStaffOptionLabel(record) {
   ).trim();
 }
 
+/** Groups an array of staff options by their group_label (or department_name) field */
+function groupStaffByDepartment(options) {
+  const groups = new Map();
+  for (const opt of options) {
+    const label = String(opt?.group_label || opt?.department_name || '').trim() || 'Other';
+    if (!groups.has(label)) groups.set(label, []);
+    groups.get(label).push(opt);
+  }
+  return groups;
+}
+
 function isRhLeaveType(leaveType) {
   const shortName = String(leaveType?.shortname || '').trim().toUpperCase();
   if (shortName === 'RH') return true;
@@ -185,7 +196,7 @@ function buildCalendarGrid(year, month) {
 
 // ─── sub-component: Calendar ─────────────────────────────────────────────────
 
-function LeaveCalendar({ year, month, onYearChange, onMonthChange, holidayMap, rhMap, availableYears, onDateClick }) {
+function LeaveCalendar({ year, month, onYearChange, onMonthChange, holidayMap, rhMap, leaveMap, availableYears, onDateClick }) {
   const today = toDateStr(new Date());
   const grid = useMemo(() => buildCalendarGrid(year, month), [year, month]);
 
@@ -275,13 +286,22 @@ function LeaveCalendar({ year, month, onYearChange, onMonthChange, holidayMap, r
               const isToday = key === today;
               const holidayTitle = holidayMap[key];
               const rhTitle = rhMap[key];
+              const leaveEntry = leaveMap?.[key];
               const isFTS = isFirstOrThirdSaturday(date);
               const isSun = date.getDay() === 0;
+
+              const leaveStatusColor = leaveEntry
+                ? leaveEntry.status === 'approved'
+                  ? 'bg-green-100'
+                  : leaveEntry.status === 'rejected'
+                    ? 'bg-red-50'
+                    : 'bg-indigo-100'
+                : '';
 
               return (
                 <div
                   key={di}
-                  className={`h-14 sm:h-16 p-1 border-l border-slate-100 first:border-l-0 flex flex-col cursor-pointer hover:ring-1 hover:ring-blue-300 ${getDayStyle(date)}`}
+                  className={`h-14 sm:h-16 p-1 border-l border-slate-100 first:border-l-0 flex flex-col cursor-pointer hover:ring-1 hover:ring-blue-300 ${leaveEntry ? leaveStatusColor : getDayStyle(date)}`}
                   onClick={() => onDateClick?.(key)}
                   role="button"
                   tabIndex={0}
@@ -313,8 +333,22 @@ function LeaveCalendar({ year, month, onYearChange, onMonthChange, holidayMap, r
                       {Math.ceil(date.getDate() / 7) === 1 ? '1st Sat' : '3rd Sat'}
                     </span>
                   )}
-                  {isSun && !holidayTitle && !rhTitle && (
+                  {isSun && !holidayTitle && !rhTitle && !leaveEntry && (
                     <span className="text-[10px] leading-tight mt-auto text-slate-400">Sunday</span>
+                  )}
+                  {leaveEntry && (
+                    <span
+                      className={`text-[9px] sm:text-[10px] leading-tight mt-auto line-clamp-2 font-medium ${
+                        leaveEntry.status === 'approved'
+                          ? 'text-green-700'
+                          : leaveEntry.status === 'rejected'
+                            ? 'text-red-500 line-through'
+                            : 'text-indigo-700'
+                      }`}
+                      title={`${leaveEntry.longname || leaveEntry.shortname} (${leaveEntry.status})`}
+                    >
+                      {leaveEntry.shortname}
+                    </span>
                   )}
                 </div>
               );
@@ -340,6 +374,18 @@ function LeaveCalendar({ year, month, onYearChange, onMonthChange, holidayMap, r
         <span className="flex items-center gap-1.5">
           <span className="inline-block w-3 h-3 rounded-sm bg-blue-600" />
           Today
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="inline-block w-3 h-3 rounded-sm bg-indigo-200 border border-indigo-300" />
+          Leave (Pending)
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="inline-block w-3 h-3 rounded-sm bg-green-200 border border-green-300" />
+          Leave (Approved)
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="inline-block w-3 h-3 rounded-sm bg-red-50 border border-red-200" />
+          Leave (Rejected)
         </span>
       </div>
     </div>
@@ -510,6 +556,33 @@ export default function StaffLeavesPage() {
     return map;
   }, [holidays]);
 
+  // ── map each applied leave day → { shortname, longname, status } ─────────
+  const leaveMap = useMemo(() => {
+    const map = {};
+    for (const app of applications) {
+      const status = normalizeLeaveStatus(app.appl_status || app.status);
+      if (status === 'cancelled') continue;
+      const start = extractDateKey(app.start_date || app.start);
+      const end   = extractDateKey(app.end_date   || app.end);
+      if (!start || !end) continue;
+      const cur = new Date(start);
+      const last = new Date(end);
+      while (cur <= last) {
+        const key = toDateStr(cur);
+        // Earlier (first-inserted) application wins if days overlap
+        if (!map[key]) {
+          map[key] = {
+            shortname: app.leave_shortname || app.shortname || '?',
+            longname:  app.leave_longname  || app.longname  || '',
+            status,
+          };
+        }
+        cur.setDate(cur.getDate() + 1);
+      }
+    }
+    return map;
+  }, [applications]);
+
   const holidayYears = useMemo(() => {
     const currentYear = new Date().getFullYear();
     const years = holidays
@@ -567,28 +640,59 @@ export default function StaffLeavesPage() {
         if (requesterStaffId && optionId === requesterStaffId) return false;
         if (!isActiveMember(option)) return false;
 
-        const optionType = normalizeEmployeeType(
-          option?.employee_type
-          || option?.employeeType
-          || option?.staff_type
-          || option?.staffType
-          || option?.role,
-        );
+        // Designation peers (Principal, Dean, etc.) bypass department and
+        // employee-type filters — they are included based on their designation.
+        if (!option?.is_designation_peer) {
+          const optionType = normalizeEmployeeType(
+            option?.employee_type
+            || option?.employeeType
+            || option?.staff_type
+            || option?.staffType
+            || option?.role,
+          );
 
-        if (optionType && optionType !== expectedType) return false;
+          if (optionType && optionType !== expectedType) return false;
 
-        const optionDepartmentIds = pickDepartmentIds(option);
-        if (
-          requesterDepartmentIds.length
-          && !optionDepartmentIds.some((departmentId) => requesterDepartmentIds.includes(departmentId))
-        ) {
-          return false;
+          const optionDepartmentIds = pickDepartmentIds(option);
+          if (
+            requesterDepartmentIds.length
+            && !optionDepartmentIds.some((departmentId) => requesterDepartmentIds.includes(departmentId))
+          ) {
+            return false;
+          }
         }
 
         return Boolean(getStaffOptionLabel(option));
       })
       .sort((a, b) => getStaffOptionLabel(a).localeCompare(getStaffOptionLabel(b), undefined, { sensitivity: 'base' }));
   }, [alternateOptions, isNonTeachingUser, requesterStaffId, user]);
+
+  const groupedAlternateOptions = useMemo(
+    () => groupStaffByDepartment(filteredAlternateOptions),
+    [filteredAlternateOptions],
+  );
+
+  const renderGroupedStaffOptions = (groups) => {
+    const entries = Array.from(groups.entries());
+    if (entries.length <= 1) {
+      return (entries[0]?.[1] || []).map((a) => {
+        const optionId = getStaffOptionId(a);
+        const label = getStaffOptionLabel(a);
+        if (!optionId || !label) return null;
+        return <option key={optionId} value={optionId}>{label}</option>;
+      });
+    }
+    return entries.map(([dept, members]) => (
+      <optgroup key={dept} label={dept}>
+        {members.map((a) => {
+          const optionId = getStaffOptionId(a);
+          const label = getStaffOptionLabel(a);
+          if (!optionId || !label) return null;
+          return <option key={optionId} value={optionId}>{label}</option>;
+        })}
+      </optgroup>
+    ));
+  };
 
   const selectableLeaveTypes = useMemo(() => {
     const isRhDate = Boolean(form.start_date && rhMap[form.start_date]);
@@ -664,11 +768,12 @@ export default function StaffLeavesPage() {
     e.preventDefault();
     setFormError('');
 
-    if (!form.leave_id)    return setFormError('Please select a leave type.');
-    if (!form.start_date)  return setFormError('Please select a start date.');
-    if (!form.end_date)    return setFormError('Please select an end date.');
+    if (!form.leave_id)      return setFormError('Please select a leave type.');
+    if (!form.start_date)    return setFormError('Please select a start date.');
+    if (!form.end_date)      return setFormError('Please select an end date.');
+    if (noOfDays === null)   return setFormError('End date must be on or after start date.');
+    if (!form.alternate)     return setFormError('Please select an alternate staff.');
     if (!form.reason.trim()) return setFormError('Please enter a reason.');
-    if (noOfDays === null) return setFormError('End date must be on or after start date.');
 
     setSubmitting(true);
     try {
@@ -756,6 +861,7 @@ export default function StaffLeavesPage() {
                 onMonthChange={setCalMonth}
                 holidayMap={holidayMap}
                 rhMap={rhMap}
+                leaveMap={leaveMap}
                 availableYears={holidayYears}
                 onDateClick={openApplyModalForDate}
               />
@@ -785,6 +891,7 @@ export default function StaffLeavesPage() {
                       name="leave_id"
                       value={form.leave_id}
                       onChange={handleChange}
+                      required
                       className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
                     >
                       <option value="">— Select leave type —</option>
@@ -820,6 +927,7 @@ export default function StaffLeavesPage() {
                         value={form.end_date}
                         min={form.start_date || undefined}
                         onChange={handleChange}
+                        required
                         className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
                       />
                     </div>
@@ -827,7 +935,7 @@ export default function StaffLeavesPage() {
 
                   {isSingleDayCL && (
                     <div>
-                      <label className="block text-sm font-medium text-slate-700 mb-1">Day Type</label>
+                      <label className="block text-sm font-medium text-slate-700 mb-1">Day Type <span className="text-red-500">*</span></label>
                       <select
                         name="cl_type"
                         value={form.cl_type}
@@ -850,21 +958,17 @@ export default function StaffLeavesPage() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
                       <label className="block text-sm font-medium text-slate-700 mb-1">
-                        Alternate staff
+                        Alternate staff <span className="text-red-500">*</span>
                       </label>
                       <select
                         name="alternate"
                         value={form.alternate}
                         onChange={handleChange}
+                        required
                         className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
                       >
                         <option value="">— Select alternate —</option>
-                        {filteredAlternateOptions.map((a) => {
-                          const optionId = getStaffOptionId(a);
-                          const label = getStaffOptionLabel(a);
-                          if (!optionId || !label) return null;
-                          return <option key={optionId} value={optionId}>{label}</option>;
-                        })}
+                        {renderGroupedStaffOptions(groupedAlternateOptions)}
                       </select>
                     </div>
 
@@ -879,12 +983,7 @@ export default function StaffLeavesPage() {
                         className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
                       >
                         <option value="">— Select additional alternate —</option>
-                        {filteredAlternateOptions.map((a) => {
-                          const optionId = getStaffOptionId(a);
-                          const label = getStaffOptionLabel(a);
-                          if (!optionId || !label) return null;
-                          return <option key={optionId} value={optionId}>{label}</option>;
-                        })}
+                        {renderGroupedStaffOptions(groupedAlternateOptions)}
                       </select>
                     </div>
                   </div>
@@ -898,6 +997,7 @@ export default function StaffLeavesPage() {
                       value={form.reason}
                       onChange={handleChange}
                       rows={3}
+                      required
                       placeholder="Enter reason for leave..."
                       className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-800 resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />

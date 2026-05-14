@@ -182,7 +182,13 @@ exports.getAlternateStaff = async (req, res) => {
     const staffId = Number(req.query.staff_id);
     if (!staffId) return sendError(res, 'staff_id is required', 400);
 
-    const data = await LeaveCalendar.getAlternateStaffOptions(staffId);
+    // employee_type sent by the client (derived from user role) is used as a
+    // fallback when the staff member has no record in employee_types table.
+    const employeeTypeHint = req.query.employee_type
+      ? String(req.query.employee_type).trim().toLowerCase()
+      : null;
+
+    const data = await LeaveCalendar.getAlternateStaffOptions(staffId, employeeTypeHint);
     sendSuccess(res, data);
   } catch (err) {
     sendError(res, err.message || 'Failed to load alternate staff options', err.statusCode || 500);

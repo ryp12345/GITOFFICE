@@ -1,4 +1,8 @@
-require('dotenv').config();
+const path = require('path');
+const dotenv = require('dotenv');
+
+dotenv.config({ path: path.resolve(__dirname, '../../.env') });
+dotenv.config();
 
 const defaultCorsOrigins = ['http://localhost:3003', 'http://127.0.0.1:3003'];
 const corsOrigins = process.env.CORS_ORIGIN

@@ -21,15 +21,13 @@ async function runJob(req, res, next) {
   }
 
   try {
-    const run = await jobRunService.startRun(jobName, { initiatedBy: req.user?.id || 'api' });
-    try {
-      const result = await jobFn({ fromApi: true, body: req.body });
-      await jobRunService.finishRun(run.id, 'success', { result });
-      return res.json({ ok: true, job: jobName, run });
-    } catch (err) {
-      await jobRunService.finishRun(run.id, 'failed', { error: err.message || String(err) });
-      throw err;
-    }
+    // Job functions already handle run start/finish logging.
+    const result = await jobFn({
+      ...(req.body || {}),
+      fromApi: true,
+      userId: req.user?.id || 'api',
+    });
+    return res.json({ ok: true, job: jobName, result });
   } catch (err) {
     return next(err);
   }

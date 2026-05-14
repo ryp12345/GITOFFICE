@@ -92,7 +92,6 @@ const getEntitlementsForStaff = async (year, staffIds) => {
     JOIN leaves l ON l.id = lse.leave_id
     WHERE lse.year = $1
       AND lse.staff_id = ANY($2::bigint[])
-      AND lse.status = 'active'
       AND l.status = 'active'
         AND UPPER(TRIM(l.shortname)) NOT LIKE 'SML%'
         AND UPPER(TRIM(l.shortname)) <> 'ML'

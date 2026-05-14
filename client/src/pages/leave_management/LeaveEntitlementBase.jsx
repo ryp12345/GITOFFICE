@@ -54,6 +54,11 @@ export default function LeaveEntitlementBase({
     setTimeout(() => setNotification({ show: false, message: '', type: '' }), 4000);
   };
 
+  const toDisplayNumber = (value) => {
+    const numeric = Number(value);
+    return Number.isFinite(numeric) ? numeric : 0;
+  };
+
   const filteredRows = useMemo(() => {
     const query = searchTerm.trim().toLowerCase();
     if (!query) return rows;
@@ -250,21 +255,21 @@ export default function LeaveEntitlementBase({
                           {leaveTypes.map((leaveType) => {
                             const leaveData = row.leaves?.[leaveType.shortname];
                             return (
-                              <td key={`entitled-${row.id}-${leaveType.shortname}`} className="px-4 py-3 border text-sm text-center text-gray-700">{leaveData ? leaveData.entitled_accumulated : 0}</td>
+                              <td key={`entitled-${row.id}-${leaveType.shortname}`} className="px-4 py-3 border text-sm text-center text-gray-700">{toDisplayNumber(leaveData?.entitled_accumulated)}</td>
                             );
                           })}
 
                           {leaveTypesTaken.map((leaveType) => {
                             const leaveData = row.leaves?.[leaveType.shortname];
                             return (
-                              <td key={`taken-${row.id}-${leaveType.shortname}`} className="px-4 py-3 border text-sm text-center text-gray-700">{leaveData ? leaveData.availed : 0}</td>
+                              <td key={`taken-${row.id}-${leaveType.shortname}`} className="px-4 py-3 border text-sm text-center text-gray-700">{toDisplayNumber(leaveData?.availed)}</td>
                             );
                           })}
 
                           {leaveTypes.map((leaveType) => {
                             const leaveData = row.leaves?.[leaveType.shortname];
                             return (
-                              <td key={`balance-${row.id}-${leaveType.shortname}`} className="px-4 py-3 border text-sm text-center text-gray-700">{leaveData ? leaveData.balance : 0}</td>
+                              <td key={`balance-${row.id}-${leaveType.shortname}`} className="px-4 py-3 border text-sm text-center text-gray-700">{toDisplayNumber(leaveData?.balance)}</td>
                             );
                           })}
                         </tr>
