@@ -85,8 +85,8 @@ async function getCalendarEvents({ year, month } = {}) {
         la.leave_id,
         l.shortname AS leave_shortname,
         l.longname AS leave_longname,
-        la.start AS start_date,
-        la.end AS end_date,
+        TO_CHAR(la.start::date, 'YYYY-MM-DD') AS start_date,
+        TO_CHAR(la.end::date, 'YYYY-MM-DD') AS end_date,
         la.no_of_days,
         la.cl_type,
         la.reason,
@@ -95,8 +95,8 @@ async function getCalendarEvents({ year, month } = {}) {
       FROM leave_staff_applications la
       LEFT JOIN leaves l ON l.id = la.leave_id
       WHERE LOWER(COALESCE(la.appl_status, 'pending')) <> 'rejected'
-        AND la.start <= $2
-        AND la.end >= $1
+        AND la.start::date <= $2::date
+        AND la.end::date >= $1::date
       ORDER BY la.start ASC, la.id ASC
     `,
     [from, to]
@@ -117,8 +117,8 @@ async function getApplicationsByStaffUserId(userId) {
         la.leave_id,
         l.shortname AS leave_shortname,
         l.longname AS leave_longname,
-        la.start AS start_date,
-        la.end AS end_date,
+        TO_CHAR(la.start::date, 'YYYY-MM-DD') AS start_date,
+        TO_CHAR(la.end::date, 'YYYY-MM-DD') AS end_date,
         la.no_of_days,
         la.cl_type,
         la.reason,
@@ -149,8 +149,8 @@ async function getLeaveApplicationById(applicationId) {
         la.leave_id,
         l.shortname AS leave_shortname,
         l.longname AS leave_longname,
-        la.start AS start_date,
-        la.end AS end_date,
+        TO_CHAR(la.start::date, 'YYYY-MM-DD') AS start_date,
+        TO_CHAR(la.end::date, 'YYYY-MM-DD') AS end_date,
         la.no_of_days,
         la.cl_type,
         la.reason,
@@ -182,8 +182,8 @@ async function validateLeaveApplication({ staffId: userId, startDate, endDate, a
     FROM leave_staff_applications
     WHERE staff_id = $1
       AND LOWER(COALESCE(appl_status, 'pending')) NOT IN ('rejected', 'cancelled')
-      AND start <= $2
-      AND "end" >= $3
+      AND start::date <= $2::date
+      AND "end"::date >= $3::date
   `;
 
   if (applicationId) {
@@ -209,84 +209,226 @@ async function createLeaveApplication(payload) {
     throw err;
   }
 
-  const year = new Date(payload.endDate || payload.startDate).getFullYear();
+  const year = Number(String(payload.endDate || payload.startDate || '').slice(0, 4));
 
-  const { rows } = await pool.query(
-    `
-      INSERT INTO leave_staff_applications
-        (staff_id, leave_id, start, "end", no_of_days, reason, cl_type,
-         alternate, additional_alternate, appl_status, leave_status, year, created_at, updated_at)
-      VALUES
-        ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'pending', 'awaiting', $10, NOW(), NOW())
-      RETURNING id
-    `,
-    [
-      staffId,
-      payload.leaveId,
-      payload.startDate,
-      payload.endDate,
-      payload.noOfDays,
-      payload.reason,
-      payload.clType || 'Full',
-      payload.alternate || null,
-      payload.additionalAlternate || null,
-      year,
-    ]
-  );
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
 
-  return rows[0] || null;
+    const { rows } = await client.query(
+      `
+        INSERT INTO leave_staff_applications
+          (staff_id, leave_id, start, "end", no_of_days, reason, cl_type,
+           alternate, additional_alternate, appl_status, leave_status, year, created_at, updated_at)
+        VALUES
+          ($1, $2, $3::date, $4::date, $5, $6, $7, $8, $9, 'pending', 'awaiting', $10, NOW(), NOW())
+        RETURNING id
+      `,
+      [
+        staffId,
+        payload.leaveId,
+        payload.startDate,
+        payload.endDate,
+        payload.noOfDays,
+        payload.reason,
+        payload.clType || 'Full',
+        payload.alternate || null,
+        payload.additionalAlternate || null,
+        year,
+      ]
+    );
+
+    await syncConsumedEntitlement(client, staffId, payload.leaveId, year);
+    await client.query('COMMIT');
+
+    return rows[0] || null;
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 async function updateLeaveApplication(applicationId, payload) {
   const id = Number(applicationId);
   if (!id) return null;
 
-  const { rows } = await pool.query(
-    `
-      UPDATE leave_staff_applications
-      SET leave_id = $1,
-          start = $2,
-          "end" = $3,
-          no_of_days = $4,
-          reason = $5,
-          cl_type = $6,
-          alternate = $7,
-          additional_alternate = $8,
-          updated_at = NOW()
-      WHERE id = $9
-      RETURNING id
-    `,
-    [
-      payload.leaveId,
-      payload.startDate,
-      payload.endDate,
-      payload.noOfDays,
-      payload.reason,
-      payload.clType || 'Full',
-      payload.alternate || null,
-      payload.additionalAlternate || null,
-      id,
-    ]
-  );
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
 
-  return rows[0] || null;
+    const beforeResult = await client.query(
+      `
+        SELECT staff_id, leave_id, EXTRACT(YEAR FROM start::date)::int AS year
+        FROM leave_staff_applications
+        WHERE id = $1
+        LIMIT 1
+      `,
+      [id]
+    );
+    const before = beforeResult.rows[0] || null;
+    if (!before) {
+      await client.query('ROLLBACK');
+      return null;
+    }
+
+    const { rows } = await client.query(
+      `
+        UPDATE leave_staff_applications
+        SET leave_id = $1,
+          start = $2::date,
+          "end" = $3::date,
+            no_of_days = $4,
+            reason = $5,
+            cl_type = $6,
+            alternate = $7,
+            additional_alternate = $8,
+            updated_at = NOW()
+        WHERE id = $9
+        RETURNING id, staff_id, leave_id, EXTRACT(YEAR FROM start::date)::int AS year
+      `,
+      [
+        payload.leaveId,
+        payload.startDate,
+        payload.endDate,
+        payload.noOfDays,
+        payload.reason,
+        payload.clType || 'Full',
+        payload.alternate || null,
+        payload.additionalAlternate || null,
+        id,
+      ]
+    );
+
+    const updated = rows[0] || null;
+    if (!updated) {
+      await client.query('ROLLBACK');
+      return null;
+    }
+
+    await syncConsumedEntitlement(client, Number(before.staff_id), Number(before.leave_id), Number(before.year));
+
+    const comboChanged =
+      Number(before.staff_id) !== Number(updated.staff_id)
+      || Number(before.leave_id) !== Number(updated.leave_id)
+      || Number(before.year) !== Number(updated.year);
+
+    if (comboChanged) {
+      await syncConsumedEntitlement(client, Number(updated.staff_id), Number(updated.leave_id), Number(updated.year));
+    }
+
+    await client.query('COMMIT');
+    return { id: updated.id };
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 async function cancelLeaveApplication(applicationId) {
   const id = Number(applicationId);
   if (!id) return null;
 
-  const { rows } = await pool.query(
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const beforeResult = await client.query(
+      `
+        SELECT staff_id, leave_id, EXTRACT(YEAR FROM start::date)::int AS year
+        FROM leave_staff_applications
+        WHERE id = $1
+        LIMIT 1
+      `,
+      [id]
+    );
+    const before = beforeResult.rows[0] || null;
+    if (!before) {
+      await client.query('ROLLBACK');
+      return null;
+    }
+
+    const { rows } = await client.query(
+      `
+        UPDATE leave_staff_applications
+        SET appl_status = 'cancelled', updated_at = NOW()
+        WHERE id = $1
+        RETURNING id
+      `,
+      [id]
+    );
+
+    await syncConsumedEntitlement(client, Number(before.staff_id), Number(before.leave_id), Number(before.year));
+    await client.query('COMMIT');
+
+    return rows[0] || null;
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+async function syncConsumedEntitlement(client, staffId, leaveId, year) {
+  const numericStaffId = Number(staffId);
+  const numericLeaveId = Number(leaveId);
+  const numericYear = Number(year);
+  if (!numericStaffId || !numericLeaveId || !numericYear) return;
+
+  const sumResult = await client.query(
     `
-      UPDATE leave_staff_applications
-      SET appl_status = 'cancelled', updated_at = NOW()
-      WHERE id = $1
-      RETURNING id
+      SELECT COALESCE(SUM(no_of_days), 0) AS consumed
+      FROM leave_staff_applications
+      WHERE staff_id = $1
+        AND leave_id = $2
+        AND year = $3
+        AND LOWER(COALESCE(appl_status, 'pending')) NOT IN ('rejected', 'cancelled')
     `,
-    [id]
+    [numericStaffId, numericLeaveId, numericYear]
   );
 
-  return rows[0] || null;
+  const consumed = Number(sumResult.rows[0]?.consumed || 0);
+
+  const entitlement = await client.query(
+    `
+      SELECT id
+      FROM leave_staff_entitlements
+      WHERE staff_id = $1
+        AND leave_id = $2
+        AND year = $3
+      ORDER BY id DESC
+      LIMIT 1
+    `,
+    [numericStaffId, numericLeaveId, numericYear]
+  );
+
+  if (entitlement.rows.length > 0) {
+    await client.query(
+      `
+        UPDATE leave_staff_entitlements
+        SET consumed_curr_year = $1,
+            status = 'active',
+            updated_at = NOW()
+        WHERE id = $2
+      `,
+      [consumed, entitlement.rows[0].id]
+    );
+    return;
+  }
+
+  await client.query(
+    `
+      INSERT INTO leave_staff_entitlements
+        (year, staff_id, leave_id, entitled_curr_year, accumulated, consumed_curr_year, encashed_curr_year, total_encashed, wef, status, created_at, updated_at)
+      VALUES
+        ($1, $2, $3, 0, 0, $4, 0, 0, $5, 'active', NOW(), NOW())
+    `,
+    [numericYear, numericStaffId, numericLeaveId, consumed, `${numericYear}-01-01`]
+  );
 }
 
 async function getActiveAdditionalDesignationIdsForStaff(staffId) {
@@ -415,6 +557,7 @@ async function getAlternateStaffOptions(userId, employeeTypeHint = null) {
 }
 
 module.exports = {
+  resolveStaffIdFromUserId,
   getMeta,
   getCalendarEvents,
   getApplicationsByStaffUserId,

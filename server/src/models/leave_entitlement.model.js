@@ -53,6 +53,7 @@ const getEligibleStaff = async (departmentId) => {
   const sql = `
     SELECT
       s.id,
+      s.user_id,
       TRIM(CONCAT_WS(' ', s.fname, s.mname, s.lname)) AS name,
       COALESCE(STRING_AGG(DISTINCT d.dept_shortname, ', '), 'N/A') AS dept_shortname
     FROM staff s
@@ -68,7 +69,7 @@ const getEligibleStaff = async (departmentId) => {
       a.asso_name ILIKE $5
     )
       AND ($6::bigint IS NULL OR ds.department_id = $6)
-    GROUP BY s.id, s.fname, s.mname, s.lname
+    GROUP BY s.id, s.user_id, s.fname, s.mname, s.lname
     ORDER BY s.id ASC
   `;
 
@@ -161,6 +162,7 @@ const buildRows = (staffRows, entitlementRows, year) => {
   staffRows.forEach((staff) => {
     byStaff.set(Number(staff.id), {
       id: Number(staff.id),
+      user_id: Number(staff.user_id || 0) || null,
       name: staff.name || '',
       dept_shortname: staff.dept_shortname || 'N/A',
       year,

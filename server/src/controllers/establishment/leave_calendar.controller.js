@@ -10,11 +10,22 @@ function computeNoOfDays(startDate, endDate, clType = 'Full') {
   }
 
   const dayDiff = Math.floor((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
-  if (dayDiff === 1 && String(clType || 'Full') !== 'Full') {
+  const clTypeNormalized = String(clType || 'Full').trim().toLowerCase();
+  const isFullDay = clTypeNormalized === 'full' || clTypeNormalized === 'full day';
+  if (dayDiff === 1 && !isFullDay) {
     return 0.5;
   }
 
   return dayDiff;
+}
+
+function normalizeClType(value) {
+  const raw = String(value || '').trim().toLowerCase();
+  if (!raw) return 'Full';
+  if (raw === 'morning' || raw === 'first half' || raw === 'firsthalf') return 'Morning';
+  if (raw === 'afternoon' || raw === 'second half' || raw === 'secondhalf') return 'Afternoon';
+  if (raw === 'full' || raw === 'full day' || raw === 'fullday') return 'Full';
+  return 'Full';
 }
 
 function normalizePayload(body) {
@@ -24,7 +35,7 @@ function normalizePayload(body) {
     startDate: body.start_date,
     endDate: body.end_date,
     reason: String(body.reason || '').trim(),
-    clType: body.cl_type || 'Full',
+    clType: normalizeClType(body.cl_type),
     alternate: body.alternate ? Number(body.alternate) : null,
     additionalAlternate: body.additional_alternate ? Number(body.additional_alternate) : null
   };
@@ -105,6 +116,15 @@ exports.createApplication = async (req, res) => {
     const payload = normalizePayload(req.body || {});
     validateRequiredPayload(payload);
 
+    const requester = req.user || {};
+    const isEstablishment = String(requester.role || '').trim() === 'Establishment';
+    const requesterStaffId = await LeaveCalendar.resolveStaffIdFromUserId(requester.id);
+    const payloadStaffId = await LeaveCalendar.resolveStaffIdFromUserId(payload.staffId);
+
+    if (!isEstablishment && (!requesterStaffId || !payloadStaffId || Number(requesterStaffId) !== Number(payloadStaffId))) {
+      return sendError(res, 'Forbidden', 403);
+    }
+
     const validation = await LeaveCalendar.validateLeaveApplication({
       staffId: payload.staffId,
       startDate: payload.startDate,
@@ -128,8 +148,24 @@ exports.updateApplication = async (req, res) => {
     const applicationId = Number(req.params.id);
     if (!applicationId) return sendError(res, 'Invalid application id', 400);
 
+    const existingApplication = await LeaveCalendar.getLeaveApplicationById(applicationId);
+    if (!existingApplication) return sendError(res, 'Leave application not found', 404);
+
+    const requester = req.user || {};
+    const isEstablishment = String(requester.role || '').trim() === 'Establishment';
+    const requesterStaffId = await LeaveCalendar.resolveStaffIdFromUserId(requester.id);
+
+    if (!isEstablishment && (!requesterStaffId || Number(requesterStaffId) !== Number(existingApplication.staff_id))) {
+      return sendError(res, 'Forbidden', 403);
+    }
+
     const payload = normalizePayload(req.body || {});
     validateRequiredPayload(payload);
+
+    const payloadStaffId = await LeaveCalendar.resolveStaffIdFromUserId(payload.staffId);
+    if (!isEstablishment && (!payloadStaffId || Number(payloadStaffId) !== Number(existingApplication.staff_id))) {
+      return sendError(res, 'Forbidden', 403);
+    }
 
     const validation = await LeaveCalendar.validateLeaveApplication({
       staffId: payload.staffId,
@@ -156,8 +192,23 @@ exports.cancelApplication = async (req, res) => {
     const applicationId = Number(req.params.id);
     if (!applicationId) return sendError(res, 'Invalid application id', 400);
 
+    // fetch application to check ownership
+    const application = await LeaveCalendar.getLeaveApplicationById(applicationId);
+    if (!application) return sendError(res, 'Leave application not found', 404);
+
+    // allow cancellation if requester is Establishment role or the application owner
+    const requester = req.user || {};
+    const isEstablishment = String(requester.role || '').trim() === 'Establishment';
+
+    // resolve staff id of requester (user -> staff)
+    const requesterStaffId = await LeaveCalendar.resolveStaffIdFromUserId(requester.id);
+
+    if (!isEstablishment && (!requesterStaffId || Number(requesterStaffId) !== Number(application.staff_id))) {
+      return sendError(res, 'Forbidden', 403);
+    }
+
     const row = await LeaveCalendar.cancelLeaveApplication(applicationId);
-    if (!row) return sendError(res, 'Leave application not found', 404);
+    if (!row) return sendError(res, 'Failed to cancel leave application', 500);
 
     sendSuccess(res, row);
   } catch (err) {

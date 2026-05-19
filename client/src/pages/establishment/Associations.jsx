@@ -244,7 +244,7 @@ export default function AssociationsPage() {
               )}
             </div>
 
-                      {isModalOpen && (
+            {isModalOpen && (
               <div className="fixed inset-0 z-50 overflow-y-auto" role="dialog" aria-modal="true">
                 <div className="flex items-end justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
                   <div className="fixed inset-0 transition-opacity bg-gray-500 bg-opacity-75" onClick={onClose} />

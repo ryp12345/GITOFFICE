@@ -15,7 +15,7 @@ const COMMON_LINKS = [
     icon: '🌿',
     submenu: [
       { name: 'Apply Leave', teachingPath: '/teaching/leave-application', nonTeachingPath: '/nonteaching/leave-application' },
-      { name: 'Leave List', teachingPath: '/teaching/leave-list', nonTeachingPath: '/nonteaching/leave-list' },
+    //   { name: 'Leave List', teachingPath: '/teaching/leave-list', nonTeachingPath: '/nonteaching/leave-list' },
     ],
   },
   {

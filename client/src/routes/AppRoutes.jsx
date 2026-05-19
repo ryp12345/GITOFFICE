@@ -47,6 +47,8 @@ import StaffLeavesPage from '../pages/staff/leaves';
 import ChangePassword from '../pages/auth/ChangePassword';
 import ForgotPassword from '../pages/auth/ForgotPassword';
 import ResetPassword from '../pages/auth/ResetPassword';
+import AssoProRecruitmentPage from '../pages/Faculty Recruitment/asso_pro_recruitment';
+import ProRecruitmentPage from '../pages/Faculty Recruitment/pro_recruitment';
 
 // StaffViewPage now fetches its own data from API using id
 function StaffViewPageWrapper() {
@@ -54,7 +56,11 @@ function StaffViewPageWrapper() {
 }
 
 function HomeRedirect() {
-  const { user, isAuthenticated } = useAuth();
+  const { user, isAuthenticated, isLoading } = useAuth();
+
+  if (isLoading) {
+    return <div className="p-4">Loading...</div>;
+  }
 
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
@@ -115,6 +121,8 @@ export default function AppRoutes() {
           <Route path="/hod/department-overview" element={<HODDepartmentOverviewPage />} />
           <Route path="/hod/my-staff" element={<HODMyStaffPage />} />
           <Route path="/hod/leave-entitlement" element={<HODLeaveEntitlementPage />} />
+          <Route path="/Faculty Recruitment/asso_pro_recruitment" element={<AssoProRecruitmentPage />} />
+          <Route path="/Faculty Recruitment/pro_recruitment" element={<ProRecruitmentPage />} />
 
 
 

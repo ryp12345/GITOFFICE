@@ -12,7 +12,7 @@ router.get('/applications/:id', authMiddleware, controller.getApplicationById);
 
 router.post('/validate',      authMiddleware, roleMiddleware('Establishment'), controller.validateApplication);
 router.post('/applications',  authMiddleware, controller.createApplication);
-router.patch('/applications/:id', authMiddleware, roleMiddleware('Establishment'), controller.updateApplication);
-router.post('/applications/:id/cancel', authMiddleware, roleMiddleware('Establishment'), controller.cancelApplication);
+router.patch('/applications/:id', authMiddleware, controller.updateApplication);
+router.post('/applications/:id/cancel', authMiddleware, controller.cancelApplication);
 
 module.exports = router;

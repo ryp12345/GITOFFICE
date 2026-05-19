@@ -21,7 +21,7 @@ export default function SidebarHOD() {
         { name: 'Leave Application', path: '/hod/leave-application', icon: '🌿' }
       ]
     },
-     {
+    {
       name: 'BIOMETRIC',
       path: '/biometric',
       icon: '🔏',
@@ -29,6 +29,15 @@ export default function SidebarHOD() {
         { name: 'Daily Data', path: '/biometric/daily' },
         { name: 'Monthly Data', path: '/biometric/monthly' },
         { name: 'Muster', path: '/biometric/muster' }
+      ]
+    },
+    {
+      name: 'Faculty Recruitment',
+      path: '/Faculty Recruitment',
+      icon: '🎓',
+      submenu: [
+        { name: 'Associate Professor Applications', path: '/Faculty Recruitment/asso_pro_recruitment' },
+        { name: 'Professor Applications', path: '/Faculty Recruitment/pro_recruitment' },
       ]
     }
   ];

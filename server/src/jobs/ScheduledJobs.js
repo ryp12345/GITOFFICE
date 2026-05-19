@@ -6,6 +6,19 @@ const leaveModel = require('../models/leave.model');
 const { pool } = require('../config/db');
 const mysql = require('mysql2/promise');
 
+// Helper: ensure an entitlement row for (year, staff, leave) exists before inserting.
+async function ensureEntitlement(year, staffId, leaveId, insertSql, insertParams) {
+  try {
+    const { rows } = await pool.query('SELECT id FROM leave_staff_entitlements WHERE year=$1 AND staff_id=$2 AND leave_id=$3 LIMIT 1', [year, staffId, leaveId]);
+    if (rows && rows.length > 0) return false; // already exists
+    await pool.query(insertSql, insertParams);
+    return true;
+  } catch (e) {
+    // if select/insert fails, rethrow to let caller handle
+    throw e;
+  }
+}
+
 const SECONDARY_DB = {
   host: process.env.DB_SECONDARY_HOST || '127.0.0.1',
   port: Number(process.env.DB_SECONDARY_PORT || 3306),
@@ -61,7 +74,7 @@ async function yearly_leave_entitlements(context = {}) {
         AND ast.status = 'active'`;
 
     const { rows: teachingStaff } = await pool.query(teachingVacationalStaffSql);
-    const { rows: vacLeaves } = await pool.query("SELECT * FROM leaves WHERE vacation_type='Vacational' AND max_entitlement>0 AND shortname NOT ILIKE 'SML%' AND shortname NOT ILIKE 'ML' AND LOWER(status)='active'");
+    const { rows: vacLeaves } = await pool.query("SELECT * FROM leaves WHERE LOWER(vacation_type)='vacational' AND max_entitlement>0 AND shortname NOT ILIKE 'SML%' AND shortname NOT ILIKE 'ML' AND LOWER(status)='active'");
     console.log('diagnostic: teachingStaff count=', teachingStaff.length, 'vacLeaves count=', vacLeaves.length, 'year=', year);
 
     for (const st of teachingStaff) {
@@ -91,7 +104,9 @@ async function yearly_leave_entitlements(context = {}) {
 
           if (!pre) {
             console.log('inserting EL for staff', st.id, 'leave', l.id, 'entitlement', max_entitlement);
-            await pool.query(`INSERT INTO leave_staff_entitlements (year, staff_id, leave_id, entitled_curr_year, monthly_grant_log, wef, status, created_at, updated_at) VALUES ($1,$2,$3,$4,$5,$6,'active', NOW(), NOW())`, [year, st.id, l.id, max_entitlement, monthlyGrantLog, `${year}-01-01`]);
+            await ensureEntitlement(year, st.id, l.id,
+              `INSERT INTO leave_staff_entitlements (year, staff_id, leave_id, entitled_curr_year, monthly_grant_log, wef, status, created_at, updated_at) VALUES ($1,$2,$3,$4,$5,$6,'active', NOW(), NOW())`,
+              [year, st.id, l.id, max_entitlement, monthlyGrantLog, `${year}-01-01`] );
           } else {
             console.log('previous year entry exists for staff', st.id, 'leave', l.id, 'using accumulated logic');
             // compute accumulated / encashed depending on leave_rules
@@ -99,15 +114,19 @@ async function yearly_leave_entitlements(context = {}) {
             let accumulated = pre.accumulated || 0;
             if (rule && String(rule.carry_forwardable || '').toLowerCase() === 'yes') {
               accumulated = (pre.accumulated || 0) + (pre.entitled_curr_year || 0) - (pre.consumed_curr_year || 0) - (pre.encashed_curr_year || 0);
+              if (accumulated < 0) accumulated = 0;
               if (accumulated >= (rule.max_cf || 0)) accumulated = rule.max_cf;
             } else {
               if ((pre.consumed_curr_year || 0) > (pre.entitled_curr_year || 0)) {
                 accumulated = (pre.accumulated || 0) + (pre.entitled_curr_year || 0) - (pre.consumed_curr_year || 0);
+                if (accumulated < 0) accumulated = 0;
               } else {
                 accumulated = pre.accumulated || 0;
               }
             }
-            await pool.query('INSERT INTO leave_staff_entitlements (year, staff_id, leave_id, entitled_curr_year, accumulated, wef, status, created_at, updated_at) VALUES ($1,$2,$3,$4,$5,$6,\'active\', NOW(), NOW())', [year, st.id, l.id, max_entitlement, accumulated, `${year}-01-01`]);
+            await ensureEntitlement(year, st.id, l.id,
+              'INSERT INTO leave_staff_entitlements (year, staff_id, leave_id, entitled_curr_year, accumulated, wef, status, created_at, updated_at) VALUES ($1,$2,$3,$4,$5,$6,\'active\', NOW(), NOW())',
+              [year, st.id, l.id, max_entitlement, accumulated, `${year}-01-01`] );
           }
         }
         // CL handling
@@ -117,28 +136,36 @@ async function yearly_leave_entitlements(context = {}) {
           const pre = preRows && preRows[0];
           const monthlyGrantLog = JSON.stringify({ jan:0,feb:0,mar:0,apr:0,may:0,jun:0,jul:0,aug:0,sep:0,oct:0,nov:0,dec:0 });
           if (!pre) {
-            await pool.query(`INSERT INTO leave_staff_entitlements (year, staff_id, leave_id, entitled_curr_year, monthly_grant_log, wef, status, created_at, updated_at) VALUES ($1,$2,$3,$4,$5,$6,'active', NOW(), NOW())`, [year, st.id, l.id, max_entitlement, monthlyGrantLog, `${year}-01-01`]);
+            await ensureEntitlement(year, st.id, l.id,
+              `INSERT INTO leave_staff_entitlements (year, staff_id, leave_id, entitled_curr_year, monthly_grant_log, wef, status, created_at, updated_at) VALUES ($1,$2,$3,$4,$5,$6,'active', NOW(), NOW())`,
+              [year, st.id, l.id, max_entitlement, monthlyGrantLog, `${year}-01-01`] );
           } else {
             const rule = await getLeaveRule(l.id);
             let accumulated = pre.accumulated || 0;
             if (rule && String(rule.carry_forwardable || '').toLowerCase() === 'yes') {
               accumulated = (pre.accumulated || 0) + (pre.entitled_curr_year || 0) - (pre.consumed_curr_year || 0);
+              if (accumulated < 0) accumulated = 0;
               if (accumulated >= (rule.max_cf || 0)) accumulated = rule.max_cf;
             } else {
               if ((pre.consumed_curr_year || 0) > (pre.entitled_curr_year || 0)) {
                 accumulated = (pre.accumulated || 0) + (pre.entitled_curr_year || 0) - (pre.consumed_curr_year || 0);
+                if (accumulated < 0) accumulated = 0;
               } else {
                 accumulated = pre.accumulated || 0;
               }
             }
             const total_encashable = (pre.total_encashed || 0) + (pre.encashed_curr_year || 0);
-            await pool.query('INSERT INTO leave_staff_entitlements (year, staff_id, leave_id, entitled_curr_year, accumulated, total_encashed, wef, status, created_at, updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,\'active\', NOW(), NOW())', [year, st.id, l.id, max_entitlement, accumulated, total_encashable, `${year}-01-01`]);
+            await ensureEntitlement(year, st.id, l.id,
+              'INSERT INTO leave_staff_entitlements (year, staff_id, leave_id, entitled_curr_year, accumulated, total_encashed, wef, status, created_at, updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,\'active\', NOW(), NOW())',
+              [year, st.id, l.id, max_entitlement, accumulated, total_encashable, `${year}-01-01`] );
           }
         }
         else {
           // other leave types: give full entitlement
           const monthlyGrantLog = JSON.stringify({ jan:0,feb:0,mar:0,apr:0,may:0,jun:0,jul:0,aug:0,sep:0,oct:0,nov:0,dec:0 });
-          await pool.query(`INSERT INTO leave_staff_entitlements (year, staff_id, leave_id, entitled_curr_year, monthly_grant_log, wef, status, created_at, updated_at) VALUES ($1,$2,$3,$4,$5,$6,'active', NOW(), NOW())`, [year, st.id, l.id, Number(l.max_entitlement) || 0, monthlyGrantLog, `${year}-01-01`]);
+          await ensureEntitlement(year, st.id, l.id,
+            `INSERT INTO leave_staff_entitlements (year, staff_id, leave_id, entitled_curr_year, monthly_grant_log, wef, status, created_at, updated_at) VALUES ($1,$2,$3,$4,$5,$6,'active', NOW(), NOW())`,
+            [year, st.id, l.id, Number(l.max_entitlement) || 0, monthlyGrantLog, `${year}-01-01`] );
         }
       }
     }
@@ -150,7 +177,7 @@ async function yearly_leave_entitlements(context = {}) {
       JOIN designations d ON ds.designation_id = d.id
       WHERE d.isadditional = 1 AND d.isvacational = 'Non-Vacational' AND ds.status = 'active'`;
     const { rows: teachingNonVacStaff } = await pool.query(teachingNonVacSql);
-    const { rows: nonVacLeaves } = await pool.query("SELECT * FROM leaves WHERE vacation_type='Non-Vacational' AND max_entitlement>0 AND shortname NOT ILIKE 'SML%' AND shortname NOT ILIKE 'ML' AND LOWER(status)='active'");
+    const { rows: nonVacLeaves } = await pool.query("SELECT * FROM leaves WHERE LOWER(vacation_type)='non-vacational' AND max_entitlement>0 AND shortname NOT ILIKE 'SML%' AND shortname NOT ILIKE 'ML' AND LOWER(status)='active'");
 
     for (const st of teachingNonVacStaff) {
       for (const l of nonVacLeaves) {
@@ -174,17 +201,21 @@ async function yearly_leave_entitlements(context = {}) {
             entitlement = Number(l.max_entitlement) || 0;
           }
           const monthlyGrantLog = JSON.stringify({ jan:0,feb:0,mar:0,apr:0,may:0,jun:0,jul:0,aug:0,sep:0,oct:0,nov:0,dec:0 });
-          await pool.query(`INSERT INTO leave_staff_entitlements (year, staff_id, leave_id, entitled_curr_year, monthly_grant_log, wef, status, created_at, updated_at) VALUES ($1,$2,$3,$4,$5,$6,'active', NOW(), NOW())`, [year, st.id, l.id, entitlement, monthlyGrantLog, `${year}-01-01`]);
+          await ensureEntitlement(year, st.id, l.id,
+            `INSERT INTO leave_staff_entitlements (year, staff_id, leave_id, entitled_curr_year, monthly_grant_log, wef, status, created_at, updated_at) VALUES ($1,$2,$3,$4,$5,$6,'active', NOW(), NOW())`,
+            [year, st.id, l.id, entitlement, monthlyGrantLog, `${year}-01-01`] );
         } else {
           // has previous entitlement: compute accumulated/encash as per rules
           const rule = await getLeaveRule(l.id);
           let accumulated = pre.accumulated || 0;
           if (rule && String(rule.carry_forwardable || '').toLowerCase() === 'yes') {
             accumulated = (pre.accumulated || 0) + (pre.entitled_curr_year || 0) - (pre.consumed_curr_year || 0) - (pre.encashed_curr_year || 0);
+            if (accumulated < 0) accumulated = 0;
             if (accumulated > (rule.max_cf || 0)) accumulated = rule.max_cf;
           } else {
             if ((pre.consumed_curr_year || 0) > (pre.entitled_curr_year || 0)) {
               accumulated = (pre.accumulated || 0) - ((pre.entitled_curr_year || 0) - (pre.consumed_curr_year || 0));
+              if (accumulated < 0) accumulated = 0;
             } else {
               accumulated = pre.accumulated || 0;
             }
@@ -196,30 +227,36 @@ async function yearly_leave_entitlements(context = {}) {
           // entitlement for EL special-case
           if ((l.shortname || '').toUpperCase() === 'EL') {
             if ((pre.accumulated || 0) === (rule && rule.max_cf ? rule.max_cf : pre.accumulated || 0)) {
-              await pool.query('INSERT INTO leave_staff_entitlements (year, staff_id, leave_id, entitled_curr_year, accumulated, total_encashed, wef, status, created_at, updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,\'active\', NOW(), NOW())', [year, st.id, l.id, (rule && rule.entitlement_post_max_cf) || 0, accumulated, total_encashable, `${year}-01-01`]);
+              await ensureEntitlement(year, st.id, l.id,
+                'INSERT INTO leave_staff_entitlements (year, staff_id, leave_id, entitled_curr_year, accumulated, total_encashed, wef, status, created_at, updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,\'active\', NOW(), NOW())',
+                [year, st.id, l.id, (rule && rule.entitlement_post_max_cf) || 0, accumulated, total_encashable, `${year}-01-01`] );
             } else {
-              await pool.query('INSERT INTO leave_staff_entitlements (year, staff_id, leave_id, entitled_curr_year, accumulated, total_encashed, wef, status, created_at, updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,\'active\', NOW(), NOW())', [year, st.id, l.id, 0, accumulated, total_encashable, `${year}-01-01`]);
+              await ensureEntitlement(year, st.id, l.id,
+                'INSERT INTO leave_staff_entitlements (year, staff_id, leave_id, entitled_curr_year, accumulated, total_encashed, wef, status, created_at, updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,\'active\', NOW(), NOW())',
+                [year, st.id, l.id, 0, accumulated, total_encashable, `${year}-01-01`] );
             }
           } else {
             const max_ent = (l.shortname || '').toUpperCase() === 'CL' ? await check_dorCL(st.id, l) : Number(l.max_entitlement) || 0;
-            await pool.query('INSERT INTO leave_staff_entitlements (year, staff_id, leave_id, entitled_curr_year, accumulated, total_encashed, wef, status, created_at, updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,\'active\', NOW(), NOW())', [year, st.id, l.id, Number(l.max_entitlement) || 0, accumulated, total_encashable, `${year}-01-01`]);
+            await ensureEntitlement(year, st.id, l.id,
+              'INSERT INTO leave_staff_entitlements (year, staff_id, leave_id, entitled_curr_year, accumulated, total_encashed, wef, status, created_at, updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,\'active\', NOW(), NOW())',
+              [year, st.id, l.id, max_ent, accumulated, total_encashable, `${year}-01-01`] );
           }
         }
       }
     }
 
     // Non-Teaching confirmed/promotional probationary (matches Laravel yearly logic)
-    const nonTeachingSql = `SELECT staff.*, association_staff.start_date AS as_start_date, associations.asso_name
+    const nonTeachingSql = `SELECT staff.*, association_staff.start_date AS start_date, associations.asso_name
       FROM staff
       JOIN employee_types ON employee_types.staff_id = staff.id
       JOIN association_staff ON association_staff.staff_id = staff.id
       JOIN associations ON associations.id = association_staff.association_id
-      WHERE LOWER(employee_types.employee_type) = 'non-teaching'
-        AND LOWER(employee_types.status) = 'active'
+      WHERE employee_types.employee_type = 'Non-Teaching'
+        AND employee_types.status = 'active'
         AND association_staff.status = 'active'
         AND associations.asso_name IN ('Confirmed', 'Promotional Probationary')`;
     const { rows: nonTeaching } = await pool.query(nonTeachingSql);
-    const { rows: nonVacLeavesAll } = await pool.query("SELECT * FROM leaves WHERE vacation_type='Non-Vacational' AND max_entitlement>0 AND shortname NOT ILIKE 'SML%' AND shortname NOT ILIKE 'ML' AND LOWER(status)='active'");
+    const { rows: nonVacLeavesAll } = await pool.query("SELECT * FROM leaves WHERE LOWER(vacation_type)='non-vacational' AND max_entitlement>0 AND shortname NOT ILIKE 'SML%' AND shortname NOT ILIKE 'ML' AND LOWER(status)='active'");
 
     for (const st of nonTeaching) {
       for (const l of nonVacLeavesAll) {
@@ -227,8 +264,8 @@ async function yearly_leave_entitlements(context = {}) {
         let max_entitlement = Number(l.max_entitlement) || 0;
         if ((l.shortname || '').toUpperCase() === 'EL') {
           // if confirmed in previous year
-          if (st.asso_name === 'Confirmed' && st.as_start_date && new Date(st.as_start_date).getFullYear() === year - 1) {
-            const startDate = new Date(st.as_start_date);
+          if (st.asso_name === 'Confirmed' && st.start_date && new Date(st.start_date).getFullYear() === year - 1) {
+            const startDate = new Date(st.start_date);
             const endDate = new Date(startDate.getFullYear(), 11, 31);
             const daysWorked = Math.max(0, Math.floor((endDate - startDate) / (1000 * 60 * 60 * 24)));
             max_entitlement = Math.ceil(Number(l.max_entitlement || 0) * daysWorked / 365);
@@ -251,24 +288,30 @@ async function yearly_leave_entitlements(context = {}) {
 
         const { rows: preRows } = await pool.query('SELECT * FROM leave_staff_entitlements WHERE year=$1 AND staff_id=$2 AND leave_id=$3 LIMIT 1', [year - 1, st.id, l.id]);
         const pre = preRows && preRows[0];
-        if (!pre) {
+          if (!pre) {
           const monthlyGrantLog = JSON.stringify({ jan:0,feb:0,mar:0,apr:0,may:0,jun:0,jul:0,aug:0,sep:0,oct:0,nov:0,dec:0 });
-          await pool.query(`INSERT INTO leave_staff_entitlements (year, staff_id, leave_id, entitled_curr_year, monthly_grant_log, wef, status, created_at, updated_at) VALUES ($1,$2,$3,$4,$5,$6,'active', NOW(), NOW())`, [year, st.id, l.id, max_entitlement, monthlyGrantLog, `${year}-01-01`]);
+          await ensureEntitlement(year, st.id, l.id,
+            `INSERT INTO leave_staff_entitlements (year, staff_id, leave_id, entitled_curr_year, monthly_grant_log, wef, status, created_at, updated_at) VALUES ($1,$2,$3,$4,$5,$6,'active', NOW(), NOW())`,
+            [year, st.id, l.id, max_entitlement, monthlyGrantLog, `${year}-01-01`]);
         } else {
           const rule = await getLeaveRule(l.id);
           let accumulated = pre.accumulated || 0;
           if (rule && String(rule.carry_forwardable || '').toLowerCase() === 'yes') {
             accumulated = (pre.accumulated || 0) + (pre.entitled_curr_year || 0) - (pre.consumed_curr_year || 0) - (pre.encashed_curr_year || 0);
+            if (accumulated < 0) accumulated = 0;
             if (accumulated > (rule.max_cf || 0)) accumulated = rule.max_cf;
           } else {
             if ((pre.consumed_curr_year || 0) > (pre.entitled_curr_year || 0)) {
               accumulated = (pre.accumulated || 0) - ((pre.entitled_curr_year || 0) - (pre.consumed_curr_year || 0));
+              if (accumulated < 0) accumulated = 0;
             } else {
               accumulated = pre.accumulated || 0;
             }
           }
           const total_encashable = rule && String(rule.encashable || '').toLowerCase() === 'yes' ? (pre.total_encashed || 0) + (pre.encashed_curr_year || 0) : 0;
-          await pool.query('INSERT INTO leave_staff_entitlements (year, staff_id, leave_id, entitled_curr_year, accumulated, total_encashed, wef, status, created_at, updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,\'active\', NOW(), NOW())', [year, st.id, l.id, max_entitlement, accumulated, pre.total_encashed || 0, `${year}-01-01`]);
+          await ensureEntitlement(year, st.id, l.id,
+            'INSERT INTO leave_staff_entitlements (year, staff_id, leave_id, entitled_curr_year, accumulated, total_encashed, wef, status, created_at, updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,\'active\', NOW(), NOW())',
+            [year, st.id, l.id, max_entitlement, accumulated, total_encashable, `${year}-01-01`]);
         }
       }
     }
@@ -346,7 +389,6 @@ async function monthly_leave_entitlements() {
           FROM leave_rules lr
           WHERE lr.leave_id = l.id
             AND LOWER(lr.status) = 'active'
-            AND lr.max_time_allowed IS NULL
         )`;
 
     const [{ rows: staffRows }, { rows: leaves }] = await Promise.all([
@@ -384,21 +426,17 @@ async function monthly_leave_entitlements() {
             await upsertMonthlyClEntitlement(Number(st.id), l, year, month, clEntitled);
             applied++;
           } else if (shortname === 'EL') {
-            await pool.query(
+            if (await ensureEntitlement(year, Number(st.id), Number(l.id),
               `INSERT INTO leave_staff_entitlements
                (year, staff_id, leave_id, entitled_curr_year, wef, status, created_at, updated_at)
                VALUES ($1, $2, $3, $4, $5, 'active', NOW(), NOW())`,
-              [year, Number(st.id), Number(l.id), 0, `${year}-01-01`]
-            );
-            applied++;
+              [year, Number(st.id), Number(l.id), 0, `${year}-01-01`] )) applied++;
           } else {
-            await pool.query(
+            if (await ensureEntitlement(year, Number(st.id), Number(l.id),
               `INSERT INTO leave_staff_entitlements
                (year, staff_id, leave_id, entitled_curr_year, wef, status, created_at, updated_at)
                VALUES ($1, $2, $3, $4, $5, 'active', NOW(), NOW())`,
-              [year, Number(st.id), Number(l.id), Number(l.max_entitlement || 0), `${year}-01-01`]
-            );
-            applied++;
+              [year, Number(st.id), Number(l.id), Number(l.max_entitlement || 0), `${year}-01-01`] )) applied++;
           }
           continue;
         }
@@ -413,21 +451,17 @@ async function monthly_leave_entitlements() {
             await upsertMonthlyClEntitlement(Number(st.id), l, year, month, clEntitled);
             applied++;
           } else if (shortname === 'EL') {
-            await pool.query(
+            if (await ensureEntitlement(year, Number(st.id), Number(l.id),
               `INSERT INTO leave_staff_entitlements
                (year, staff_id, leave_id, entitled_curr_year, wef, status, created_at, updated_at)
                VALUES ($1, $2, $3, $4, $5, 'active', NOW(), NOW())`,
-              [year, Number(st.id), Number(l.id), 0, `${year}-01-01`]
-            );
-            applied++;
+              [year, Number(st.id), Number(l.id), 0, `${year}-01-01`] )) applied++;
           } else {
-            await pool.query(
+            if (await ensureEntitlement(year, Number(st.id), Number(l.id),
               `INSERT INTO leave_staff_entitlements
                (year, staff_id, leave_id, entitled_curr_year, wef, status, created_at, updated_at)
                VALUES ($1, $2, $3, $4, $5, 'active', NOW(), NOW())`,
-              [year, Number(st.id), Number(l.id), Number(l.max_entitlement || 0), `${year}-01-01`]
-            );
-            applied++;
+              [year, Number(st.id), Number(l.id), Number(l.max_entitlement || 0), `${year}-01-01`] )) applied++;
           }
         } else if (shortname === 'CL') {
           await upsertMonthlyClEntitlement(Number(st.id), l, year, month, clEntitled);
@@ -724,6 +758,7 @@ async function halfyearlyEL() {
           return Number.isFinite(n) ? n : fallback;
         };
 
+        const current = safeNumber(ent.entitled_curr_year, 0);
         let max_entitlement_full;
         if (dor === year && st.date_of_superanuation) {
           // Retiring: prorated from July 1 to retirement date
@@ -736,12 +771,11 @@ async function halfyearlyEL() {
           const calc = Math.ceil(noOfDaysRemaining * base / 365);
           max_entitlement_full = Number.isFinite(calc) ? calc : 0;
         } else {
-          // Non-retiring: allocate HALF (July portion) matching January allocation
-          // Comment: EL for vacational staff is 1/2 in Jan and 1/2 in July
-          max_entitlement_full = Math.ceil(safeNumber(leave.max_entitlement, 0) / 2);
+          // July grant should be only the remaining entitlement to reach annual max.
+          const base = safeNumber(leave.max_entitlement, 0);
+          max_entitlement_full = Math.max(base - current, 0);
         }
 
-        const current = safeNumber(ent.entitled_curr_year, 0);
         const newEntitled = Math.round(current + max_entitlement_full);
 
         await client.query('UPDATE leave_staff_entitlements SET entitled_curr_year = $1, updated_at = NOW() WHERE id = $2', [newEntitled, ent.id]);
