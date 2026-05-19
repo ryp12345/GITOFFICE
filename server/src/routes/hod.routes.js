@@ -3,6 +3,7 @@ const { authMiddleware } = require('../middlewares/auth.middleware');
 const { roleMiddleware } = require('../middlewares/role.middleware');
 const hodDepartmentOverviewController = require('../controllers/hod/departmentOverview.controller');
 const hodMyStaffController = require('../controllers/hod/myStaff.controller');
+const hodLeaveApplicationController = require('../controllers/hod/leaveApplication.controller');
 const associateProfessorController = require('../controllers/hod/associateProfessor.controller');
 const professorController = require('../controllers/hod/professor.controller');
 
@@ -20,6 +21,34 @@ router.get(
   authMiddleware,
   roleMiddleware('Head of Department', 'hod'),
   hodMyStaffController.getMyStaff
+);
+
+router.get(
+  '/leave-applications',
+  authMiddleware,
+  roleMiddleware('Head of Department', 'hod'),
+  hodLeaveApplicationController.listLeaveApplications
+);
+
+router.post(
+  '/leave-applications/:id/recommend',
+  authMiddleware,
+  roleMiddleware('Head of Department', 'hod'),
+  hodLeaveApplicationController.recommendLeave
+);
+
+router.post(
+  '/leave-applications/:id/reject',
+  authMiddleware,
+  roleMiddleware('Head of Department', 'hod'),
+  hodLeaveApplicationController.rejectLeave
+);
+
+router.post(
+  '/leave-applications/bulk-action',
+  authMiddleware,
+  roleMiddleware('Head of Department', 'hod'),
+  hodLeaveApplicationController.bulkUpdate
 );
 
 router.get(

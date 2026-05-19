@@ -12,6 +12,7 @@ import PrincipalDeanDashboard from '../pages/PrincipalDean/Dashboard';
 import HODDepartmentOverviewPage from '../pages/hod/DepartmentOverview';
 import HODMyStaffPage from '../pages/hod/MyStaff';
 import HODLeaveEntitlementPage from '../pages/hod/LeaveEntitlement';
+import HODLeaveApplicationPage from '../pages/hod/LeaveApplication';
 import SidebarHOD from '../components/layout/SidebarHOD';
 import StaffDashboard from '../pages/staff/StaffDashboard';
 import AssociationsPage from '../pages/establishment/Associations';
@@ -121,6 +122,7 @@ export default function AppRoutes() {
           <Route path="/hod/department-overview" element={<HODDepartmentOverviewPage />} />
           <Route path="/hod/my-staff" element={<HODMyStaffPage />} />
           <Route path="/hod/leave-entitlement" element={<HODLeaveEntitlementPage />} />
+          <Route path="/hod/leave-application" element={<HODLeaveApplicationPage />} />
           <Route path="/Faculty Recruitment/asso_pro_recruitment" element={<AssoProRecruitmentPage />} />
           <Route path="/Faculty Recruitment/pro_recruitment" element={<ProRecruitmentPage />} />
 
