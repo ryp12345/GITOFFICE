@@ -1,34 +1,41 @@
 import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
+import { useAuth } from '../../context/AuthContext';
+import { isRoleMatch, ROLE_DEAN_ADMIN } from '../../utils/role';
 
 export default function PrincipalDeansidebar() {
   const location = useLocation();
+  const { user } = useAuth();
   const [isOpen, setIsOpen] = useState(true);
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [expandedMenus, setExpandedMenus] = useState({});
 
   const sidebarWidth = isOpen ? 'w-64' : 'w-20';
+  let roleBasePath = '/principal';
+  if (isRoleMatch(user?.role, ROLE_DEAN_ADMIN)) {
+    roleBasePath = '/dean_admin';
+  }
 
   const links = [
-    { name: 'Dashboard', path: '/principal', icon: '📊' },
+    { name: 'Dashboard', path: roleBasePath, icon: '📊' },
     { name: 'Staff', path: '/staff', icon: '👥' },
     {
       name: 'Leave Management',
       path: '/leave-management',
       icon: '🌿',
       submenu: [
-        { name: 'Entitlement', path: '/leave-management/entitlement' },
+        { name: 'Entitlement', path: `${roleBasePath}/leave-entitlement` },
         { name: 'Holiday RH List', path: '/leave-management/holiday-rh' },
-        { name: 'Leave Calendar', path: '/leave-management/calendar' }
+        { name: 'Leave Application', path: '/leave-management/leaveapplication' }
       ]
     },
     {
       name: 'BIOMETRIC',
       icon: '🔏',
       submenu: [
-        { name: 'Daily Data', path: '/principal/biometric/daily' },
-        { name: 'Monthly Data', path: '/principal/biometric/monthly' },
-        { name: 'Muster', path: '/principal/biometric/muster' }
+        { name: 'Daily Data', path: `${roleBasePath}/biometric/daily` },
+        { name: 'Monthly Data', path: `${roleBasePath}/biometric/monthly` },
+        { name: 'Muster', path: `${roleBasePath}/biometric/muster` }
       ]
     }
   ];

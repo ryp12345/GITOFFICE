@@ -9,6 +9,7 @@ import SuperAdminHolidayRHListPage from '../pages/super-admin/HolidayRHList';
 import EstablishmentDashboard from '../pages/establishment/Dashboard';
 import HODDashboard from '../pages/hod/Dashboard';
 import PrincipalDeanDashboard from '../pages/PrincipalDean/Dashboard';
+import PrincipalDeanLeaveEntitlementPage from '../pages/PrincipalDean/LeaveEntitlement';
 import HODDepartmentOverviewPage from '../pages/hod/DepartmentOverview';
 import HODMyStaffPage from '../pages/hod/MyStaff';
 import HODLeaveEntitlementPage from '../pages/hod/LeaveEntitlement';
@@ -140,12 +141,14 @@ export default function AppRoutes() {
           <Route path="/principal/biometric/daily" element={<DailyDataPage />} />
           <Route path="/principal/biometric/monthly" element={<MonthlyDataPage />} />
           <Route path="/principal/biometric/muster" element={<MusterPage />} />
+          <Route path="/principal/leave-entitlement" element={<PrincipalDeanLeaveEntitlementPage />} />
         </Route>
-        <Route element={<RoleRoute role="Dean" />}>
-          <Route path="/dean" element={<PrincipalDeanDashboard />} />
-          <Route path="/dean/biometric/daily" element={<DailyDataPage />} />
-          <Route path="/dean/biometric/monthly" element={<MonthlyDataPage />} />
-          <Route path="/dean/biometric/muster" element={<MusterPage />} />
+        <Route element={<RoleRoute role="Dean_admin" />}>
+          <Route path="/dean_admin" element={<PrincipalDeanDashboard />} />
+          <Route path="/dean_admin/biometric/daily" element={<DailyDataPage />} />
+          <Route path="/dean_admin/biometric/monthly" element={<MonthlyDataPage />} />
+          <Route path="/dean_admin/biometric/muster" element={<MusterPage />} />
+          <Route path="/dean_admin/leave-entitlement" element={<PrincipalDeanLeaveEntitlementPage />} />
         </Route>
         <Route element={<RoleRoute role="Teaching" />}>
           <Route path="/teaching" element={<StaffDashboard />} />
