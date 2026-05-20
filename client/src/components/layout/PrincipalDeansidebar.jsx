@@ -23,10 +23,11 @@ export default function PrincipalDeansidebar() {
       name: 'Leave Management',
       path: '/leave-management',
       icon: '🌿',
-      submenu: [
+        submenu: [
         { name: 'Entitlement', path: `${roleBasePath}/leave-entitlement` },
-        { name: 'Holiday RH List', path: '/leave-management/holiday-rh' },
-        { name: 'Leave Application', path: '/leave-management/leaveapplication' }
+        { name: 'Holiday RH List', path: `${roleBasePath}/leave-management/holiday-rh` },
+        { name: 'Leave Application', path: `${roleBasePath}/leave-application` },
+        { name: 'Leave List', path: `${roleBasePath}/leave-list` }
       ]
     },
     {

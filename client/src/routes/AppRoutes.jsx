@@ -149,6 +149,8 @@ export default function AppRoutes() {
           <Route path="/dean_admin/biometric/monthly" element={<MonthlyDataPage />} />
           <Route path="/dean_admin/biometric/muster" element={<MusterPage />} />
           <Route path="/dean_admin/leave-entitlement" element={<PrincipalDeanLeaveEntitlementPage />} />
+          <Route path="/dean_admin/leave-application" element={<LeaveApplicationPage />} />
+          <Route path="/dean_admin/holidays" element={<HolidayRHListPage SidebarComponent={SidebarHOD} />} />
         </Route>
         <Route element={<RoleRoute role="Teaching" />}>
           <Route path="/teaching" element={<StaffDashboard />} />

@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState, useRef } from 'react';
+import { isRoleMatch, ROLE_DEAN_ADMIN } from '../../utils/role';
 import Notification from '../../components/common/Notification';
 import Header from '../../components/layout/Header';
-import SidebarHOD from '../../components/layout/SidebarHOD';
+import Sidebar from '../../components/layout/Sidebar';
 import { useAuth } from '../../context/AuthContext';
 import axios from '../../api/axios';
 import {
@@ -236,7 +237,9 @@ function formatDateDMY(value) {
 }
 
 export default function LeaveApplicationPage() {
-  const { token } = useAuth() || {};
+  const { token, user } = useAuth() || {};
+
+  const isDean = isRoleMatch(user?.role, ROLE_DEAN_ADMIN);
   const [department, setDepartment] = useState(null);
   const [rows, setRows] = useState([]);
   const [leaveTypeOptions, setLeaveTypeOptions] = useState([]);
@@ -560,6 +563,40 @@ export default function LeaveApplicationPage() {
     }
   };
 
+  const handleDeanApprove = async (applicationId) => {
+    const confirmed = window.confirm('Are you sure you want to Approve this leave application?');
+    if (!confirmed) return;
+    setProcessing(true);
+    try {
+      await axios.get(`${window.location.origin}/Dean_admin/leaves_management/approve_leave`, {
+        params: { application_id: applicationId },
+      });
+      notify('Leave approved successfully.');
+      await loadRows();
+    } catch (error) {
+      notify(error?.response?.data?.message || 'Failed to approve leave.', 'error');
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  const handleDeanReject = async (applicationId) => {
+    const confirmed = window.confirm('Are you sure you want to Reject this leave application?');
+    if (!confirmed) return;
+    setProcessing(true);
+    try {
+      await axios.get(`${window.location.origin}/Dean_admin/leaves_management/reject_leave`, {
+        params: { application_id: applicationId },
+      });
+      notify('Leave rejected successfully.');
+      await loadRows();
+    } catch (error) {
+      notify(error?.response?.data?.message || 'Failed to reject leave.', 'error');
+    } finally {
+      setProcessing(false);
+    }
+  };
+
   const handleBulkAction = async (action) => {
     if (selectedIds.length === 0) {
       notify('Please select at least one pending leave application.', 'error');
@@ -598,7 +635,7 @@ export default function LeaveApplicationPage() {
     <div className="min-h-screen bg-slate-100 flex flex-col">
       <Header />
       <div className="flex flex-1 min-h-0">
-        <SidebarHOD />
+        <Sidebar />
         <main className="flex-1 overflow-auto p-6">
           <div className="mx-auto max-w-7xl space-y-6">
             <Notification
@@ -768,26 +805,49 @@ export default function LeaveApplicationPage() {
                                       onChange={() => toggleSelect(row.id, isPending)}
                                     />
                                     {isPending ? (
-                                      <>
-                                        <button
-                                          type="button"
-                                          disabled={processing}
-                                          onClick={() => handleSingleAction(row.id, 'recommend')}
-                                          className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-gray-100 text-slate-700 hover:bg-gray-200 disabled:opacity-50"
-                                          title="Recommend"
-                                        >
-                                          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M9.9997 15.1709L19.1921 5.97852L20.6063 7.39273L9.9997 17.9993L3.63574 11.6354L5.04996 10.2212L9.9997 15.1709Z" /></svg>
-                                        </button>
-                                        <button
-                                          type="button"
-                                          disabled={processing}
-                                          onClick={() => handleSingleAction(row.id, 'reject')}
-                                          className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-red-100 text-red-600 hover:bg-red-200 disabled:opacity-50"
-                                          title="Reject"
-                                        >
-                                          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M11.9997 10.5855L16.9495 5.63574L18.3637 7.04996L13.4139 11.9997L18.3637 16.9495L16.9495 18.3637L11.9997 13.4139L7.04996 18.3637L5.63574 16.9495L10.5855 11.9997L5.63574 7.04996L7.04996 5.63574L11.9997 10.5855Z" /></svg>
-                                        </button>
-                                      </>
+                                      isDean ? (
+                                        <>
+                                          <button
+                                            type="button"
+                                            disabled={processing}
+                                            onClick={() => handleDeanApprove(row.id)}
+                                            className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-green-600 text-white hover:bg-green-700 disabled:opacity-50"
+                                            title="Approve"
+                                          >
+                                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M9.9997 15.1709L19.1921 5.97852L20.6063 7.39273L9.9997 17.9993L3.63574 11.6354L5.04996 10.2212L9.9997 15.1709Z"></path></svg>
+                                          </button>
+                                          <button
+                                            type="button"
+                                            disabled={processing}
+                                            onClick={() => handleDeanReject(row.id)}
+                                            className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-red-600 text-white hover:bg-red-700 disabled:opacity-50"
+                                            title="Reject"
+                                          >
+                                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M11.9997 10.5855L16.9495 5.63574L18.3637 7.04996L13.4139 11.9997L18.3637 16.9495L16.9495 18.3637L11.9997 13.4139L7.04996 18.3637L5.63574 16.9495L10.5855 11.9997L5.63574 7.04996L7.04996 5.63574L11.9997 10.5855Z"></path></svg>
+                                          </button>
+                                        </>
+                                      ) : (
+                                        <>
+                                          <button
+                                            type="button"
+                                            disabled={processing}
+                                            onClick={() => handleSingleAction(row.id, 'recommend')}
+                                            className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-gray-100 text-slate-700 hover:bg-gray-200 disabled:opacity-50"
+                                            title="Recommend"
+                                          >
+                                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M9.9997 15.1709L19.1921 5.97852L20.6063 7.39273L9.9997 17.9993L3.63574 11.6354L5.04996 10.2212L9.9997 15.1709Z" /></svg>
+                                          </button>
+                                          <button
+                                            type="button"
+                                            disabled={processing}
+                                            onClick={() => handleSingleAction(row.id, 'reject')}
+                                            className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-red-100 text-red-600 hover:bg-red-200 disabled:opacity-50"
+                                            title="Reject"
+                                          >
+                                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M11.9997 10.5855L16.9495 5.63574L18.3637 7.04996L13.4139 11.9997L18.3637 16.9495L16.9495 18.3637L11.9997 13.4139L7.04996 18.3637L5.63574 16.9495L10.5855 11.9997L5.63574 7.04996L7.04996 5.63574L11.9997 10.5855Z" /></svg>
+                                          </button>
+                                        </>
+                                      )
                                     ) : (
                                       <span className="text-xs text-slate-400">-</span>
                                     )}
