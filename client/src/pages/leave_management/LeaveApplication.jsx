@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useRef } from 'react';
 import Notification from '../../components/common/Notification';
 import Header from '../../components/layout/Header';
 import SidebarHOD from '../../components/layout/SidebarHOD';
@@ -235,7 +235,7 @@ function formatDateDMY(value) {
   return `${day}-${month}-${year}`;
 }
 
-export default function HODLeaveApplicationPage() {
+export default function LeaveApplicationPage() {
   const { token } = useAuth() || {};
   const [department, setDepartment] = useState(null);
   const [rows, setRows] = useState([]);
@@ -252,6 +252,8 @@ export default function HODLeaveApplicationPage() {
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
   const [selectedCalendarDate, setSelectedCalendarDate] = useState('');
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [activeModalLeaveType, setActiveModalLeaveType] = useState('');
   const [notification, setNotification] = useState({ show: false, message: '', type: 'info' });
 
   const notify = (message, type = 'success') => {
@@ -394,15 +396,26 @@ export default function HODLeaveApplicationPage() {
     return [...new Set([...fromMaster, ...fromMeta, ...fromRows])];
   }, [groupedRows, leaveTypeOptions, masterLeaveTypeOptions]);
 
+  const prevLeaveKeysLenRef = useRef(0);
+
   useEffect(() => {
     if (!leaveTypeKeys.length) {
       setActiveLeaveType('');
+      prevLeaveKeysLenRef.current = 0;
       return;
     }
 
-    if (!activeLeaveType || !leaveTypeKeys.includes(activeLeaveType)) {
-      setActiveLeaveType(leaveTypeKeys[0]);
+    const initialLoad = prevLeaveKeysLenRef.current === 0 && leaveTypeKeys.length > 0;
+
+    if (initialLoad) {
+      if (leaveTypeKeys.includes('CL')) setActiveLeaveType('CL');
+      else setActiveLeaveType(leaveTypeKeys[0]);
+    } else if (!activeLeaveType || !leaveTypeKeys.includes(activeLeaveType)) {
+      if (leaveTypeKeys.includes('CL')) setActiveLeaveType('CL');
+      else setActiveLeaveType(leaveTypeKeys[0]);
     }
+
+    prevLeaveKeysLenRef.current = leaveTypeKeys.length;
   }, [leaveTypeKeys, activeLeaveType]);
 
   const visibleRows = useMemo(() => {
@@ -464,6 +477,33 @@ export default function HODLeaveApplicationPage() {
     if (!selectedCalendarDate) return [];
     return leaveMap[selectedCalendarDate] || [];
   }, [leaveMap, selectedCalendarDate]);
+
+  const modalLeaveTypeKeys = useMemo(() => {
+    // Show all known leave types in the modal tabs (fall back to types on the date)
+    if (Array.isArray(leaveTypeKeys) && leaveTypeKeys.length > 0) return leaveTypeKeys;
+    const keys = Array.from(new Set((selectedDateRows || []).map((r) => String(r.leave_shortname || r.title || 'Other'))));
+    return keys;
+  }, [leaveTypeKeys, selectedDateRows]);
+
+  useEffect(() => {
+    if (!modalLeaveTypeKeys.length) {
+      setActiveModalLeaveType('');
+      return;
+    }
+    if (!activeModalLeaveType || !modalLeaveTypeKeys.includes(activeModalLeaveType)) {
+      if (modalLeaveTypeKeys.includes('CL')) {
+        setActiveModalLeaveType('CL');
+      } else {
+        setActiveModalLeaveType(modalLeaveTypeKeys[0]);
+      }
+    }
+  }, [modalLeaveTypeKeys, activeModalLeaveType]);
+
+  const modalVisibleRows = useMemo(() => {
+    if (!modalLeaveTypeKeys.length) return selectedDateRows;
+    if (!activeModalLeaveType) return selectedDateRows;
+    return (selectedDateRows || []).filter((r) => String(r.leave_shortname || r.title || 'Other') === activeModalLeaveType);
+  }, [selectedDateRows, modalLeaveTypeKeys, activeModalLeaveType]);
 
   useEffect(() => {
     setSelectedIds([]);
@@ -797,54 +837,97 @@ export default function HODLeaveApplicationPage() {
                     rhMap={rhMap}
                     leaveMap={leaveMap}
                     selectedDate={selectedCalendarDate}
-                    onDateClick={(dateKey) => setSelectedCalendarDate(dateKey)}
+                    onDateClick={(dateKey) => {
+                      setSelectedCalendarDate(dateKey);
+                      setIsModalOpen(true);
+                    }}
                   />
 
-                  <div className="mt-6 rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-                    <div className="px-4 py-3 border-b border-slate-200 bg-slate-50">
-                      <h3 className="text-sm font-semibold text-slate-800">
-                        Leave List for {selectedCalendarDate ? formatDateDMY(selectedCalendarDate) : 'Selected Date'}
-                      </h3>
+                  {isModalOpen && (
+                    <div className="fixed inset-0 z-50 overflow-y-auto" role="dialog" aria-modal="true">
+                      <div className="fixed inset-0 transition-opacity bg-gray-500 bg-opacity-75" onClick={() => setIsModalOpen(false)} />
+
+                      <div className="flex min-h-full items-center justify-center p-4">
+                        <div className="relative max-w-5xl w-full bg-white rounded-lg shadow-xl max-h-[85vh] overflow-auto">
+                          <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 bg-slate-50">
+                            <h3 className="text-sm font-semibold text-slate-800">Leave List for {selectedCalendarDate ? formatDateDMY(selectedCalendarDate) : 'Selected Date'}</h3>
+                            <button className="text-slate-600 hover:text-slate-800" type="button" onClick={() => setIsModalOpen(false)}>✕</button>
+                          </div>
+
+                          <div className="p-4 overflow-x-auto">
+                            <div className="border-b border-gray-200 mb-3">
+                              <nav className="-mb-0.5 flex flex-wrap justify-center gap-x-6" aria-label="Leave type tabs in modal">
+                                {modalLeaveTypeKeys.length === 0 ? (
+                                  <div className="py-3 text-sm text-slate-500">No leave types</div>
+                                ) : (
+                                  modalLeaveTypeKeys.map((lt) => {
+                                    const count = (selectedDateRows || []).filter((r) => String(r.leave_shortname || r.title || 'Other') === lt).length;
+                                    const isActive = activeModalLeaveType === lt;
+                                    return (
+                                      <button
+                                        key={lt}
+                                        type="button"
+                                        onClick={() => setActiveModalLeaveType(lt)}
+                                        className={`py-3 px-1 inline-flex items-center gap-2 border-b-[3px] whitespace-nowrap ${isActive ? 'font-semibold border-blue-600 text-blue-700' : 'border-transparent text-gray-500 hover:text-blue-600'}`}
+                                      >
+                                        <span className="text-base">{lt}</span>
+                                        {count > 0 && (
+                                          <span className="inline-flex items-center justify-center min-w-[22px] h-5 px-1 text-xs font-medium rounded-full bg-yellow-500 text-white">
+                                            {count}
+                                          </span>
+                                        )}
+                                      </button>
+                                    );
+                                  })
+                                )}
+                              </nav>
+                            </div>
+
+                            <table className="min-w-full border-collapse">
+                              <thead className="bg-blue-700">
+                                <tr>
+                                  <th className="px-3 py-2 text-left text-xs font-semibold text-white">Application ID</th>
+                                  <th className="px-3 py-2 text-left text-xs font-semibold text-white">Name</th>
+                                  <th className="px-3 py-2 text-left text-xs font-semibold text-white">Leave</th>
+                                  <th className="px-3 py-2 text-left text-xs font-semibold text-white">From</th>
+                                  <th className="px-3 py-2 text-left text-xs font-semibold text-white">To</th>
+                                  <th className="px-3 py-2 text-left text-xs font-semibold text-white">Days</th>
+                                  <th className="px-3 py-2 text-left text-xs font-semibold text-white">Status</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {modalVisibleRows.length === 0 ? (
+                                  <tr>
+                                    <td colSpan={7} className="px-4 py-8 text-center text-sm text-slate-500">No leave applications on this date.</td>
+                                  </tr>
+                                ) : (
+                                  modalVisibleRows.map((row) => (
+                                    <tr key={`${row.id}-${row.staff_id || 'staff'}`} className="border-t border-slate-100">
+                                      <td className="px-3 py-2 text-sm text-slate-700">{row.id}</td>
+                                      <td className="px-3 py-2 text-sm text-slate-700">{row.staff_name || 'N/A'}</td>
+                                      <td className="px-3 py-2 text-sm text-slate-700">{row.leave_shortname || row.title || 'N/A'}</td>
+                                      <td className="px-3 py-2 text-sm text-slate-700">{formatDateDMY(row.start_date)}</td>
+                                      <td className="px-3 py-2 text-sm text-slate-700">{formatDateDMY(row.end_date)}</td>
+                                      <td className="px-3 py-2 text-sm text-slate-700">{Number(row.no_of_days || 0)}</td>
+                                      <td className="px-3 py-2 text-sm text-slate-700">
+                                        <span className={`inline-flex px-2 py-1 rounded text-xs font-semibold ${getStatusClass(row.appl_status)}`}>
+                                          {row.appl_status || 'N/A'}
+                                        </span>
+                                      </td>
+                                    </tr>
+                                  ))
+                                )}
+                              </tbody>
+                            </table>
+                          </div>
+
+                          <div className="flex justify-end gap-3 px-4 py-3 border-t bg-slate-50">
+                            <button type="button" onClick={() => setIsModalOpen(false)} className="inline-flex justify-center px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50">Close</button>
+                          </div>
+                        </div>
+                      </div>
                     </div>
-                    <div className="overflow-x-auto">
-                      <table className="min-w-full border-collapse">
-                        <thead className="bg-blue-700">
-                          <tr>
-                            <th className="px-3 py-2 text-left text-xs font-semibold text-white">Application ID</th>
-                            <th className="px-3 py-2 text-left text-xs font-semibold text-white">Name</th>
-                            <th className="px-3 py-2 text-left text-xs font-semibold text-white">Leave</th>
-                            <th className="px-3 py-2 text-left text-xs font-semibold text-white">From</th>
-                            <th className="px-3 py-2 text-left text-xs font-semibold text-white">To</th>
-                            <th className="px-3 py-2 text-left text-xs font-semibold text-white">Days</th>
-                            <th className="px-3 py-2 text-left text-xs font-semibold text-white">Status</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {selectedDateRows.length === 0 ? (
-                            <tr>
-                              <td colSpan={7} className="px-4 py-8 text-center text-sm text-slate-500">No leave applications on this date.</td>
-                            </tr>
-                          ) : (
-                            selectedDateRows.map((row) => (
-                              <tr key={`${row.id}-${row.staff_id || 'staff'}`} className="border-t border-slate-100">
-                                <td className="px-3 py-2 text-sm text-slate-700">{row.id}</td>
-                                <td className="px-3 py-2 text-sm text-slate-700">{row.staff_name || 'N/A'}</td>
-                                <td className="px-3 py-2 text-sm text-slate-700">{row.leave_shortname || row.title || 'N/A'}</td>
-                                <td className="px-3 py-2 text-sm text-slate-700">{formatDateDMY(row.start_date)}</td>
-                                <td className="px-3 py-2 text-sm text-slate-700">{formatDateDMY(row.end_date)}</td>
-                                <td className="px-3 py-2 text-sm text-slate-700">{Number(row.no_of_days || 0)}</td>
-                                <td className="px-3 py-2 text-sm text-slate-700">
-                                  <span className={`inline-flex px-2 py-1 rounded text-xs font-semibold ${getStatusClass(row.appl_status)}`}>
-                                    {row.appl_status || 'N/A'}
-                                  </span>
-                                </td>
-                              </tr>
-                            ))
-                          )}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
+                  )}
                 </div>
               )}
             </div>

@@ -5,7 +5,6 @@ export const ROLE_HOD = 'Head of Department';
 export const ROLE_TEACHING = 'Teaching';
 export const ROLE_NON_TEACHING = 'Non-Teaching';
 export const ROLE_PRINCIPAL = 'Principal';
-// export const ROLE_DEAN = 'Dean'; // removed, not used
 export const ROLE_DEAN_ADMIN = 'Dean_admin';
 
 const ROLE_ALIAS_MAP = {
@@ -21,7 +20,6 @@ const ROLE_ALIAS_MAP = {
   'non-teaching': ROLE_NON_TEACHING,
   nonteaching: ROLE_NON_TEACHING,
   principal: ROLE_PRINCIPAL,
-  // dean: ROLE_DEAN, // removed, not used
   'dean_admin': ROLE_DEAN_ADMIN,
   'dean admin': ROLE_DEAN_ADMIN,
   dean_admin: ROLE_DEAN_ADMIN
