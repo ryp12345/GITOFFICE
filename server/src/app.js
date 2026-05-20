@@ -73,6 +73,8 @@ const staffRoutes = require('./routes/staff.routes');
 app.use('/api/staff', staffRoutes);
 const hodRoutes = require('./routes/hod.routes');
 app.use('/api/hod', hodRoutes);
+const deanRoutes = require('./routes/dean.routes');
+app.use('/api/dean', deanRoutes);
 const jobsRoutes = require('./routes/jobs.routes');
 app.use('/api/jobs', jobsRoutes);
 

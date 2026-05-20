@@ -11,11 +11,17 @@ import {
   recommendHodLeaveApplication,
   rejectHodLeaveApplication,
 } from '../../api/hodApi';
+import {
+  getDeanLeaveApplications,
+  approveDeanLeaveApplication,
+  rejectDeanLeaveApplication,
+} from '../../api/deanApi';
 import { getLeaveEntitlementMeta } from '../../api/leaveEntitlementApi';
 import { getHolidayRHList } from '../../api/holidayrhApi';
 
 const MAIN_TABS = {
   LIST: 'list',
+  ALL_LIST: 'all_list',
   CALENDAR: 'calendar',
 };
 
@@ -276,7 +282,9 @@ export default function LeaveApplicationPage() {
         month: month || undefined,
         year: year || undefined,
       };
-      const response = await getHodLeaveApplications(token, params);
+      const response = isDean
+        ? await getDeanLeaveApplications(token, params)
+        : await getHodLeaveApplications(token, params);
       const payload = response?.data?.data || {};
       setDepartment(payload.department || null);
       const nextRows = Array.isArray(payload.applications) ? payload.applications : [];
@@ -382,15 +390,23 @@ export default function LeaveApplicationPage() {
     loadHolidays();
   }, [token]);
 
+  const sourceRows = useMemo(() => {
+    if (activeMainTab === MAIN_TABS.ALL_LIST) return rows;
+    return rows.filter((row) => {
+      const status = normalizeLeaveStatus(row.appl_status || row.status);
+      return status === 'pending' || status === 'recommended';
+    });
+  }, [rows, activeMainTab]);
+
   const groupedRows = useMemo(() => {
     const grouped = {};
-    for (const row of rows) {
+    for (const row of sourceRows) {
       const key = String(row.leave_shortname || row.title || 'Other');
       if (!grouped[key]) grouped[key] = [];
       grouped[key].push(row);
     }
     return grouped;
-  }, [rows]);
+  }, [sourceRows]);
 
   const leaveTypeKeys = useMemo(() => {
     const fromRows = Object.keys(groupedRows);
@@ -510,11 +526,16 @@ export default function LeaveApplicationPage() {
 
   useEffect(() => {
     setSelectedIds([]);
-  }, [activeLeaveType]);
+  }, [activeLeaveType, activeMainTab]);
 
   const pendingIdsOnPage = useMemo(() => {
-    return visibleRows.filter((row) => row.appl_status === 'pending').map((row) => Number(row.id));
-  }, [visibleRows]);
+    return visibleRows
+      .filter((row) => {
+        const status = normalizeLeaveStatus(row.appl_status || row.status);
+        return isDean ? status === 'recommended' : status === 'pending';
+      })
+      .map((row) => Number(row.id));
+  }, [visibleRows, isDean]);
 
   const allPendingSelected = pendingIdsOnPage.length > 0 && pendingIdsOnPage.every((id) => selectedIds.includes(id));
 
@@ -568,9 +589,7 @@ export default function LeaveApplicationPage() {
     if (!confirmed) return;
     setProcessing(true);
     try {
-      await axios.get(`${window.location.origin}/Dean_admin/leaves_management/approve_leave`, {
-        params: { application_id: applicationId },
-      });
+      await approveDeanLeaveApplication(token, applicationId);
       notify('Leave approved successfully.');
       await loadRows();
     } catch (error) {
@@ -585,9 +604,7 @@ export default function LeaveApplicationPage() {
     if (!confirmed) return;
     setProcessing(true);
     try {
-      await axios.get(`${window.location.origin}/Dean_admin/leaves_management/reject_leave`, {
-        params: { application_id: applicationId },
-      });
+      await rejectDeanLeaveApplication(token, applicationId);
       notify('Leave rejected successfully.');
       await loadRows();
     } catch (error) {
@@ -619,6 +636,47 @@ export default function LeaveApplicationPage() {
       await loadRows();
     } catch (error) {
       notify(error?.response?.data?.message || `Failed to ${action} selected leaves.`, 'error');
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  const handleDeanBulkAction = async (action) => {
+    if (selectedIds.length === 0) {
+      notify('Please select at least one pending leave application.', 'error');
+      return;
+    }
+
+    const verb = action === 'approve' ? 'approve' : 'reject';
+    const confirmed = window.confirm(`Are you sure you want to ${verb} selected leave applications?`);
+    if (!confirmed) return;
+
+    setProcessing(true);
+    try {
+      const failed = [];
+      for (const id of selectedIds) {
+        try {
+          if (action === 'approve') {
+            // Dean flow maps to approve/reject, not recommend/reject.
+            // eslint-disable-next-line no-await-in-loop
+            await approveDeanLeaveApplication(token, id);
+          } else {
+            // eslint-disable-next-line no-await-in-loop
+            await rejectDeanLeaveApplication(token, id);
+          }
+        } catch (error) {
+          failed.push({ id, message: error?.response?.data?.message || 'Failed' });
+        }
+      }
+
+      if (failed.length > 0) {
+        notify(`Completed with partial failures (${failed.length}).`, 'error');
+      } else {
+        notify(`Bulk ${verb} completed successfully.`);
+      }
+      await loadRows();
+    } catch (error) {
+      notify(error?.response?.data?.message || `Failed to ${verb} selected leaves.`, 'error');
     } finally {
       setProcessing(false);
     }
@@ -663,8 +721,22 @@ export default function LeaveApplicationPage() {
                     }`}
                   >
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="rgba(240,187,64,1)"><path d="M4.00001 20V14C4.00001 9.58172 7.58173 6 12 6C16.4183 6 20 9.58172 20 14V20H21V22H3.00001V20H4.00001ZM6.00001 14H8.00001C8.00001 11.7909 9.79087 10 12 10V8C8.6863 8 6.00001 10.6863 6.00001 14ZM11 2H13V5H11V2ZM19.7782 4.80761L21.1924 6.22183L19.0711 8.34315L17.6569 6.92893L19.7782 4.80761ZM2.80762 6.22183L4.22183 4.80761L6.34315 6.92893L4.92894 8.34315L2.80762 6.22183Z" /></svg>
-                    Pending Leaves List View
+                    Pending/Recommended Leaves List
                   </button>
+                  {isDean && (
+                    <button
+                      type="button"
+                      onClick={() => setActiveMainTab(MAIN_TABS.ALL_LIST)}
+                      className={`py-4 px-2 inline-flex items-center gap-2 border-b-[3px] text-sm whitespace-nowrap ${
+                        activeMainTab === MAIN_TABS.ALL_LIST
+                          ? 'font-semibold border-blue-600 text-blue-700'
+                          : 'border-transparent text-gray-500 hover:text-blue-600'
+                      }`}
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M19.5611 12.0985L21.0926 14.7501C22.0591 16.4241 21.4855 18.5647 19.8115 19.5312C19.2794 19.8384 18.6759 20.0001 18.0615 20.0001L15.9993 19.9995V22.0001L10.9993 18.5001L15.9993 15.0001V16.9995L18.0615 17.0001C18.1493 17.0001 18.2355 16.977 18.3115 16.9331C18.5241 16.8104 18.6124 16.5551 18.5325 16.332L18.4945 16.2501L16.9631 13.5985L19.5611 12.0985ZM7.73617 9.38407L8.26726 15.4642L6.53571 14.4645L5.50412 16.2501C5.46023 16.3261 5.43713 16.4123 5.43713 16.5001C5.43713 16.7456 5.614 16.9497 5.84725 16.992L5.93713 17.0001L8.99919 16.9997V19.9996L5.93713 20.0001C4.00413 20.0001 2.43713 18.4331 2.43713 16.5001C2.43713 15.8857 2.59885 15.2822 2.90604 14.7501L3.93763 12.9645L2.20508 11.9642L7.73617 9.38407ZM13.7493 2.96901C14.2814 3.2762 14.7232 3.71803 15.0304 4.2501L16.061 6.03629L17.7935 5.03599L17.2624 11.1161L11.7314 8.53599L13.4629 7.53629L12.4323 5.7501C12.3884 5.67409 12.3253 5.61097 12.2493 5.56708C12.0367 5.44435 11.7715 5.49546 11.6182 5.67629L11.5663 5.7501L10.0356 8.40209L7.4376 6.90216L8.96822 4.2501C9.93472 2.57607 12.0753 2.00251 13.7493 2.96901Z"></path></svg>
+                      All Leaves Application List
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={() => setActiveMainTab(MAIN_TABS.CALENDAR)}
@@ -680,9 +752,11 @@ export default function LeaveApplicationPage() {
                 </nav>
               </div>
 
-              {activeMainTab === MAIN_TABS.LIST ? (
+              {activeMainTab === MAIN_TABS.LIST || activeMainTab === MAIN_TABS.ALL_LIST ? (
                 <div className="p-4 md:p-6 space-y-5">
-                  <h2 className="text-xl font-semibold text-slate-800">Pending Leaves List</h2>
+                  <h2 className="text-xl font-semibold text-slate-800">
+                    {activeMainTab === MAIN_TABS.ALL_LIST ? 'All Leaves Application List' : 'Pending/Recommended Leaves List'}
+                  </h2>
 
                   <div className="flex flex-wrap items-center gap-3">
                     <label htmlFor="monthSelect" className="text-sm font-semibold text-slate-700">Select Month:</label>
@@ -779,7 +853,11 @@ export default function LeaveApplicationPage() {
                           </tr>
                         ) : (
                           visibleRows.map((row) => {
-                            const isPending = row.appl_status === 'pending';
+                            const status = normalizeLeaveStatus(row.appl_status || row.status);
+                            const isPending = status === 'pending';
+                            const canDeanAct = status === 'recommended';
+                            const canHodAct = status === 'pending';
+                            const isActionable = isDean ? canDeanAct : canHodAct;
                             const isChecked = selectedIds.includes(Number(row.id));
                             return (
                               <tr key={row.id} className="border-b border-gray-100 hover:bg-gray-50">
@@ -800,12 +878,12 @@ export default function LeaveApplicationPage() {
                                     <input
                                       type="checkbox"
                                       value={row.id}
-                                      disabled={!isPending}
+                                      disabled={!isActionable}
                                       checked={isChecked}
-                                      onChange={() => toggleSelect(row.id, isPending)}
+                                      onChange={() => toggleSelect(row.id, isActionable)}
                                     />
-                                    {isPending ? (
-                                      isDean ? (
+                                    {isDean ? (
+                                      canDeanAct ? (
                                         <>
                                           <button
                                             type="button"
@@ -826,28 +904,32 @@ export default function LeaveApplicationPage() {
                                             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M11.9997 10.5855L16.9495 5.63574L18.3637 7.04996L13.4139 11.9997L18.3637 16.9495L16.9495 18.3637L11.9997 13.4139L7.04996 18.3637L5.63574 16.9495L10.5855 11.9997L5.63574 7.04996L7.04996 5.63574L11.9997 10.5855Z"></path></svg>
                                           </button>
                                         </>
+                                      ) : isPending ? (
+                                        <span className="text-xs text-slate-500">Waiting for Recommendation</span>
                                       ) : (
-                                        <>
-                                          <button
-                                            type="button"
-                                            disabled={processing}
-                                            onClick={() => handleSingleAction(row.id, 'recommend')}
-                                            className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-gray-100 text-slate-700 hover:bg-gray-200 disabled:opacity-50"
-                                            title="Recommend"
-                                          >
-                                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M9.9997 15.1709L19.1921 5.97852L20.6063 7.39273L9.9997 17.9993L3.63574 11.6354L5.04996 10.2212L9.9997 15.1709Z" /></svg>
-                                          </button>
-                                          <button
-                                            type="button"
-                                            disabled={processing}
-                                            onClick={() => handleSingleAction(row.id, 'reject')}
-                                            className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-red-100 text-red-600 hover:bg-red-200 disabled:opacity-50"
-                                            title="Reject"
-                                          >
-                                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M11.9997 10.5855L16.9495 5.63574L18.3637 7.04996L13.4139 11.9997L18.3637 16.9495L16.9495 18.3637L11.9997 13.4139L7.04996 18.3637L5.63574 16.9495L10.5855 11.9997L5.63574 7.04996L7.04996 5.63574L11.9997 10.5855Z" /></svg>
-                                          </button>
-                                        </>
+                                        <span className="text-xs text-slate-400">-</span>
                                       )
+                                    ) : canHodAct ? (
+                                      <>
+                                        <button
+                                          type="button"
+                                          disabled={processing}
+                                          onClick={() => handleSingleAction(row.id, 'recommend')}
+                                          className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-gray-100 text-slate-700 hover:bg-gray-200 disabled:opacity-50"
+                                          title="Recommend"
+                                        >
+                                          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M9.9997 15.1709L19.1921 5.97852L20.6063 7.39273L9.9997 17.9993L3.63574 11.6354L5.04996 10.2212L9.9997 15.1709Z" /></svg>
+                                        </button>
+                                        <button
+                                          type="button"
+                                          disabled={processing}
+                                          onClick={() => handleSingleAction(row.id, 'reject')}
+                                          className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-red-100 text-red-600 hover:bg-red-200 disabled:opacity-50"
+                                          title="Reject"
+                                        >
+                                          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M11.9997 10.5855L16.9495 5.63574L18.3637 7.04996L13.4139 11.9997L18.3637 16.9495L16.9495 18.3637L11.9997 13.4139L7.04996 18.3637L5.63574 16.9495L10.5855 11.9997L5.63574 7.04996L7.04996 5.63574L11.9997 10.5855Z" /></svg>
+                                        </button>
+                                      </>
                                     ) : (
                                       <span className="text-xs text-slate-400">-</span>
                                     )}
@@ -865,18 +947,18 @@ export default function LeaveApplicationPage() {
                     <button
                       type="button"
                       disabled={processing || selectedIds.length === 0}
-                      onClick={() => handleBulkAction('recommend')}
+                      onClick={() => (isDean ? handleDeanBulkAction('approve') : handleBulkAction('recommend'))}
                       className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50"
                     >
-                      Bulk Recommend
+                      {isDean ? 'Approve' : 'Bulk Recommend'}
                     </button>
                     <button
                       type="button"
                       disabled={processing || selectedIds.length === 0}
-                      onClick={() => handleBulkAction('reject')}
+                      onClick={() => (isDean ? handleDeanBulkAction('reject') : handleBulkAction('reject'))}
                       className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 disabled:opacity-50"
                     >
-                      Bulk Reject
+                      {isDean ? 'Reject' : 'Bulk Reject'}
                     </button>
                   </div>
                 </div>

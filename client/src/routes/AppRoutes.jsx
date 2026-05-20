@@ -14,6 +14,7 @@ import HODDepartmentOverviewPage from '../pages/hod/DepartmentOverview';
 import HODMyStaffPage from '../pages/hod/MyStaff';
 import HODLeaveEntitlementPage from '../pages/hod/LeaveEntitlement';
 import LeaveApplicationPage from '../pages/leave_management/LeaveApplication';
+import LeaveListPage from '../pages/leave_management/LeaveList';
 import SidebarHOD from '../components/layout/SidebarHOD';
 import StaffDashboard from '../pages/staff/StaffDashboard';
 import AssociationsPage from '../pages/establishment/Associations';
@@ -150,6 +151,7 @@ export default function AppRoutes() {
           <Route path="/dean_admin/biometric/muster" element={<MusterPage />} />
           <Route path="/dean_admin/leave-entitlement" element={<PrincipalDeanLeaveEntitlementPage />} />
           <Route path="/dean_admin/leave-application" element={<LeaveApplicationPage />} />
+          <Route path="/dean_admin/leave-list" element={<LeaveListPage />} />
           <Route path="/dean_admin/holidays" element={<HolidayRHListPage SidebarComponent={SidebarHOD} />} />
         </Route>
         <Route element={<RoleRoute role="Teaching" />}>
