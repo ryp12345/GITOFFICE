@@ -145,6 +145,7 @@ export default function AppRoutes() {
           <Route path="/principal/leave-entitlement" element={<PrincipalDeanLeaveEntitlementPage />} />
           <Route path="/principal/leave-application" element={<LeaveApplicationPage />} />
           <Route path="/principal/leave-list" element={<LeaveListPage />} />
+          <Route path="/principal/leave-management/holiday-rh" element={<HolidayRHListPage />} />
         </Route>
         <Route element={<RoleRoute role="Dean_admin" />}>
           <Route path="/dean_admin" element={<PrincipalDeanDashboard />} />
@@ -154,7 +155,8 @@ export default function AppRoutes() {
           <Route path="/dean_admin/leave-entitlement" element={<PrincipalDeanLeaveEntitlementPage />} />
           <Route path="/dean_admin/leave-application" element={<LeaveApplicationPage />} />
           <Route path="/dean_admin/leave-list" element={<LeaveListPage />} />
-          <Route path="/dean_admin/holidays" element={<HolidayRHListPage SidebarComponent={SidebarHOD} />} />
+          <Route path="/dean_admin/holidays" element={<HolidayRHListPage />} />
+          <Route path="/dean_admin/leave-management/holiday-rh" element={<HolidayRHListPage />} />
         </Route>
         <Route element={<RoleRoute role="Teaching" />}>
           <Route path="/teaching" element={<StaffDashboard />} />

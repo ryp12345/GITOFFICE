@@ -878,7 +878,8 @@ export default function LeaveApplicationPage() {
                     <table className="min-w-full border border-gray-200">
                       <thead className="bg-blue-700">
                         <tr>
-                          <th className="px-3 py-3 text-left text-xs font-semibold text-white">#</th>
+                          <th className="px-3 py-3 text-left text-xs font-semibold text-white">S.NO</th>
+                          <th className="px-3 py-3 text-left text-xs font-semibold text-white">Application ID</th>
                           <th className="px-3 py-3 text-left text-xs font-semibold text-white">Application Date</th>
                           <th className="px-3 py-3 text-left text-xs font-semibold text-white">Name</th>
                           <th className="px-3 py-3 text-left text-xs font-semibold text-white">Leave From</th>
@@ -906,14 +907,14 @@ export default function LeaveApplicationPage() {
                       <tbody>
                         {loading ? (
                           <tr>
-                            <td colSpan={9} className="px-4 py-10 text-center text-slate-500">Loading leave applications...</td>
+                            <td colSpan={10} className="px-4 py-10 text-center text-slate-500">Loading leave applications...</td>
                           </tr>
                         ) : visibleRows.length === 0 ? (
                           <tr>
-                            <td colSpan={9} className="px-4 py-10 text-center text-slate-500">No leave applications found.</td>
+                            <td colSpan={10} className="px-4 py-10 text-center text-slate-500">No leave applications found.</td>
                           </tr>
                         ) : (
-                          visibleRows.map((row) => {
+                          visibleRows.map((row, index) => {
                             const status = normalizeLeaveStatus(row.appl_status || row.status);
                             const isPending = status === 'pending';
                             const hasAdditional = Boolean(row.additional || row.additional_alternate || row.additional_staff || row.additionalAlternate);
@@ -927,6 +928,7 @@ export default function LeaveApplicationPage() {
                             const isChecked = selectedIds.includes(Number(row.id));
                             return (
                               <tr key={row.id} className="border-b border-gray-100 hover:bg-gray-50">
+                                <td className="px-3 py-3 text-sm text-slate-700">{index + 1}</td>
                                 <td className="px-3 py-3 text-sm text-slate-700">{row.id}</td>
                                 <td className="px-3 py-3 text-sm text-slate-700">{formatDateDMY(row.application_date)}</td>
                                 <td className="px-3 py-3 text-sm text-slate-700">{row.staff_name || 'N/A'}</td>
@@ -1094,6 +1096,7 @@ export default function LeaveApplicationPage() {
                             <table className="min-w-full border-collapse">
                               <thead className="bg-blue-700">
                                 <tr>
+                                  <th className="px-3 py-2 text-left text-xs font-semibold text-white">S.NO</th>
                                   <th className="px-3 py-2 text-left text-xs font-semibold text-white">Application ID</th>
                                   <th className="px-3 py-2 text-left text-xs font-semibold text-white">Name</th>
                                   <th className="px-3 py-2 text-left text-xs font-semibold text-white">Leave</th>
@@ -1106,11 +1109,12 @@ export default function LeaveApplicationPage() {
                               <tbody>
                                 {modalVisibleRows.length === 0 ? (
                                   <tr>
-                                    <td colSpan={7} className="px-4 py-8 text-center text-sm text-slate-500">No leave applications on this date.</td>
+                                    <td colSpan={8} className="px-4 py-8 text-center text-sm text-slate-500">No leave applications on this date.</td>
                                   </tr>
                                 ) : (
-                                  modalVisibleRows.map((row) => (
+                                  modalVisibleRows.map((row, index) => (
                                     <tr key={`${row.id}-${row.staff_id || 'staff'}`} className="border-t border-slate-100">
+                                      <td className="px-3 py-2 text-sm text-slate-700">{index + 1}</td>
                                       <td className="px-3 py-2 text-sm text-slate-700">{row.id}</td>
                                       <td className="px-3 py-2 text-sm text-slate-700">{row.staff_name || 'N/A'}</td>
                                       <td className="px-3 py-2 text-sm text-slate-700">{row.leave_shortname || row.title || 'N/A'}</td>
