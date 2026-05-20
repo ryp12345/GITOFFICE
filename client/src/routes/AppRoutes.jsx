@@ -143,6 +143,8 @@ export default function AppRoutes() {
           <Route path="/principal/biometric/monthly" element={<MonthlyDataPage />} />
           <Route path="/principal/biometric/muster" element={<MusterPage />} />
           <Route path="/principal/leave-entitlement" element={<PrincipalDeanLeaveEntitlementPage />} />
+          <Route path="/principal/leave-application" element={<LeaveApplicationPage />} />
+          <Route path="/principal/leave-list" element={<LeaveListPage />} />
         </Route>
         <Route element={<RoleRoute role="Dean_admin" />}>
           <Route path="/dean_admin" element={<PrincipalDeanDashboard />} />

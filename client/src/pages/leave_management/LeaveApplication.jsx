@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, useRef } from 'react';
-import { isRoleMatch, ROLE_DEAN_ADMIN } from '../../utils/role';
+import { isRoleMatch, ROLE_DEAN_ADMIN, ROLE_PRINCIPAL } from '../../utils/role';
 import Notification from '../../components/common/Notification';
 import Header from '../../components/layout/Header';
 import Sidebar from '../../components/layout/Sidebar';
@@ -16,6 +16,11 @@ import {
   approveDeanLeaveApplication,
   rejectDeanLeaveApplication,
 } from '../../api/deanApi';
+import {
+  getPrincipalLeaveApplications,
+  approvePrincipalLeaveApplication,
+  rejectPrincipalLeaveApplication,
+} from '../../api/principalApi';
 import { getLeaveEntitlementMeta } from '../../api/leaveEntitlementApi';
 import { getHolidayRHList } from '../../api/holidayrhApi';
 
@@ -229,15 +234,19 @@ function getStatusClass(status) {
 
 function formatDateDMY(value) {
   if (!value) return '-';
-  const raw = String(value);
-  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
-    const [year, month, day] = raw.split('-');
-    return `${day}-${month}-${year}`;
+  const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+  if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    const [year, month, day] = value.split('-');
+    const monthIndex = Number(month) - 1;
+    if (monthIndex < 0 || monthIndex > 11) return '-';
+    return `${day}-${monthNames[monthIndex]}-${year}`;
   }
-  const date = new Date(raw);
+
+  const date = new Date(value);
   if (Number.isNaN(date.getTime())) return '-';
   const day = String(date.getDate()).padStart(2, '0');
-  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const month = monthNames[date.getMonth()];
   const year = date.getFullYear();
   return `${day}-${month}-${year}`;
 }
@@ -246,6 +255,7 @@ export default function LeaveApplicationPage() {
   const { token, user } = useAuth() || {};
 
   const isDean = isRoleMatch(user?.role, ROLE_DEAN_ADMIN);
+  const isPrincipal = isRoleMatch(user?.role, ROLE_PRINCIPAL);
   const [department, setDepartment] = useState(null);
   const [rows, setRows] = useState([]);
   const [leaveTypeOptions, setLeaveTypeOptions] = useState([]);
@@ -284,6 +294,8 @@ export default function LeaveApplicationPage() {
       };
       const response = isDean
         ? await getDeanLeaveApplications(token, params)
+        : isPrincipal
+        ? await getPrincipalLeaveApplications(token, params)
         : await getHodLeaveApplications(token, params);
       const payload = response?.data?.data || {};
       setDepartment(payload.department || null);
@@ -392,6 +404,18 @@ export default function LeaveApplicationPage() {
 
   const sourceRows = useMemo(() => {
     if (activeMainTab === MAIN_TABS.ALL_LIST) return rows;
+    // For principal, Laravel shows only those pending/recommended rows that have
+    // an additional designation/alternate OR are >4 days and recommended.
+    if (isPrincipal) {
+      return rows.filter((row) => {
+        const status = normalizeLeaveStatus(row.appl_status || row.status);
+        if (!(status === 'pending' || status === 'recommended')) return false;
+        const hasAdditional = Boolean(row.additional || row.additional_designation_names || row.additional_alternate || row.additional_alternate_staff || row.additional_alternate_staff);
+        const noOfDays = Number(row.no_of_days || 0);
+        return hasAdditional || (noOfDays > 4 && status === 'recommended');
+      });
+    }
+
     return rows.filter((row) => {
       const status = normalizeLeaveStatus(row.appl_status || row.status);
       return status === 'pending' || status === 'recommended';
@@ -532,10 +556,14 @@ export default function LeaveApplicationPage() {
     return visibleRows
       .filter((row) => {
         const status = normalizeLeaveStatus(row.appl_status || row.status);
-        return isDean ? status === 'recommended' : status === 'pending';
+        const hasAdditional = Boolean(row.additional || row.additional_alternate || row.additional_staff || row.additionalAlternate);
+        const noOfDays = Number(row.no_of_days || 0);
+        if (isDean) return status === 'recommended';
+        if (isPrincipal) return status === 'recommended' && (hasAdditional || noOfDays > 4);
+        return status === 'pending';
       })
       .map((row) => Number(row.id));
-  }, [visibleRows, isDean]);
+  }, [visibleRows, isDean, isPrincipal]);
 
   const allPendingSelected = pendingIdsOnPage.length > 0 && pendingIdsOnPage.every((id) => selectedIds.includes(id));
 
@@ -614,6 +642,36 @@ export default function LeaveApplicationPage() {
     }
   };
 
+  const handlePrincipalApprove = async (applicationId) => {
+    const confirmed = window.confirm('Are you sure you want to Approve this leave application?');
+    if (!confirmed) return;
+    setProcessing(true);
+    try {
+      await approvePrincipalLeaveApplication(token, applicationId);
+      notify('Leave approved successfully.');
+      await loadRows();
+    } catch (error) {
+      notify(error?.response?.data?.message || 'Failed to approve leave.', 'error');
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  const handlePrincipalReject = async (applicationId) => {
+    const confirmed = window.confirm('Are you sure you want to Reject this leave application?');
+    if (!confirmed) return;
+    setProcessing(true);
+    try {
+      await rejectPrincipalLeaveApplication(token, applicationId);
+      notify('Leave rejected successfully.');
+      await loadRows();
+    } catch (error) {
+      notify(error?.response?.data?.message || 'Failed to reject leave.', 'error');
+    } finally {
+      setProcessing(false);
+    }
+  };
+
   const handleBulkAction = async (action) => {
     if (selectedIds.length === 0) {
       notify('Please select at least one pending leave application.', 'error');
@@ -657,12 +715,14 @@ export default function LeaveApplicationPage() {
       for (const id of selectedIds) {
         try {
           if (action === 'approve') {
-            // Dean flow maps to approve/reject, not recommend/reject.
+            // Dean/Principal flow maps to approve/reject, not recommend/reject.
             // eslint-disable-next-line no-await-in-loop
-            await approveDeanLeaveApplication(token, id);
+            if (isPrincipal) await approvePrincipalLeaveApplication(token, id);
+            else await approveDeanLeaveApplication(token, id);
           } else {
             // eslint-disable-next-line no-await-in-loop
-            await rejectDeanLeaveApplication(token, id);
+            if (isPrincipal) await rejectPrincipalLeaveApplication(token, id);
+            else await rejectDeanLeaveApplication(token, id);
           }
         } catch (error) {
           failed.push({ id, message: error?.response?.data?.message || 'Failed' });
@@ -723,7 +783,7 @@ export default function LeaveApplicationPage() {
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="rgba(240,187,64,1)"><path d="M4.00001 20V14C4.00001 9.58172 7.58173 6 12 6C16.4183 6 20 9.58172 20 14V20H21V22H3.00001V20H4.00001ZM6.00001 14H8.00001C8.00001 11.7909 9.79087 10 12 10V8C8.6863 8 6.00001 10.6863 6.00001 14ZM11 2H13V5H11V2ZM19.7782 4.80761L21.1924 6.22183L19.0711 8.34315L17.6569 6.92893L19.7782 4.80761ZM2.80762 6.22183L4.22183 4.80761L6.34315 6.92893L4.92894 8.34315L2.80762 6.22183Z" /></svg>
                     Pending/Recommended Leaves List
                   </button>
-                  {isDean && (
+                    {(isDean || isPrincipal) && (
                     <button
                       type="button"
                       onClick={() => setActiveMainTab(MAIN_TABS.ALL_LIST)}
@@ -835,6 +895,7 @@ export default function LeaveApplicationPage() {
                                   checked={allPendingSelected}
                                   onChange={toggleSelectAllOnPage}
                                   title="Select all pending rows"
+                                  disabled={pendingIdsOnPage.length === 0}
                                 />
                               </span>
                               <span>Action</span>
@@ -855,9 +916,14 @@ export default function LeaveApplicationPage() {
                           visibleRows.map((row) => {
                             const status = normalizeLeaveStatus(row.appl_status || row.status);
                             const isPending = status === 'pending';
-                            const canDeanAct = status === 'recommended';
+                            const hasAdditional = Boolean(row.additional || row.additional_alternate || row.additional_staff || row.additionalAlternate);
+                            const noOfDays = Number(row.no_of_days || 0);
+                            const canDeanAct = isPrincipal
+                              ? (status === 'recommended' && (hasAdditional || noOfDays > 4))
+                              : status === 'recommended';
                             const canHodAct = status === 'pending';
-                            const isActionable = isDean ? canDeanAct : canHodAct;
+                            const isApprover = isDean || isPrincipal;
+                            const isActionable = isApprover ? canDeanAct : canHodAct;
                             const isChecked = selectedIds.includes(Number(row.id));
                             return (
                               <tr key={row.id} className="border-b border-gray-100 hover:bg-gray-50">
@@ -882,13 +948,13 @@ export default function LeaveApplicationPage() {
                                       checked={isChecked}
                                       onChange={() => toggleSelect(row.id, isActionable)}
                                     />
-                                    {isDean ? (
+                                    {(isDean || isPrincipal) ? (
                                       canDeanAct ? (
                                         <>
                                           <button
                                             type="button"
                                             disabled={processing}
-                                            onClick={() => handleDeanApprove(row.id)}
+                                            onClick={() => (isPrincipal ? handlePrincipalApprove(row.id) : handleDeanApprove(row.id))}
                                             className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-green-600 text-white hover:bg-green-700 disabled:opacity-50"
                                             title="Approve"
                                           >
@@ -897,7 +963,7 @@ export default function LeaveApplicationPage() {
                                           <button
                                             type="button"
                                             disabled={processing}
-                                            onClick={() => handleDeanReject(row.id)}
+                                            onClick={() => (isPrincipal ? handlePrincipalReject(row.id) : handleDeanReject(row.id))}
                                             className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-red-600 text-white hover:bg-red-700 disabled:opacity-50"
                                             title="Reject"
                                           >
@@ -947,18 +1013,18 @@ export default function LeaveApplicationPage() {
                     <button
                       type="button"
                       disabled={processing || selectedIds.length === 0}
-                      onClick={() => (isDean ? handleDeanBulkAction('approve') : handleBulkAction('recommend'))}
+                      onClick={() => ((isDean || isPrincipal) ? handleDeanBulkAction('approve') : handleBulkAction('recommend'))}
                       className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50"
                     >
-                      {isDean ? 'Approve' : 'Bulk Recommend'}
+                      {(isDean || isPrincipal) ? 'Approve' : 'Bulk Recommend'}
                     </button>
                     <button
                       type="button"
                       disabled={processing || selectedIds.length === 0}
-                      onClick={() => (isDean ? handleDeanBulkAction('reject') : handleBulkAction('reject'))}
+                      onClick={() => ((isDean || isPrincipal) ? handleDeanBulkAction('reject') : handleBulkAction('reject'))}
                       className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 disabled:opacity-50"
                     >
-                      {isDean ? 'Reject' : 'Bulk Reject'}
+                      {(isDean || isPrincipal) ? 'Reject' : 'Bulk Reject'}
                     </button>
                   </div>
                 </div>

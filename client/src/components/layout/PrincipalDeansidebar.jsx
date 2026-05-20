@@ -15,6 +15,7 @@ export default function PrincipalDeansidebar() {
   if (isRoleMatch(user?.role, ROLE_DEAN_ADMIN)) {
     roleBasePath = '/dean_admin';
   }
+  const isDeanAdmin = isRoleMatch(user?.role, ROLE_DEAN_ADMIN);
 
   const links = [
     { name: 'Dashboard', path: roleBasePath, icon: '📊' },
@@ -23,11 +24,12 @@ export default function PrincipalDeansidebar() {
       name: 'Leave Management',
       path: '/leave-management',
       icon: '🌿',
-        submenu: [
+      submenu: [
         { name: 'Entitlement', path: `${roleBasePath}/leave-entitlement` },
         { name: 'Holiday RH List', path: `${roleBasePath}/leave-management/holiday-rh` },
         { name: 'Leave Application', path: `${roleBasePath}/leave-application` },
-        { name: 'Leave List', path: `${roleBasePath}/leave-list` }
+        // Show 'Leave List' only to Dean/Admin users, not to Principal
+        ...(isDeanAdmin ? [{ name: 'Leave List', path: `${roleBasePath}/leave-list` }] : []),
       ]
     },
     {

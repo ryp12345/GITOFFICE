@@ -75,6 +75,8 @@ const hodRoutes = require('./routes/hod.routes');
 app.use('/api/hod', hodRoutes);
 const deanRoutes = require('./routes/dean.routes');
 app.use('/api/dean', deanRoutes);
+const principalRoutes = require('./routes/principal.routes');
+app.use('/api/principal', principalRoutes);
 const jobsRoutes = require('./routes/jobs.routes');
 app.use('/api/jobs', jobsRoutes);
 
