@@ -23,8 +23,7 @@ export default function SidebarEstablishment() {
         { name: 'Leaves', path: '/leave-management/leaves' },
         { name: 'Entitlement', path: '/leave-management/entitlement' },
         { name: 'Holiday RH List', path: '/leave-management/holiday-rh' },
-        { name: 'Leave Calendar', path: '/leave-management/calendar' },
-        { name: 'Leave List', path: '/leave-management/leavelist' }
+        { name: 'Leave Calendar', path: '/leave-management/leave-calendar' }
       ]
     },
 

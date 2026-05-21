@@ -94,8 +94,7 @@ async function getCalendarEvents({ year, month } = {}) {
         la.created_at
       FROM leave_staff_applications la
       LEFT JOIN leaves l ON l.id = la.leave_id
-      WHERE LOWER(COALESCE(la.appl_status, 'pending')) <> 'rejected'
-        AND la.start::date <= $2::date
+      WHERE la.start::date <= $2::date
         AND la.end::date >= $1::date
       ORDER BY la.start ASC, la.id ASC
     `,

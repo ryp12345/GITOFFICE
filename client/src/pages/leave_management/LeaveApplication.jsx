@@ -409,7 +409,7 @@ export default function LeaveApplicationPage() {
     if (isPrincipal) {
       return rows.filter((row) => {
         const status = normalizeLeaveStatus(row.appl_status || row.status);
-        if (!(status === 'pending' || status === 'recommended')) return false;
+        if (!(status === 'pending' || status === 'recommended' || status === 'cancelled' || status === 'rejected')) return false;
         const hasAdditional = Boolean(row.additional || row.additional_designation_names || row.additional_alternate || row.additional_alternate_staff || row.additional_alternate_staff);
         const noOfDays = Number(row.no_of_days || 0);
         return hasAdditional || (noOfDays > 4 && status === 'recommended');
@@ -418,7 +418,7 @@ export default function LeaveApplicationPage() {
 
     return rows.filter((row) => {
       const status = normalizeLeaveStatus(row.appl_status || row.status);
-      return status === 'pending' || status === 'recommended';
+      return status === 'pending' || status === 'recommended' || status === 'cancelled' || status === 'rejected';
     });
   }, [rows, activeMainTab]);
 
@@ -496,7 +496,6 @@ export default function LeaveApplicationPage() {
 
     for (const app of rows) {
       const status = normalizeLeaveStatus(app.appl_status || app.status);
-      if (status === 'cancelled') continue;
 
       const start = extractDateKey(app.start_date || app.start);
       const end = extractDateKey(app.end_date || app.end);

@@ -48,6 +48,7 @@ import LeaveRulesPage from '../pages/establishment/leave_management/LeaveRules';
 import LeaveEntitlementPage from '../pages/establishment/leave_management/leave_entitlement';
 import StaffLeavesPage from '../pages/staff/leaves';
 import ChangePassword from '../pages/auth/ChangePassword';
+import EstablishmentLeaveCalendarPage from '../pages/establishment/leave_management/LeaveCalendar';
 import ForgotPassword from '../pages/auth/ForgotPassword';
 import ResetPassword from '../pages/auth/ResetPassword';
 import AssoProRecruitmentPage from '../pages/Faculty Recruitment/asso_pro_recruitment';
@@ -112,6 +113,7 @@ export default function AppRoutes() {
               <Route path="/leave-management/entitlement" element={<LeaveEntitlementPage />} />
               <Route path="/leave-management/holiday-rh" element={<HolidayRHListPage />} />
               <Route path="/leave-management/leave-rules" element={<LeaveRulesPage />} />
+              <Route path="/leave-management/leave-calendar" element={<EstablishmentLeaveCalendarPage />} />
             {/* RemunerationHeadsPage removed */}
               <Route path="/staff" element={<StaffPage />} />
               <Route path="/establishment/staff/statistics" element={<StaffStatisticsPage />} />
