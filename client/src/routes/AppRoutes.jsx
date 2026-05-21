@@ -28,6 +28,7 @@ import DailyDataPage from '../pages/biometric/DailyData';
 import MonthlyDataPage from '../pages/biometric/MonthlyData';
 import MusterPage from '../pages/biometric/Muster';
 import LeavesPage from '../pages/establishment/leave_management/Leaves';
+import EstablishementLeaveList from '../pages/establishment/leave_management/EstablishementLeaveList';
 import HolidayRHListPage from '../pages/establishment/leave_management/HolidayRHList';
 import ProtectedRoute from './ProtectedRoute';
 import RoleRoute from './RoleRoute';
@@ -110,6 +111,7 @@ export default function AppRoutes() {
             <Route path="/establishment/biometric/monthly" element={<MonthlyDataPage />} />
             <Route path="/establishment/biometric/muster" element={<MusterPage />} />
               <Route path="/leave-management/leaves" element={<LeavesPage />} />
+              <Route path="/leave-management/establishment-leave-list" element={<EstablishementLeaveList />} />
               <Route path="/leave-management/entitlement" element={<LeaveEntitlementPage />} />
               <Route path="/leave-management/holiday-rh" element={<HolidayRHListPage />} />
               <Route path="/leave-management/leave-rules" element={<LeaveRulesPage />} />

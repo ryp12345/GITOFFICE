@@ -209,6 +209,7 @@ function Calendar({ year, month, onYearChange, onMonthChange, holidayMap, rhMap,
   );
 }
 
+
 export default function EstablishmentLeaveCalendarPage() {
   const { user, token } = useAuth?.() || {};
   const today = new Date();
@@ -241,6 +242,8 @@ export default function EstablishmentLeaveCalendarPage() {
     no_of_days: null,
   });
   const [notification, setNotification] = useState({ show: false, message: '', type: '' });
+  // Track if From Date should be disabled
+  const [fromDateLocked, setFromDateLocked] = useState(false);
 
   const loadMeta = useCallback(async () => {
     try {
@@ -327,6 +330,9 @@ export default function EstablishmentLeaveCalendarPage() {
   const openApplyModal = (dateKey = null) => {
     if (dateKey) {
       setForm((f) => ({ ...f, start_date: dateKey, end_date: dateKey }));
+      setFromDateLocked(true);
+    } else {
+      setFromDateLocked(false);
     }
     setEditingApplicationId(null);
     setIsApplyOpen(true);
@@ -336,6 +342,7 @@ export default function EstablishmentLeaveCalendarPage() {
     setIsApplyOpen(false);
     setForm({ staff_id: '', leave_id: '', cl_type: 'Full', start_date: '', end_date: '', reason: '', alternate: '', additional_alternate: '', no_of_days: null });
     setEditingApplicationId(null);
+    setFromDateLocked(false);
   };
 
   const handleSubmit = async (e) => {
@@ -623,7 +630,14 @@ export default function EstablishmentLeaveCalendarPage() {
 
                     <div>
                       <label className="block text-sm font-medium">From Date:<span className="text-red-500">*</span></label>
-                      <input type="date" className="mt-1 block w-full border rounded p-2" value={form.start_date} onChange={(e) => setForm((f) => ({ ...f, start_date: e.target.value }))} required />
+                      <input
+                        type="date"
+                        className="mt-1 block w-full border rounded p-2"
+                        value={form.start_date}
+                        onChange={(e) => setForm((f) => ({ ...f, start_date: e.target.value }))}
+                        required
+                        disabled={fromDateLocked}
+                      />
                     </div>
                     <div>
                       <label className="block text-sm font-medium">TO Date:<span className="text-red-500">*</span></label>
@@ -774,10 +788,14 @@ export default function EstablishmentLeaveCalendarPage() {
                                   <td className="px-3 py-3 text-sm text-slate-700">
                                     <div className="flex items-center gap-2">
                                       <button type="button" onClick={() => handleEditFromView(r)} className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-gray-100 text-slate-700 hover:bg-gray-200" title="Edit">
-                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1.003 1.003 0 0 0 0-1.42l-2.34-2.34a1.003 1.003 0 0 0-1.42 0l-1.83 1.83 3.75 3.75 1.84-1.82z"/></svg>
+                                        <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                        </svg>
                                       </button>
                                       <button type="button" onClick={() => handleCancelApplication(r.id)} className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-red-100 text-red-600 hover:bg-red-200" title="Cancel">
-                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+                                        <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                        </svg>
                                       </button>
                                     </div>
                                   </td>

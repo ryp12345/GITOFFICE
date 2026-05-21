@@ -82,6 +82,8 @@ async function getCalendarEvents({ year, month } = {}) {
       SELECT
         la.id,
         la.staff_id,
+        CONCAT_WS(' ', s.fname, s.mname, s.lname) AS staff_name,
+        dept.shortname,
         la.leave_id,
         l.shortname AS leave_shortname,
         l.longname AS leave_longname,
@@ -90,10 +92,22 @@ async function getCalendarEvents({ year, month } = {}) {
         la.no_of_days,
         la.cl_type,
         la.reason,
+        la.alternate,
+        CONCAT_WS(' ', s2.fname, s2.mname, s2.lname) AS alternate_staff,
+        la.appl_status,
         la.appl_status AS status,
         la.created_at
       FROM leave_staff_applications la
       LEFT JOIN leaves l ON l.id = la.leave_id
+      LEFT JOIN staff s ON s.id = la.staff_id
+      LEFT JOIN staff s2 ON s2.id = la.alternate
+      LEFT JOIN LATERAL (
+        SELECT STRING_AGG(DISTINCT d.dept_shortname, ', ' ORDER BY d.dept_shortname) AS shortname
+        FROM department_staff ds
+        JOIN departments d ON d.id = ds.department_id
+        WHERE ds.staff_id = la.staff_id
+          AND LOWER(COALESCE(ds.status, 'active')) = 'active'
+      ) dept ON TRUE
       WHERE la.start::date <= $2::date
         AND la.end::date >= $1::date
       ORDER BY la.start ASC, la.id ASC
