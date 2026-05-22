@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { fetchLeaveRules } from '../../utils/leaveRulesApi';
 import Notification from '../../components/common/Notification';
 import Header from '../../components/layout/Header';
 import Sidebar from '../../components/layout/Sidebar';
 import { useAuth } from '../../context/AuthContext';
 import { ROLE_NON_TEACHING, ROLE_ESTABLISHMENT, isRoleMatch } from '../../utils/role';
 import axios from '../../api/axios';
+import { getLeaveEntitlements } from '../../api/leaveEntitlementApi';
 import { getHolidayRHList } from '../../api/holidayrhApi';
 
 // Leave statistics component: fetches /api/leave-entitlements and
@@ -509,6 +511,8 @@ export default function StaffLeavesPage() {
   const [leaveTypes, setLeaveTypes] = useState([]);
   const [alternateOptions, setAlternateOptions] = useState([]);
   const [employeeVacationType, setEmployeeVacationType] = useState('');
+  const [leaveEntitlementRowsByYear, setLeaveEntitlementRowsByYear] = useState({});
+  const [combineLeaveRows, setCombineLeaveRows] = useState([]);
 
   // application list
   const [applications, setApplications] = useState([]);
@@ -614,6 +618,63 @@ export default function StaffLeavesPage() {
 
   useEffect(() => { loadApplications(); }, [loadApplications]);
 
+  const loadEntitlementYear = useCallback(async (year) => {
+    if (!requesterUserId && !requesterStaffId) return null;
+
+    const targetYear = Number(year);
+    if (!Number.isFinite(targetYear)) return null;
+
+    try {
+      const response = await getLeaveEntitlements({ year: targetYear }, token);
+      const payload = response?.data?.data || {};
+      const rows = payload.data || [];
+      const staffRow = rows.find((row) => {
+        if (requesterStaffId && Number(row.id) === Number(requesterStaffId)) return true;
+        if (requesterUserId && Number(row.user_id) === Number(requesterUserId)) return true;
+        return false;
+      }) || null;
+
+      setLeaveEntitlementRowsByYear((current) => ({
+        ...current,
+        [targetYear]: staffRow,
+      }));
+
+      return staffRow;
+    } catch {
+      setLeaveEntitlementRowsByYear((current) => ({
+        ...current,
+        [targetYear]: null,
+      }));
+      return null;
+    }
+  }, [requesterStaffId, requesterUserId, token]);
+
+  useEffect(() => {
+    let mounted = true;
+
+    const loadEntitlements = async () => {
+      if (!requesterUserId && !requesterStaffId) {
+        setLeaveEntitlementRowsByYear({});
+        return;
+      }
+
+      const staffRow = await loadEntitlementYear(calYear);
+      if (!mounted) return;
+      if (staffRow == null) {
+        setLeaveEntitlementRowsByYear((current) => ({
+          ...current,
+          [calYear]: null,
+        }));
+      }
+    };
+
+    loadEntitlements();
+
+    return () => {
+      mounted = false;
+    };
+  }, [calYear, loadEntitlementYear, requesterStaffId, requesterUserId, token]);
+
   useEffect(() => {
     if (!requesterStaffId) {
       setEmployeeVacationType('');
@@ -625,6 +686,29 @@ export default function StaffLeavesPage() {
     })
       .then((response) => {
         const staff = response?.data?.data || null;
+        const additionalDesignation = Array.isArray(staff?.latest_additional_designation)
+          ? staff.latest_additional_designation[0]
+          : staff?.latest_additional_designation || null;
+        const employeeType = Array.isArray(staff?.latest_employee_type)
+          ? staff.latest_employee_type[0]?.employee_type
+          : staff?.latest_employee_type?.employee_type;
+        const associationName = Array.isArray(staff?.latestassociation)
+          ? staff.latestassociation[0]?.asso_name
+          : staff?.latestassociation?.asso_name;
+
+        if (additionalDesignation?.isvacational) {
+          setEmployeeVacationType(
+            normalizeVacationType(additionalDesignation.isvacational),
+          );
+          return;
+        }
+
+        if (String(employeeType || '').trim().toLowerCase() === 'teaching'
+          && ['confirmed', 'promotional probationary'].includes(String(associationName || '').trim().toLowerCase())) {
+          setEmployeeVacationType('vacational');
+          return;
+        }
+
         setEmployeeVacationType(
           normalizeVacationType(
             staff?.designation_type
@@ -739,6 +823,7 @@ export default function StaffLeavesPage() {
       (leaveType) => {
         if (normalizeLeaveStatus(leaveType?.status) !== 'active') return false;
         if (!isSelectableLeaveType(leaveType)) return false;
+        if (leaveType?.max_time_allowed !== null && leaveType?.max_time_allowed !== undefined) return false;
 
         const leaveVacationType = normalizeVacationType(leaveType?.vacation_type);
         if (employeeVacationType && leaveVacationType && leaveVacationType !== employeeVacationType) {
@@ -755,6 +840,36 @@ export default function StaffLeavesPage() {
     () => activeLeaveTypes.find((leaveType) => String(leaveType.id) === String(form.leave_id)),
     [activeLeaveTypes, form.leave_id],
   );
+
+  useEffect(() => {
+    let mounted = true;
+
+    const loadCombineLeaveRows = async () => {
+      if (!selectedLeaveType?.id) {
+        setCombineLeaveRows([]);
+        return;
+      }
+
+      try {
+        const response = await axios.get('/combine-leaves', {
+          params: { leave_id: selectedLeaveType.id },
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
+
+        if (!mounted) return;
+        setCombineLeaveRows(response?.data?.data || []);
+      } catch {
+        if (!mounted) return;
+        setCombineLeaveRows([]);
+      }
+    };
+
+    loadCombineLeaveRows();
+
+    return () => {
+      mounted = false;
+    };
+  }, [selectedLeaveType?.id, token]);
 
   const filteredAlternateOptions = useMemo(() => {
     const expectedType = isNonTeachingUser ? 'non-teaching' : 'teaching';
@@ -830,18 +945,211 @@ export default function StaffLeavesPage() {
     });
   }, [activeLeaveTypes, form.start_date, rhMap]);
 
-  const isSingleDayCL = useMemo(() => {
-    if (!selectedLeaveType || !form.start_date || !form.end_date) return false;
+  const selectedLeaveShortName = useMemo(
+    () => String(selectedLeaveType?.shortname || '').trim().toUpperCase(),
+    [selectedLeaveType],
+  );
 
-    const shortName = String(selectedLeaveType.shortname || '').trim().toUpperCase();
-    return shortName === 'CL' && form.start_date === form.end_date;
-  }, [selectedLeaveType, form.start_date, form.end_date]);
+  const leaveTypeShortNameById = useMemo(() => {
+    const map = new Map();
+    leaveTypes.forEach((leaveType) => {
+      const id = Number(leaveType?.id);
+      if (!Number.isFinite(id)) return;
+      map.set(id, String(leaveType?.shortname || '').trim().toUpperCase());
+    });
+    return map;
+  }, [leaveTypes]);
+
+  const isExemptLeaveShortName = useCallback((shortName) => {
+    const normalized = String(shortName || '').trim().toUpperCase();
+    return normalized === 'EL' || normalized === 'LWP';
+  }, []);
+
+  const getApplicationLeaveShortName = useCallback((app) => {
+    const directShortName = String(app?.leave_shortname || app?.shortname || '').trim().toUpperCase();
+    if (directShortName) return directShortName;
+
+    const leaveId = Number(app?.leave_id);
+    if (!Number.isFinite(leaveId)) return '';
+
+    return leaveTypeShortNameById.get(leaveId) || '';
+  }, [leaveTypeShortNameById]);
+
+  const findBoundaryApplication = useCallback((dateKey, direction) => {
+    return applications.find((app) => {
+      if (editingApplicationId && String(app.id) === String(editingApplicationId)) return false;
+
+      const status = normalizeLeaveStatus(app.appl_status || app.status);
+      if (status === 'cancelled' || status === 'rejected') return false;
+
+      const shortName = getApplicationLeaveShortName(app);
+      if (shortName.includes('DL')) return false;
+
+      const boundaryDate = direction === 'before'
+        ? extractDateKey(app.end_date || app.end)
+        : extractDateKey(app.start_date || app.start);
+
+      if (!boundaryDate || boundaryDate !== dateKey) return false;
+
+      if (direction === 'before') {
+        return String(app.cl_type || '').trim().toLowerCase() !== 'morning';
+      }
+
+      return String(app.cl_type || '').trim().toLowerCase() !== 'afternoon';
+    }) || null;
+  }, [applications, editingApplicationId, getApplicationLeaveShortName]);
+
+  const analyzeHolidayRhChain = useCallback((anchorDate, direction) => {
+    const result = {
+      holidayDates: [],
+      rhDates: [],
+      adjacentLeave: null,
+    };
+
+    if (!anchorDate) return result;
+
+    const cursor = new Date(anchorDate);
+    if (Number.isNaN(cursor.getTime())) return result;
+
+    const step = direction === 'before' ? -1 : 1;
+    cursor.setDate(cursor.getDate() + step);
+
+    let safety = 0;
+    while (safety < 60) {
+      safety += 1;
+      const key = toDateStr(cursor);
+
+      if (holidayMap[key]) {
+        result.holidayDates.push(key);
+        cursor.setDate(cursor.getDate() + step);
+        continue;
+      }
+
+      const dayName = cursor.toLocaleDateString('en-US', { weekday: 'long' });
+      if (dayName === 'Sunday' || isFirstOrThirdSaturday(cursor)) {
+        result.holidayDates.push(key);
+        cursor.setDate(cursor.getDate() + step);
+        continue;
+      }
+
+      const boundaryApplication = findBoundaryApplication(key, direction);
+      if (boundaryApplication) {
+        const shortName = getApplicationLeaveShortName(boundaryApplication);
+        if (shortName === 'RH') {
+          result.rhDates.push(key);
+          cursor.setDate(cursor.getDate() + step);
+          continue;
+        }
+
+        result.adjacentLeave = boundaryApplication;
+      }
+
+      break;
+    }
+
+    return result;
+  }, [findBoundaryApplication, getApplicationLeaveShortName, holidayMap]);
+
+  const combineLeaveIds = useMemo(() => {
+    return new Set(
+      Array.isArray(combineLeaveRows)
+        ? combineLeaveRows.map((item) => Number(item?.combined_id ?? item?.id ?? 0)).filter(Boolean)
+        : [],
+    );
+  }, [combineLeaveRows]);
+
+  const isCombinationAllowed = useCallback((leaveId) => combineLeaveIds.has(Number(leaveId)), [combineLeaveIds]);
+
+  const isCLLeave = selectedLeaveShortName === 'CL';
+  const isRHLeave = isRhLeaveType(selectedLeaveType);
+  const isSingleDayCL = isCLLeave && form.start_date && form.end_date && form.start_date === form.end_date;
+
+  const getLeaveStats = useCallback((leaveType, year = calYear) => {
+    const shortName = String(leaveType?.shortname || '').trim().toUpperCase();
+    const row = leaveEntitlementRowsByYear[Number(year)] || null;
+    if (!shortName || !row?.leaves) return null;
+
+    return row.leaves[shortName] || null;
+  }, [calYear, leaveEntitlementRowsByYear]);
+
+  const getAvailableBalance = useCallback((leaveType, year = calYear) => {
+    const stats = getLeaveStats(leaveType, year);
+    if (!stats) return null;
+
+    if (stats.balance !== undefined && stats.balance !== null) {
+      const balance = Number(stats.balance);
+      if (Number.isFinite(balance)) return balance;
+    }
+
+    const entitled = Number(stats.entitled_accumulated ?? stats.entitled_curr_year ?? 0);
+    const availed = Number(stats.availed ?? stats.consumed ?? stats.consumed_curr_year ?? 0);
+    const encashed = Number(stats.encashed_curr_year ?? stats.encashed ?? 0);
+    const available = entitled - availed - encashed;
+    return Number.isFinite(available) ? available : null;
+  }, [calYear, getLeaveStats]);
+
+  const getRequestedDaysByYear = useCallback(() => {
+    if (!form.start_date || !form.end_date) return {};
+
+    const counts = {};
+    const current = new Date(form.start_date);
+    const last = new Date(form.end_date);
+
+    if (Number.isNaN(current.getTime()) || Number.isNaN(last.getTime()) || last < current) {
+      return {};
+    }
+
+    while (current <= last) {
+      const year = current.getFullYear();
+      counts[year] = (counts[year] || 0) + 1;
+      current.setDate(current.getDate() + 1);
+    }
+
+    return counts;
+  }, [form.end_date, form.start_date]);
+
+  const hasOverlapWithExistingApplications = useCallback((startDate, endDate) => {
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return false;
+
+    return applications.some((app) => {
+      if (editingApplicationId && String(app.id) === String(editingApplicationId)) return false;
+      const status = normalizeLeaveStatus(app.appl_status || app.status);
+      if (status === 'cancelled' || status === 'rejected') return false;
+
+      const appStart = extractDateKey(app.start_date || app.start);
+      const appEnd = extractDateKey(app.end_date || app.end);
+      if (!appStart || !appEnd) return false;
+
+      const existingStart = new Date(appStart);
+      const existingEnd = new Date(appEnd);
+      return start <= existingEnd && end >= existingStart;
+    });
+  }, [applications, editingApplicationId]);
 
   useEffect(() => {
-    if (!isSingleDayCL && form.cl_type !== 'Full') {
+    if (!isCLLeave && form.cl_type !== 'Full') {
       setForm((currentForm) => ({ ...currentForm, cl_type: 'Full' }));
     }
-  }, [isSingleDayCL, form.cl_type]);
+  }, [isCLLeave, form.cl_type]);
+
+  useEffect(() => {
+    if (!form.start_date) return;
+
+    if (isRHLeave) {
+      if (form.end_date !== form.start_date) {
+        setForm((currentForm) => ({ ...currentForm, end_date: currentForm.start_date || form.start_date, cl_type: 'Full' }));
+      }
+      return;
+    }
+
+    if (isCLLeave && (form.cl_type === 'Morning' || form.cl_type === 'Afternoon')) {
+      if (form.end_date !== form.start_date) {
+        setForm((currentForm) => ({ ...currentForm, end_date: currentForm.start_date || form.start_date }));
+      }
+    }
+  }, [form.start_date, form.end_date, form.cl_type, isCLLeave, isRHLeave]);
 
   useEffect(() => {
     if (!form.leave_id) return;
@@ -902,6 +1210,184 @@ export default function StaffLeavesPage() {
     if (noOfDays === null)   return setFormError('End date must be on or after start date.');
     if (!form.alternate)     return setFormError('Please select an alternate staff.');
     if (!form.reason.trim()) return setFormError('Please enter a reason.');
+
+    // --- Fetch and check leave rules ---
+    let leaveRules = null;
+    try {
+      leaveRules = await fetchLeaveRules(form.leave_id);
+    } catch {}
+
+    const leaveMinimumDays = Number(selectedLeaveType?.min_days ?? 0);
+    if (leaveMinimumDays > 0 && noOfDays < leaveMinimumDays) {
+      return setFormError(`You must apply for at least ${leaveMinimumDays} days for this leave type.`);
+    }
+
+    const leaveDurationLimit = Number(selectedLeaveType?.max_days ?? 0);
+    if (leaveDurationLimit > 0 && noOfDays > leaveDurationLimit) {
+      return setFormError(`You cannot apply for more than ${leaveDurationLimit} days for this leave type.`);
+    }
+
+    if (noOfDays > 30) {
+      return setFormError('You cannot apply for more than 30 days at a time.');
+    }
+
+    if (hasOverlapWithExistingApplications(form.start_date, form.end_date)) {
+      return setFormError('Leave dates cannot overlap with an existing leave application.');
+    }
+
+    // 1. Leave master day limit and min days per application
+    if (leaveRules) {
+      if (leaveRules.min_days && noOfDays < leaveRules.min_days) {
+        return setFormError(`You must apply for at least ${leaveRules.min_days} days for this leave.`);
+      }
+      // 2. Gap between leaves
+      if (leaveRules.gap === 'Yes' && leaveRules.min_gap) {
+        // Match backend behavior: compare against the nearest previous same-type start date.
+        const prev = applications
+          .filter(app => String(app.leave_id) === String(form.leave_id))
+          .map((app) => ({
+            app,
+            startDate: extractDateKey(app.start_date || app.start),
+          }))
+          .filter(({ startDate }) => Boolean(startDate) && new Date(startDate) <= new Date(form.start_date))
+          .sort((a, b) => {
+            const aDiff = Math.abs(new Date(a.startDate) - new Date(form.start_date));
+            const bDiff = Math.abs(new Date(b.startDate) - new Date(form.start_date));
+            return aDiff - bDiff;
+          });
+        if (prev.length > 0) {
+          const lastStart = new Date(prev[0].startDate);
+          const thisStart = new Date(form.start_date);
+          const diffDays = Math.abs(Math.floor((thisStart - lastStart) / 86400000));
+          if (diffDays < leaveRules.min_gap) {
+            return setFormError(`You must wait at least ${leaveRules.min_gap} days between two such leaves.`);
+          }
+        }
+      }
+      // 3. Prior intimation
+      if (leaveRules.prior_intimation_days) {
+        const today = new Date();
+        const start = new Date(form.start_date);
+        const diff = Math.floor((start - today) / 86400000);
+        if (diff < leaveRules.prior_intimation_days) {
+          return setFormError(`You must apply at least ${leaveRules.prior_intimation_days} days in advance for this leave.`);
+        }
+      }
+      // 4. Entitlement/balance (year-specific, same source as Blade)
+      const daysByYear = getRequestedDaysByYear();
+      for (const [yearKey, requestedDays] of Object.entries(daysByYear)) {
+        const year = Number(yearKey);
+        let row = leaveEntitlementRowsByYear[year] || null;
+        if (!row) {
+          row = await loadEntitlementYear(year);
+        }
+
+        if (!row) {
+          return setFormError(`You do not have any leave entitlement for the year ${year}.`);
+        }
+
+        const availableBalance = getAvailableBalance(selectedLeaveType, year);
+        if (availableBalance != null && requestedDays > availableBalance) {
+          return setFormError(`You do not have enough leave balance for the year ${year}.`);
+        }
+      }
+      // 5. Holiday/RH sandwich checks match the backend chain walk.
+      const selectedLeaveId = Number(form.leave_id);
+      const currentLeaveIsExempt = isExemptLeaveShortName(selectedLeaveShortName);
+      const requestedDays = Number(noOfDays || 0);
+
+      if (form.cl_type !== 'Afternoon') {
+        const beforeChain = analyzeHolidayRhChain(form.start_date, 'before');
+        const beforeLeave = beforeChain.adjacentLeave;
+        if (beforeLeave) {
+          const beforeLeaveShortName = getApplicationLeaveShortName(beforeLeave);
+          const beforeLeaveDays = Number(beforeLeave.no_of_days || 0);
+
+          if (beforeChain.holidayDates.length > 0) {
+            if ((beforeChain.rhDates.length + beforeChain.holidayDates.length + requestedDays > 5)
+              && !isExemptLeaveShortName(beforeLeaveShortName)) {
+              return setFormError('You have applied for leave combining with RH and holidays and the total number of days of leave including RH & holidays will be more than 5. You are not allowed to take more than 5 days off.');
+            }
+
+            if (beforeLeaveShortName !== 'EL' && beforeLeaveShortName !== 'LWP'
+              && beforeLeaveDays + requestedDays + beforeChain.holidayDates.length > 5) {
+              return setFormError('You have applied for a leave followed by holidays and the total number of days of leave including the holidays will be more than 5. You are not allowed to take more than 5 days off.');
+            }
+          } else if ((beforeChain.rhDates.length + beforeChain.holidayDates.length + requestedDays > 5)
+            && !currentLeaveIsExempt) {
+            return setFormError('You have applied leave with holidays/RH and the total number of days of leave including RH/holidays will be more than 5. You are not allowed to take more than 5 days off.');
+          }
+
+          if (String(beforeLeave.leave_id) !== String(selectedLeaveId)
+            && !isCombinationAllowed(beforeLeave.leave_id)) {
+            return setFormError('Application rejected as it is combined with a leave that is not allowed.');
+          }
+        }
+      }
+
+      if (form.cl_type !== 'Morning') {
+        const afterChain = analyzeHolidayRhChain(form.end_date, 'after');
+        const afterLeave = afterChain.adjacentLeave;
+        if (afterLeave) {
+          const afterLeaveShortName = getApplicationLeaveShortName(afterLeave);
+          const afterLeaveDays = Number(afterLeave.no_of_days || 0);
+
+          if (form.cl_type === 'Afternoon' && afterChain.rhDates.length > 0) {
+            return setFormError('You cannot apply this afternoon leave as there is a regular leave after the RH and holidays that follow your leave date. The leave can only be granted if there is no leave after the RH and subsequent holidays/weekends.');
+          }
+
+          if (afterChain.holidayDates.length + requestedDays > 5
+            && !isExemptLeaveShortName(afterLeaveShortName)) {
+            return setFormError('You have applied for leave combining with RH and holidays and the total number of days of leave including RH & holidays will be more than 5. You are not allowed to take more than 5 days off.');
+          }
+
+          if (afterLeaveShortName !== 'EL' && afterLeaveShortName !== 'LWP'
+            && afterLeaveDays + requestedDays + afterChain.holidayDates.length > 5) {
+            return setFormError('You have applied for a leave followed by holidays and the total number of days of leave including the holidays will be more than 5. You are not allowed to take more than 5 days off.');
+          }
+
+          if (String(afterLeave.leave_id) !== String(selectedLeaveId)
+            && !isCombinationAllowed(afterLeave.leave_id)) {
+            return setFormError('Application rejected as it is combined with a leave that is not allowed.');
+          }
+        }
+
+        if ((afterChain.holidayDates.length + requestedDays > 6)
+          && !currentLeaveIsExempt
+          && !(form.cl_type === 'Afternoon' && afterChain.rhDates.length > 0)) {
+          return setFormError('You have applied for leave combining with RH and holidays and the total number of days of leave including RH & holidays will be more than 5. You are not allowed to take more than 5 days off.');
+        }
+      }
+
+      // 6. Maximum times allowed in a period (leave_rules.max_time_allowed)
+      if (leaveRules.period && leaveRules.max_time_allowed) {
+        const normalizedPeriod = String(leaveRules.period || '').toLowerCase();
+        const periodStart = new Date(form.start_date);
+
+        if (normalizedPeriod.includes('entire service')) {
+          periodStart.setTime(0);
+        } else if (normalizedPeriod.includes('five years')) {
+          periodStart.setFullYear(periodStart.getFullYear() - 5);
+        } else if (normalizedPeriod.includes('one year')) {
+          periodStart.setFullYear(periodStart.getFullYear() - 1);
+        } else if (normalizedPeriod.includes('six months')) {
+          periodStart.setMonth(periodStart.getMonth() - 6);
+        } else if (normalizedPeriod.includes('one month')) {
+          periodStart.setMonth(periodStart.getMonth() - 1);
+        } else {
+          periodStart.setFullYear(periodStart.getFullYear() - 1);
+        }
+
+        const count = applications.filter(app =>
+          String(app.leave_id) === String(form.leave_id) &&
+          normalizeLeaveStatus(app.appl_status || app.status) !== 'cancelled' &&
+          new Date(app.start_date || app.start) >= periodStart
+        ).length;
+        if (count >= Number(leaveRules.max_time_allowed)) {
+          return setFormError(`You cannot take this leave more than ${leaveRules.max_time_allowed} times in the specified period.`);
+        }
+      }
+    }
 
     setSubmitting(true);
     try {
@@ -1187,7 +1673,7 @@ export default function StaffLeavesPage() {
                     </div>
                   </div>
 
-                  {isSingleDayCL && (
+                  {isCLLeave && (
                     <div>
                       <label className="block text-sm font-medium text-slate-700 mb-1">Day Type <span className="text-red-500">*</span></label>
                       <select
@@ -1200,6 +1686,12 @@ export default function StaffLeavesPage() {
                         <option value="Morning">First Half</option>
                         <option value="Afternoon">Second Half</option>
                       </select>
+                    </div>
+                  )}
+
+                  {isRHLeave && (
+                    <div className="text-sm text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
+                      Restricted Holiday is applied as a single day leave.
                     </div>
                   )}
 
