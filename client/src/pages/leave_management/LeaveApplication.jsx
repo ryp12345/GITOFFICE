@@ -202,8 +202,14 @@ function LeaveCalendar({ year, month, onYearChange, onMonthChange, holidayMap, r
                   )}
 
                   {dayLeaves.length > 0 && (
-                    <span className="text-[10px] sm:text-xs leading-tight mt-auto font-semibold text-indigo-700">
-                      {dayLeaves.length} leave{dayLeaves.length > 1 ? 's' : ''}
+                    <span
+                      className="leave-list-box mt-auto px-1 py-0.5 rounded bg-blue-100 text-blue-800 text-[10px] sm:text-[11px] font-semibold border border-blue-300 cursor-pointer"
+                      title="View Leaves"
+                      onClick={(e) => { e.stopPropagation(); onDateClick?.(key); }}
+                      role="button"
+                      tabIndex={0}
+                    >
+                      Leave List
                     </span>
                   )}
                 </button>

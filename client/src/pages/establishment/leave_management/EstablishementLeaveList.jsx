@@ -577,8 +577,21 @@ export default function EstablishementLeaveList() {
                 <select className="mt-1 block w-full border rounded p-2" value={editFields.alternate_staff || ''} onChange={e => setEditFields(f => ({ ...f, alternate_staff: e.target.value }))}>
                   <option value="">Choose Alternate</option>
                   {(Array.isArray(alternateOptions) ? alternateOptions : (alternateOptions.alternate_staff || [])).map((s) => (
-                    <option key={s.id} value={s.id}>{[s.fname, s.mname, s.lname].filter(Boolean).join(' ')}</option>
+                    <option key={s.id} value={String(s.id)}>
+                      {[s.fname, s.mname, s.lname].filter(Boolean).join(' ')}
+                    </option>
                   ))}
+                  {/* Ensure selected alternate is visible even if not in options */}
+                  {editFields.alternate_staff &&
+                    !((Array.isArray(alternateOptions) ? alternateOptions : (alternateOptions.alternate_staff || [])).some(s => String(s.id) === String(editFields.alternate_staff))) && (
+                      <option value={String(editFields.alternate_staff)}>
+                        {staffList.find(s => String(s.id) === String(editFields.alternate_staff))
+                          ? [staffList.find(s => String(s.id) === String(editFields.alternate_staff)).fname,
+                              staffList.find(s => String(s.id) === String(editFields.alternate_staff)).mname,
+                              staffList.find(s => String(s.id) === String(editFields.alternate_staff)).lname].filter(Boolean).join(' ')
+                          : editFields.alternate_staff}
+                      </option>
+                  )}
                 </select>
               </div>
               <div>
