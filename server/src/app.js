@@ -87,6 +87,9 @@ app.use('/api/biometric', biometricRoutes);
 const leaveCalendarRoutes = require('./routes/leave_calendar.routes');
 app.use('/api/leave-calendar', leaveCalendarRoutes);
 
+const superAdminLeaveRoutes = require('./routes/superAdminLeave.routes');
+app.use('/api/super-admin-leaves', superAdminLeaveRoutes);
+
 app.use(errorMiddleware);
 
 module.exports = app;

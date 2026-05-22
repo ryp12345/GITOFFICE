@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, useRef } from 'react';
-import { isRoleMatch, ROLE_DEAN_ADMIN, ROLE_PRINCIPAL } from '../../utils/role';
+import { isRoleMatch, ROLE_DEAN_ADMIN, ROLE_PRINCIPAL, ROLE_SUPER_ADMIN } from '../../utils/role';
 import Notification from '../../components/common/Notification';
 import Header from '../../components/layout/Header';
 import Sidebar from '../../components/layout/Sidebar';
@@ -23,6 +23,7 @@ import {
 } from '../../api/principalApi';
 import { getLeaveEntitlementMeta } from '../../api/leaveEntitlementApi';
 import { getHolidayRHList } from '../../api/holidayrhApi';
+import { getItCellLeaveApplications } from '../../api/superAdminLeaveApi';
 
 const MAIN_TABS = {
   LIST: 'list',
@@ -256,6 +257,7 @@ export default function LeaveApplicationPage() {
 
   const isDean = isRoleMatch(user?.role, ROLE_DEAN_ADMIN);
   const isPrincipal = isRoleMatch(user?.role, ROLE_PRINCIPAL);
+  const isSuperAdmin = isRoleMatch(user?.role, ROLE_SUPER_ADMIN);
   const [department, setDepartment] = useState(null);
   const [rows, setRows] = useState([]);
   const [leaveTypeOptions, setLeaveTypeOptions] = useState([]);
@@ -292,11 +294,24 @@ export default function LeaveApplicationPage() {
         month: month || undefined,
         year: year || undefined,
       };
-      const response = isDean
-        ? await getDeanLeaveApplications(token, params)
-        : isPrincipal
-        ? await getPrincipalLeaveApplications(token, params)
-        : await getHodLeaveApplications(token, params);
+      let response;
+      if (isSuperAdmin) {
+        response = await getItCellLeaveApplications(token, params);
+      } else if (isDean) {
+        response = await getDeanLeaveApplications(token, params);
+      } else if (isPrincipal) {
+        response = await getPrincipalLeaveApplications(token, params);
+      } else if (isRoleMatch(user?.role, 'Head of Department')) {
+        response = await getHodLeaveApplications(token, params);
+      } else {
+        // fallback or staff logic if needed
+        setRows([]);
+        setDepartment(null);
+        setActiveLeaveType('');
+        setSelectedIds([]);
+        setLoading(false);
+        return;
+      }
       const payload = response?.data?.data || {};
       setDepartment(payload.department || null);
       const nextRows = Array.isArray(payload.applications) ? payload.applications : [];
@@ -454,8 +469,11 @@ export default function LeaveApplicationPage() {
       if (leaveTypeKeys.includes('CL')) setActiveLeaveType('CL');
       else setActiveLeaveType(leaveTypeKeys[0]);
     } else if (!activeLeaveType || !leaveTypeKeys.includes(activeLeaveType)) {
-      if (leaveTypeKeys.includes('CL')) setActiveLeaveType('CL');
-      else setActiveLeaveType(leaveTypeKeys[0]);
+      if (leaveTypeKeys.includes('CL')) {
+        setActiveLeaveType('CL');
+      } else {
+        setActiveLeaveType(leaveTypeKeys[0]);
+      }
     }
 
     prevLeaveKeysLenRef.current = leaveTypeKeys.length;

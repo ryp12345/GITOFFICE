@@ -267,6 +267,7 @@ export default function LeaveListPage() {
 									<thead className="bg-blue-600">
 										<tr>
 											<th className="px-6 py-4 text-left text-xs font-medium text-white uppercase tracking-wider">S.NO</th>
+											<th className="px-6 py-4 text-left text-xs font-medium text-white uppercase tracking-wider">Application ID</th>
 											<th className="px-6 py-4 text-left text-xs font-medium text-white uppercase tracking-wider">Application Date</th>
 											<th className="px-6 py-4 text-left text-xs font-medium text-white uppercase tracking-wider">Name</th>
 											<th className="px-6 py-4 text-left text-xs font-medium text-white uppercase tracking-wider">Department</th>
@@ -282,20 +283,21 @@ export default function LeaveListPage() {
 									<tbody className="bg-white divide-y divide-gray-200">
 										{loading ? (
 											<tr>
-												<td colSpan={11} className="px-6 py-12 text-center text-gray-500">Loading leave list...</td>
+												<td colSpan={12} className="px-6 py-12 text-center text-gray-500">Loading leave list...</td>
 											</tr>
 										) : paginatedRows.length === 0 ? (
 											<tr>
-												<td colSpan={11} className="px-6 py-12 text-center text-gray-500">No leave applications found</td>
+												<td colSpan={12} className="px-6 py-12 text-center text-gray-500">No leave applications found</td>
 											</tr>
 										) : (
-											paginatedRows.map((row) => {
+											paginatedRows.map((row, idx) => {
 												const status = normalizeLeaveStatus(row.appl_status || row.status);
 												const canAct = status === 'recommended';
 
 												return (
 													<tr key={row.id} className="hover:bg-blue-50 transition-colors duration-150">
-														<td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{row.id}</td>
+														<td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{(currentPage - 1) * entriesPerPage + idx + 1}</td>
+														<td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{row.id}</td>
 														<td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">{formatDateDMY(row.application_date)}</td>
 														<td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">{row.staff_name || 'N/A'}</td>
 														<td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">{row.shortname || '-'}</td>

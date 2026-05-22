@@ -91,6 +91,7 @@ export default function AppRoutes() {
             <Route path="/super-admin/coordinators" element={<SuperAdminCoordinatorsPage />} />
             <Route path="/super-admin/leave-management/entitlement" element={<SuperAdminLeaveEntitlementPage />} />
             <Route path="/super-admin/leave-management/holiday-rh" element={<SuperAdminHolidayRHListPage />} />
+            <Route path="/super-admin/leave-management/it-cell-leave-applications" element={<LeaveApplicationPage />} />
 
             <Route path="/super-admin/biometric/daily" element={<DailyDataPage />} />
             <Route path="/super-admin/biometric/monthly" element={<MonthlyDataPage />} />

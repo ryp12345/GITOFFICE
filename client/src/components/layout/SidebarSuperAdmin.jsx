@@ -22,7 +22,7 @@ export default function SidebarSuperAdmin() {
       submenu: [
         { name: 'Entitlement', path: '/super-admin/leave-management/entitlement' },
         { name: 'Holiday & RH List', path: '/super-admin/leave-management/holiday-rh' },
-        { name: 'Leave Calendar', path: '/super-admin/leave-management/calendar' }
+        { name: 'Leave Applications', path: '/super-admin/leave-management/it-cell-leave-applications' },
       ]
     },
     { name: 'Coordinators', path: '/super-admin/coordinators', icon: '🤝' },
