@@ -258,12 +258,27 @@ function formatDateDMY(value) {
   return `${day}-${month}-${year}`;
 }
 
+function getDepartmentName(row) {
+  if (!row) return 'N/A';
+  if (typeof row.department === 'object' && row.department) {
+    return row.department.dept_shortname || row.department.shortname || row.department.dept_name || row.department.name || 'N/A';
+  }
+  if (Array.isArray(row.departments) && row.departments.length) {
+    const active = row.departments.find((dep) => String(dep?.status || '').toLowerCase() === 'active');
+    const dep = active || row.departments[0];
+    if (dep) return dep.dept_shortname || dep.shortname || dep.dept_name || dep.name || 'N/A';
+  }
+  return row.shortname || row.dept_shortname || row.dept_name || row.department_name || row.department || 'N/A';
+}
+
 export default function LeaveApplicationPage() {
   const { token, user } = useAuth() || {};
 
   const isDean = isRoleMatch(user?.role, ROLE_DEAN_ADMIN);
   const isPrincipal = isRoleMatch(user?.role, ROLE_PRINCIPAL);
   const isSuperAdmin = isRoleMatch(user?.role, ROLE_SUPER_ADMIN);
+  const isHod = isRoleMatch(user?.role, 'Head of Department');
+  const showDepartmentColumn = !isHod;
   const [department, setDepartment] = useState(null);
   const [rows, setRows] = useState([]);
   const [leaveTypeOptions, setLeaveTypeOptions] = useState([]);
@@ -905,6 +920,7 @@ export default function LeaveApplicationPage() {
                           <th className="px-3 py-3 text-left text-xs font-semibold text-white">Application ID</th>
                           <th className="px-3 py-3 text-left text-xs font-semibold text-white">Application Date</th>
                           <th className="px-3 py-3 text-left text-xs font-semibold text-white">Name</th>
+                          {showDepartmentColumn && <th className="px-3 py-3 text-left text-xs font-semibold text-white">Department</th>}
                           <th className="px-3 py-3 text-left text-xs font-semibold text-white">Leave From</th>
                           <th className="px-3 py-3 text-left text-xs font-semibold text-white">Leave To</th>
                           <th className="px-3 py-3 text-left text-xs font-semibold text-white">No Of Days</th>
@@ -930,11 +946,11 @@ export default function LeaveApplicationPage() {
                       <tbody>
                         {loading ? (
                           <tr>
-                            <td colSpan={10} className="px-4 py-10 text-center text-slate-500">Loading leave applications...</td>
+                            <td colSpan={showDepartmentColumn ? 11 : 10} className="px-4 py-10 text-center text-slate-500">Loading leave applications...</td>
                           </tr>
                         ) : visibleRows.length === 0 ? (
                           <tr>
-                            <td colSpan={10} className="px-4 py-10 text-center text-slate-500">No leave applications found.</td>
+                            <td colSpan={showDepartmentColumn ? 11 : 10} className="px-4 py-10 text-center text-slate-500">No leave applications found.</td>
                           </tr>
                         ) : (
                           visibleRows.map((row, index) => {
@@ -955,6 +971,7 @@ export default function LeaveApplicationPage() {
                                 <td className="px-3 py-3 text-sm text-slate-700">{row.id}</td>
                                 <td className="px-3 py-3 text-sm text-slate-700">{formatDateDMY(row.application_date)}</td>
                                 <td className="px-3 py-3 text-sm text-slate-700">{row.staff_name || 'N/A'}</td>
+                                {showDepartmentColumn && <td className="px-3 py-3 text-sm text-slate-700">{getDepartmentName(row)}</td>}
                                 <td className="px-3 py-3 text-sm text-slate-700">{formatDateDMY(row.start_date)}</td>
                                 <td className="px-3 py-3 text-sm text-slate-700">{formatDateDMY(row.end_date)}</td>
                                 <td className="px-3 py-3 text-sm text-slate-700">{Number(row.no_of_days || 0)}</td>
@@ -1122,6 +1139,7 @@ export default function LeaveApplicationPage() {
                                   <th className="px-3 py-2 text-left text-xs font-semibold text-white">S.NO</th>
                                   <th className="px-3 py-2 text-left text-xs font-semibold text-white">Application ID</th>
                                   <th className="px-3 py-2 text-left text-xs font-semibold text-white">Name</th>
+                                  {showDepartmentColumn && <th className="px-3 py-2 text-left text-xs font-semibold text-white">Department</th>}
                                   <th className="px-3 py-2 text-left text-xs font-semibold text-white">Leave</th>
                                   <th className="px-3 py-2 text-left text-xs font-semibold text-white">From</th>
                                   <th className="px-3 py-2 text-left text-xs font-semibold text-white">To</th>
@@ -1132,7 +1150,7 @@ export default function LeaveApplicationPage() {
                               <tbody>
                                 {modalVisibleRows.length === 0 ? (
                                   <tr>
-                                    <td colSpan={8} className="px-4 py-8 text-center text-sm text-slate-500">No leave applications on this date.</td>
+                                    <td colSpan={showDepartmentColumn ? 9 : 8} className="px-4 py-8 text-center text-sm text-slate-500">No leave applications on this date.</td>
                                   </tr>
                                 ) : (
                                   modalVisibleRows.map((row, index) => (
@@ -1140,6 +1158,7 @@ export default function LeaveApplicationPage() {
                                       <td className="px-3 py-2 text-sm text-slate-700">{index + 1}</td>
                                       <td className="px-3 py-2 text-sm text-slate-700">{row.id}</td>
                                       <td className="px-3 py-2 text-sm text-slate-700">{row.staff_name || 'N/A'}</td>
+                                      {showDepartmentColumn && <td className="px-3 py-2 text-sm text-slate-700">{getDepartmentName(row)}</td>}
                                       <td className="px-3 py-2 text-sm text-slate-700">{row.leave_shortname || row.title || 'N/A'}</td>
                                       <td className="px-3 py-2 text-sm text-slate-700">{formatDateDMY(row.start_date)}</td>
                                       <td className="px-3 py-2 text-sm text-slate-700">{formatDateDMY(row.end_date)}</td>

@@ -64,6 +64,19 @@ function getAlternateName(row) {
   return row.alternate_staff || row.alternate_staff_name || row.alternateName || row.alternate || row.additional_alternate_staff || row.additional_alternate || '-';
 }
 
+function getDepartmentName(row) {
+  if (!row) return 'N/A';
+  if (typeof row.department === 'object' && row.department) {
+    return row.department.dept_shortname || row.department.shortname || row.department.dept_name || row.department.name || 'N/A';
+  }
+  if (Array.isArray(row.departments) && row.departments.length) {
+    const active = row.departments.find((d) => String(d?.status || '').toLowerCase() === 'active');
+    const dep = active || row.departments[0];
+    if (dep) return dep.dept_shortname || dep.shortname || dep.dept_name || dep.name || 'N/A';
+  }
+  return row.shortname || row.dept_shortname || row.dept_name || row.department_name || row.department || 'N/A';
+}
+
 function isFirstOrThirdSaturday(date) {
   if (date.getDay() !== 6) return false;
   const day = date.getDate();
@@ -517,15 +530,26 @@ export default function EstablishmentLeaveCalendarPage() {
         });
         const detailed = await Promise.all(promises);
         // enrich with staff/alternate names from staffList
-        const enriched = detailed.map((d) => {
+        const enriched = detailed.map((d, idx) => {
+          const base = appsForDate[idx] || {};
           const staffId = d.staff_id || d.staffId || d.staffId;
           const alternateId = d.alternate || d.alternate_staff || d.additional_alternate;
           const staff = staffList.find((s) => Number(s.id) === Number(staffId));
           const alt = staffList.find((s) => Number(s.id) === Number(alternateId));
+          const activeDepartment = Array.isArray(staff?.departments)
+            ? (staff.departments.find((dep) => String(dep?.status || '').toLowerCase() === 'active') || staff.departments[0])
+            : null;
+          const staffDeptShort = activeDepartment?.dept_shortname || activeDepartment?.shortname || staff?.dept_shortname || staff?.shortname || '';
+          const staffDeptName = activeDepartment?.dept_name || activeDepartment?.name || staff?.dept_name || staff?.department_name || '';
           return {
+            ...base,
             ...d,
             staff_name: d.staff_name || (staff ? [staff.fname, staff.mname, staff.lname].filter(Boolean).join(' ') : d.staff_name),
             alternate_staff: d.alternate_staff || (alt ? [alt.fname, alt.mname, alt.lname].filter(Boolean).join(' ') : d.alternate_staff),
+            shortname: d.shortname || base.shortname || staffDeptShort || '',
+            dept_name: d.dept_name || base.dept_name || staffDeptName || '',
+            department_name: d.department_name || base.department_name || staffDeptName || '',
+            department: d.department || base.department || staffDeptName || '',
           };
         });
         setViewApps(enriched);
@@ -765,6 +789,7 @@ export default function EstablishmentLeaveCalendarPage() {
                                 <th className="px-3 py-3 text-left text-xs font-semibold text-white">Application ID</th>
                                 <th className="px-3 py-3 text-left text-xs font-semibold text-white">Application Date</th>
                                 <th className="px-3 py-3 text-left text-xs font-semibold text-white">Name</th>
+                                <th className="px-3 py-3 text-left text-xs font-semibold text-white">Department</th>
                                 <th className="px-3 py-3 text-left text-xs font-semibold text-white">Leave From</th>
                                 <th className="px-3 py-3 text-left text-xs font-semibold text-white">Leave To</th>
                                 <th className="px-3 py-3 text-left text-xs font-semibold text-white">No Of Days</th>
@@ -780,6 +805,7 @@ export default function EstablishmentLeaveCalendarPage() {
                                   <td className="px-3 py-3 text-sm text-slate-700">{r.id}</td>
                                   <td className="px-3 py-3 text-sm text-slate-700">{formatDate(getApplicationDate(r))}</td>
                                   <td className="px-3 py-3 text-sm text-slate-700">{getStaffName(r)}</td>
+                                  <td className="px-3 py-3 text-sm text-slate-700">{getDepartmentName(r)}</td>
                                   <td className="px-3 py-3 text-sm text-slate-700">{formatDate(r.start_date || r.start)}</td>
                                   <td className="px-3 py-3 text-sm text-slate-700">{formatDate(r.end_date || r.end)}</td>
                                   <td className="px-3 py-3 text-sm text-slate-700">{r.no_of_days ?? r.days ?? '-'}</td>
