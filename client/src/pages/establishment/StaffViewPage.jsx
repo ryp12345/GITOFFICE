@@ -60,7 +60,11 @@ const TABS = [
   ) },
 ];
 
-export default function StaffViewPage() {
+export default function StaffViewPage({
+  readOnly = false,
+  SidebarComponent = Sidebar,
+  listPath = '/staff',
+}) {
   const [notification, setNotification] = useState({ show: false, message: '', type: 'success' });
   const navigate = useNavigate();
   const { id } = useParams();
@@ -116,12 +120,12 @@ export default function StaffViewPage() {
         onClose={() => setNotification({ show: false, message: '', type: 'success' })}
       />
       <div className="flex flex-1 min-h-0">
-        <Sidebar />
+        <SidebarComponent />
         <main className="flex-1 overflow-auto p-0 px-2">
           <div className="w-full h-full flex flex-col">
             {/* Back Button */}
             <button
-              onClick={() => navigate(-1)}
+              onClick={() => navigate(listPath)}
               className="self-start mt-2 ml-1 px-3 py-1 bg-blue-100 hover:bg-blue-200 text-blue-800 rounded-md font-medium flex items-center gap-2 shadow-sm border border-blue-200 text-sm"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
@@ -162,7 +166,7 @@ export default function StaffViewPage() {
                 </div>
               </div>
               {/* Right: Tab Content */}
-              <div className="flex-1 px-4 py-4 flex flex-col items-start overflow-y-auto">
+              <div className={`flex-1 px-4 py-4 flex flex-col items-start overflow-y-auto ${readOnly ? '[&_input]:pointer-events-none [&_select]:pointer-events-none [&_textarea]:pointer-events-none [&_button]:pointer-events-none [&_button]:opacity-60 [&_button]:cursor-not-allowed' : ''}`}>
                 {staff ? (
                   <>
                     {activeTab === 'summary' && (

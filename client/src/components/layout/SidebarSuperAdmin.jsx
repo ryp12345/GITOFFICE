@@ -11,6 +11,7 @@ export default function SidebarSuperAdmin() {
 
   const links = [
     { name: 'Dashboard', path: '/super-admin', icon: '📊' },
+    { name: 'Staff', path: '/super-admin/staff', icon: '👥' },
     { name: 'Tickets', path: '/super-admin/tickets', icon: '🎫' },
     // { name: 'Events', path: '/super-admin/events', icon: '📅' },
     // { name: 'Notice', path: '/super-admin/notice', icon: '📢' },

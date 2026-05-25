@@ -2,10 +2,27 @@ import { useEffect, useState, useMemo } from 'react';
 import Header from '../../components/layout/Header';
 import Sidebar from '../../components/layout/Sidebar';
 import api from '../../api/axios';
+import { getDepartments } from '../../api/departmentApi';
+import { getDesignations } from '../../api/designationApi';
+import { getInstitutions } from '../../api/institutionApi';
+import { getAssociations } from '../../api/associationApi';
+import { getQualifications } from '../../api/qualificationApi';
 
 export default function SuperAdminDashboard() {
   const [attendance, setAttendance] = useState([]);
   const [attendanceLoading, setAttendanceLoading] = useState(true);
+  const [stats, setStats] = useState({
+    staff: null,
+    departments: null,
+    designations: null,
+    institutions: null,
+    teaching: null,
+    nonTeaching: null,
+    associations: null,
+    qualifications: null,
+  });
+  const [staffList, setStaffList] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [selectedPunches, setSelectedPunches] = useState(null);
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
@@ -13,6 +30,83 @@ export default function SuperAdminDashboard() {
 
   useEffect(() => {
     let mounted = true;
+
+    async function fetchStats() {
+      try {
+        // Staff
+        const staffRes = await api.get('/staff');
+        const staffArr = Array.isArray(staffRes?.data?.data) ? staffRes.data.data : [];
+        if (mounted) setStaffList(staffArr);
+        const staffCount = staffArr.length;
+        const normalizeType = (val) => {
+          if (!val) return '';
+          return String(val).toLowerCase().replace(/\s|_/g, '');
+        };
+        const teachingCount = staffArr.filter((s) => {
+          const type = normalizeType(s.employee_type || s.emp_type || s.emp_type_name);
+          return (
+            type === 'teaching' ||
+            type === 'teachingstaff' ||
+            type === 'teacher'
+          );
+        }).length;
+        const nonTeachingCount = staffArr.filter((s) => {
+          const type = normalizeType(s.employee_type || s.emp_type || s.emp_type_name);
+          return (
+            type === 'nonteaching' ||
+            type === 'nonteachingstaff' ||
+            type === 'non-teaching' ||
+            type === 'non-teachingstaff'
+          );
+        }).length;
+
+        // Departments
+        const deptRes = await getDepartments();
+        const deptCount = Array.isArray(deptRes?.data?.data) ? deptRes.data.data.length : 0;
+
+        // Designations
+        const desigRes = await getDesignations();
+        const desigCount = Array.isArray(desigRes?.data?.data) ? desigRes.data.data.length : 0;
+
+        // Institutions
+        const instRes = await getInstitutions();
+        const instCount = Array.isArray(instRes?.data?.data) ? instRes.data.data.length : 0;
+
+        // Associations
+        let associationCount = 0;
+        try {
+          const assocRes = await getAssociations();
+          associationCount = Array.isArray(assocRes?.data?.data) ? assocRes.data.data.length : 0;
+        } catch (e) {
+          associationCount = 0;
+        }
+
+        // Qualifications
+        let qualificationCount = 0;
+        try {
+          const qualRes = await getQualifications();
+          qualificationCount = Array.isArray(qualRes?.data?.data) ? qualRes.data.data.length : 0;
+        } catch (e) {
+          qualificationCount = 0;
+        }
+
+        if (mounted) setStats({
+          staff: staffCount,
+          departments: deptCount,
+          designations: desigCount,
+          institutions: instCount,
+          teaching: teachingCount,
+          nonTeaching: nonTeachingCount,
+          associations: associationCount,
+          qualifications: qualificationCount,
+        });
+      } catch (err) {
+        if (mounted) setStats({ staff: 0, departments: 0, designations: 0, institutions: 0, teaching: 0, nonTeaching: 0, associations: 0, qualifications: 0 });
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    }
+
     async function fetchAttendance() {
       try {
         setAttendanceLoading(true);
@@ -33,6 +127,22 @@ export default function SuperAdminDashboard() {
               punchCounts: entryExit.punchCounts && code ? (entryExit.punchCounts[code] ?? (d.punchCounts || d.punchCount || null)) : (d.punchCounts || d.punchCount || null),
               durations: entryExit.durations && code ? (entryExit.durations[code] ?? d.durations ?? d.duration ?? null) : (d.durations || d.duration || null),
             };
+
+            // Enrich with staff data (department, id) when available
+            if (Array.isArray(staffList) && staffList.length > 0) {
+              const matched = staffList.find(s => String(s.EmployeeCode || s.employeecode || s.employeecode) === String(code) || String(s.employeecode || s.EmployeeCode || s.employeecode) === String(code));
+              if (matched) {
+                if (!base.DepartmentName && Array.isArray(matched.departments) && matched.departments.length > 0) {
+                  const dept = matched.departments[0];
+                  base.DepartmentName = dept.dept_shortname || dept.dept_name || base.DepartmentName;
+                } else {
+                  base.DepartmentName = base.DepartmentName || matched.department_name || matched.dept_shortname || matched.department || base.DepartmentName;
+                }
+                base.id = base.id || matched.id || null;
+                base.EmployeeName = base.EmployeeName || `${matched.fname || ''} ${matched.mname || ''} ${matched.lname || ''}`.trim() || matched.full_name || matched.name || base.EmployeeName;
+              }
+            }
+
             return base;
           });
           if (mounted) setAttendance(rows);
@@ -46,7 +156,12 @@ export default function SuperAdminDashboard() {
         if (mounted) setAttendanceLoading(false);
       }
     }
-    fetchAttendance();
+
+    (async () => {
+      await fetchStats();
+      await fetchAttendance();
+    })();
+
     return () => { mounted = false; };
   }, []);
 
@@ -85,6 +200,46 @@ export default function SuperAdminDashboard() {
           <div className="min-h-full rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
             <h2 className="text-2xl font-semibold text-slate-900">Super Admin Dashboard</h2>
             <p className="mt-2 text-slate-600">Welcome to the Super Admin panel.</p>
+
+            {/* Statistics Cards */}
+            <div className="mt-6 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-4">
+              <div className="rounded-lg bg-blue-50 p-4 shadow flex flex-col items-center border border-blue-200">
+                <span className="text-3xl font-bold text-blue-700">{loading || stats.staff === null ? '...' : stats.staff}</span>
+                <span className="mt-2 text-blue-900">Total Staff</span>
+              </div>
+              <div className="rounded-lg bg-green-50 p-4 shadow flex flex-col items-center border border-green-200">
+                <span className="text-3xl font-bold text-green-700">{loading || stats.departments === null ? '...' : stats.departments}</span>
+                <span className="mt-2 text-green-900">Departments</span>
+              </div>
+              <div className="rounded-lg bg-yellow-50 p-4 shadow flex flex-col items-center border border-yellow-200">
+                <span className="text-3xl font-bold text-yellow-700">{loading || stats.designations === null ? '...' : stats.designations}</span>
+                <span className="mt-2 text-yellow-900">Designations</span>
+              </div>
+              <div className="rounded-lg bg-purple-50 p-4 shadow flex flex-col items-center border border-purple-200">
+                <span className="text-3xl font-bold text-purple-700">{loading || stats.institutions === null ? '...' : stats.institutions}</span>
+                <span className="mt-2 text-purple-900">Institutions</span>
+              </div>
+            </div>
+
+            {/* Additional Statistics Cards */}
+            <div className="mt-6 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-4">
+              <div className="rounded-lg bg-blue-50 p-4 shadow flex flex-col items-center border border-blue-200">
+                <span className="text-3xl font-bold text-blue-700">{loading || stats.teaching === null ? '...' : stats.teaching}</span>
+                <span className="mt-2 text-blue-900">Teaching Staff</span>
+              </div>
+              <div className="rounded-lg bg-green-50 p-4 shadow flex flex-col items-center border border-green-200">
+                <span className="text-3xl font-bold text-green-700">{loading || stats.nonTeaching === null ? '...' : stats.nonTeaching}</span>
+                <span className="mt-2 text-green-900">Non-Teaching Staff</span>
+              </div>
+              <div className="rounded-lg bg-yellow-50 p-4 shadow flex flex-col items-center border border-yellow-200 min-h-[92px]">
+                <span className="text-3xl font-bold text-yellow-700">{loading || stats.associations === null ? '...' : stats.associations}</span>
+                <span className="mt-2 text-yellow-900">Associations</span>
+              </div>
+              <div className="rounded-lg bg-purple-50 p-4 shadow flex flex-col items-center border border-purple-200 min-h-[92px]">
+                <span className="text-3xl font-bold text-purple-700">{loading || stats.qualifications === null ? '...' : stats.qualifications}</span>
+                <span className="mt-2 text-purple-900">Qualifications</span>
+              </div>
+            </div>
 
             {/* Daily Employee Attendance */}
             <div className="mt-8">

@@ -16,6 +16,8 @@ import HODLeaveEntitlementPage from '../pages/hod/LeaveEntitlement';
 import LeaveApplicationPage from '../pages/leave_management/LeaveApplication';
 import LeaveListPage from '../pages/leave_management/LeaveList';
 import SidebarHOD from '../components/layout/SidebarHOD';
+import SidebarSuperAdmin from '../components/layout/SidebarSuperAdmin';
+import PrincipalDeansidebar from '../components/layout/PrincipalDeansidebar';
 import StaffDashboard from '../pages/staff/StaffDashboard';
 import AssociationsPage from '../pages/establishment/Associations';
 import DepartmentPage from '../pages/establishment/Departments';
@@ -92,6 +94,8 @@ export default function AppRoutes() {
             <Route path="/super-admin/leave-management/entitlement" element={<SuperAdminLeaveEntitlementPage />} />
             <Route path="/super-admin/leave-management/holiday-rh" element={<SuperAdminHolidayRHListPage />} />
             <Route path="/super-admin/leave-management/it-cell-leave-applications" element={<LeaveApplicationPage />} />
+            <Route path="/super-admin/staff" element={<StaffPage readOnly SidebarComponent={SidebarSuperAdmin} viewBasePath="/super-admin/staff" />} />
+            <Route path="/super-admin/staff/:id" element={<StaffViewPage readOnly SidebarComponent={SidebarSuperAdmin} listPath="/super-admin/staff" />} />
 
             <Route path="/super-admin/biometric/daily" element={<DailyDataPage />} />
             <Route path="/super-admin/biometric/monthly" element={<MonthlyDataPage />} />
@@ -151,6 +155,8 @@ export default function AppRoutes() {
           <Route path="/principal/leave-application" element={<LeaveApplicationPage />} />
           <Route path="/principal/leave-list" element={<LeaveListPage />} />
           <Route path="/principal/leave-management/holiday-rh" element={<HolidayRHListPage />} />
+          <Route path="/principal/staff" element={<StaffPage readOnly SidebarComponent={PrincipalDeansidebar} viewBasePath="/principal/staff" />} />
+          <Route path="/principal/staff/:id" element={<StaffViewPage readOnly SidebarComponent={PrincipalDeansidebar} listPath="/principal/staff" />} />
         </Route>
         <Route element={<RoleRoute role="Dean_admin" />}>
           <Route path="/dean_admin" element={<PrincipalDeanDashboard />} />
@@ -162,6 +168,8 @@ export default function AppRoutes() {
           <Route path="/dean_admin/leave-list" element={<LeaveListPage />} />
           <Route path="/dean_admin/holidays" element={<HolidayRHListPage />} />
           <Route path="/dean_admin/leave-management/holiday-rh" element={<HolidayRHListPage />} />
+          <Route path="/dean_admin/staff" element={<StaffPage readOnly SidebarComponent={PrincipalDeansidebar} viewBasePath="/dean_admin/staff" />} />
+          <Route path="/dean_admin/staff/:id" element={<StaffViewPage readOnly SidebarComponent={PrincipalDeansidebar} listPath="/dean_admin/staff" />} />
         </Route>
         <Route element={<RoleRoute role="Teaching" />}>
           <Route path="/teaching" element={<StaffDashboard />} />

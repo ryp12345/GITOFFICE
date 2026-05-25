@@ -46,7 +46,11 @@ const initialForm = {
 
 const LOCAL_STAFF_KEY = 'gitoffice_staff_rows';
 
-export default function StaffPage() {
+export default function StaffPage({
+  readOnly = false,
+  SidebarComponent = Sidebar,
+  viewBasePath = '/establishment/staff',
+}) {
   const { token } = useAuth?.() || {};
   const navigate = useNavigate();
   const [rows, setRows] = useState([]);
@@ -617,7 +621,7 @@ export default function StaffPage() {
     <div className="min-h-screen bg-slate-100 flex flex-col">
       <Header />
       <div className="flex flex-1 min-h-0">
-        <Sidebar />
+        <SidebarComponent />
         <main className="flex-1 overflow-auto p-6">
           <div className="max-w-7xl mx-auto">
             <Notification
@@ -629,7 +633,7 @@ export default function StaffPage() {
 
             <div className="mb-12 text-center">
               <h1 className="mb-2 text-4xl font-extrabold text-gray-900">Staff</h1>
-              <p className="text-lg text-gray-600">Create, update and manage staff</p>
+              <p className="text-lg text-gray-600">{readOnly ? 'View staff details' : 'Create, update and manage staff'}</p>
             </div>
 
             <div className="flex flex-col items-start justify-between gap-4 mb-6 sm:flex-row sm:items-center">
@@ -645,6 +649,7 @@ export default function StaffPage() {
                 </svg>
               </div>
 
+              {!readOnly && (
               <div className="flex w-full gap-2 sm:w-auto">
                 <button
                   type="button"
@@ -677,6 +682,7 @@ export default function StaffPage() {
                   Add Staff
                 </button>
               </div>
+              )}
             </div>
 
             <div className="overflow-hidden bg-white shadow-xl rounded-xl">
@@ -756,7 +762,7 @@ export default function StaffPage() {
                             <div className="flex items-center gap-2">
                               <button
                                 type="button"
-                                onClick={() => navigate(`/establishment/staff/${row.id}`)}
+                                onClick={() => navigate(`${viewBasePath}/${row.id}`)}
                                 className="p-2 text-blue-600 transition-colors duration-200 bg-white rounded-lg hover:bg-blue-100 border border-blue-300"
                               >
                                 <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -764,17 +770,19 @@ export default function StaffPage() {
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.477 0 8.268 2.943 9.542 7-1.274 4.057-5.065 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                                 </svg>
                               </button>
-                              <button
-                                type="button"
-                                onClick={() => onDelete(row.id, row.name)}
-                                className="inline-flex items-center justify-center w-8 h-8 text-white bg-red-600 rounded-md hover:bg-red-700"
-                                title="Delete"
-                                aria-label="Delete"
-                              >
-                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
-                                  <path d="M7 4V3C7 2.44772 7.44772 2 8 2H16C16.5523 2 17 2.44772 17 3V4H22V6H20V21C20 21.5523 19.5523 22 19 22H5C4.44772 22 4 21.5523 4 21V6H2V4H7ZM6 6V20H18V6H6ZM9 9H11V17H9V9ZM13 9H15V17H13V9ZM9 4H15V3H9V4Z" />
-                                </svg>
-                              </button>
+                              {!readOnly && (
+                                <button
+                                  type="button"
+                                  onClick={() => onDelete(row.id, row.name)}
+                                  className="inline-flex items-center justify-center w-8 h-8 text-white bg-red-600 rounded-md hover:bg-red-700"
+                                  title="Delete"
+                                  aria-label="Delete"
+                                >
+                                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                                    <path d="M7 4V3C7 2.44772 7.44772 2 8 2H16C16.5523 2 17 2.44772 17 3V4H22V6H20V21C20 21.5523 19.5523 22 19 22H5C4.44772 22 4 21.5523 4 21V6H2V4H7ZM6 6V20H18V6H6ZM9 9H11V17H9V9ZM13 9H15V17H13V9ZM9 4H15V3H9V4Z" />
+                                  </svg>
+                                </button>
+                              )}
                             </div>
                           </td>
                         </tr>
@@ -811,7 +819,7 @@ export default function StaffPage() {
         </main>
       </div>
 
-      {isModalOpen && (
+      {!readOnly && isModalOpen && (
         <div className="fixed inset-0 z-50 overflow-y-auto" role="dialog" aria-modal="true">
           <div className="flex items-end justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
             <div className="fixed inset-0 transition-opacity bg-gray-500 bg-opacity-75" onClick={closeModal} />
