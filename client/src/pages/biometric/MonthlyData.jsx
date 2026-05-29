@@ -14,6 +14,10 @@ export default function MonthlyDataPage() {
   const [month, setMonth] = useState(new Date().getMonth() + 1);
   const [year, setYear] = useState(new Date().getFullYear());
   const [loading, setLoading] = useState(false);
+  const [downloadingReport, setDownloadingReport] = useState(false);
+  const [summaryLoading, setSummaryLoading] = useState(false);
+  const [hodMonthlySummary, setHodMonthlySummary] = useState(null);
+  const [summaryError, setSummaryError] = useState('');
   const [monthlyData, setMonthlyData] = useState(null);
   const [missingDates, setMissingDates] = useState([]);
   const [leaveDates, setLeaveDates] = useState([]);
@@ -27,6 +31,7 @@ export default function MonthlyDataPage() {
 
   const { user } = useAuth();
   const endpointPrefix = '/biometric';
+  const isHodUser = isRoleMatch(user?.role, ROLE_HOD);
 
   useEffect(() => {
     async function fetchEmployees() {
@@ -122,13 +127,34 @@ export default function MonthlyDataPage() {
 
   const submit = async (e) => {
     if (e && e.preventDefault) e.preventDefault();
-    if (!selectedEmployee) return alert('Select employee');
+    const shouldLoadEmployeeView = Boolean(selectedEmployee);
+    if (!shouldLoadEmployeeView && !isHodUser) return alert('Select employee');
+
     setLoading(true);
+    if (isHodUser && !shouldLoadEmployeeView) {
+      setSummaryLoading(true);
+      setSummaryError('');
+    }
+
     try {
-      const res = await api.get(`${endpointPrefix}/monthly`, { params: { employee: selectedEmployee, month, year } });
+      const requests = [];
+      if (shouldLoadEmployeeView) {
+        requests.push(api.get(`${endpointPrefix}/monthly`, { params: { employee: selectedEmployee, month, year } }));
+      }
+      if (isHodUser && !shouldLoadEmployeeView) {
+        requests.push(api.get(`${endpointPrefix}/monthly/hod-summary`, { params: { month, year } }));
+      }
+
+      const responses = await Promise.all(requests);
+      const res = shouldLoadEmployeeView ? responses[0] : null;
+      const hodSummaryRes = shouldLoadEmployeeView ? null : responses[0];
       const data = res?.data || {};
       // Laravel returns: employeeLogs, averageDurations, logsByEmployee, missinglog_array, selectedEmployee
-      setMonthlyData(data);
+      if (shouldLoadEmployeeView) {
+        setMonthlyData(data);
+      } else {
+        setMonthlyData(null);
+      }
       // Recompute missing dates client-side to avoid incorrect server results:
       const serverMissing = Array.isArray(data.missinglog_array) ? data.missinglog_array : [];
       const empLogs = data.employeeLogs || {};
@@ -170,16 +196,61 @@ export default function MonthlyDataPage() {
         if (empLogKeys.has(formatted)) return false;
         return true;
       });
-      setMissingDates(filteredMissing);
-      setLeaveDates(Array.isArray(data.leave_dates) ? data.leave_dates : []);
-      setLogsByEmployee(data.logsByEmployee || {});
+      setMissingDates(shouldLoadEmployeeView ? filteredMissing : []);
+      setLeaveDates(shouldLoadEmployeeView ? (Array.isArray(data.leave_dates) ? data.leave_dates : []) : []);
+      setLogsByEmployee(shouldLoadEmployeeView ? (data.logsByEmployee || {}) : {});
+
+      if (isHodUser && !shouldLoadEmployeeView) {
+        setHodMonthlySummary(hodSummaryRes?.data || null);
+      } else {
+        setHodMonthlySummary(null);
+        setSummaryError('');
+      }
     } catch (err) {
       setMonthlyData(null);
       setMissingDates([]);
       setLeaveDates([]);
       setLogsByEmployee({});
+      if (isHodUser && !selectedEmployee) {
+        setHodMonthlySummary(null);
+        setSummaryError(err?.response?.data?.message || 'Failed to load department monthly summary');
+      } else {
+        setSummaryError('');
+      }
     } finally {
       setLoading(false);
+      if (isHodUser) setSummaryLoading(false);
+    }
+  };
+
+  const downloadHodMonthlyReport = async () => {
+    if (!isHodUser) return;
+    setDownloadingReport(true);
+    try {
+      const response = await api.get(`${endpointPrefix}/monthly/download-hod`, {
+        params: { month, year },
+        responseType: 'blob'
+      });
+
+      const contentDisposition = response?.headers?.['content-disposition'] || '';
+      const fileNameMatch = contentDisposition.match(/filename="?([^";]+)"?/i);
+      const fileName = fileNameMatch?.[1] || `Biometric_Report_${month}_${year}.xlsx`;
+
+      const blob = new Blob([response.data], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      alert(err?.response?.data?.message || 'Failed to download report');
+    } finally {
+      setDownloadingReport(false);
     }
   };
 
@@ -293,95 +364,160 @@ export default function MonthlyDataPage() {
       <div className="flex flex-1 min-h-0">
         <Sidebar />
         <main className="flex-1 overflow-auto p-6">
-          <div className="min-h-full rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-            <h2 className="text-2xl font-semibold text-slate-900">Monthwise Biometric Details</h2>
+          <div className="min-h-full overflow-hidden rounded-xl bg-white shadow-xl">
+            <div className="border-b border-slate-200 px-6 py-5">
+              <h2 className="text-2xl font-semibold text-slate-900">Monthwise Biometric Details</h2>
+              <p className="mt-1 text-sm text-slate-600">Search an employee and view the monthwise biometric log summary in a single boxed layout.</p>
+            </div>
 
-            <form onSubmit={submit} className="mt-4 flex flex-wrap gap-3 items-center">
-              <label className="font-bold">Select Employee:</label>
-              {staffFetchError && (
-                <div className="w-full text-sm text-red-600 mt-2">{staffFetchError}</div>
+            <div className="space-y-6 p-6">
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                <form onSubmit={submit} className="flex flex-wrap items-center gap-3">
+                  <label className="font-bold">Select Employee:</label>
+                  {staffFetchError && (
+                    <div className="w-full text-sm text-red-600 mt-1">{staffFetchError}</div>
+                  )}
+                  <select value={selectedEmployee} onChange={(e) => setSelectedEmployee(e.target.value)} className="border p-2 rounded bg-white">
+                    <option value="">Select Employee</option>
+                    {employees.slice().sort((a,b)=> (a.fname||'').localeCompare(b.fname||'')).map((emp, idx) => (
+                      <option key={emp.id ?? emp.EmployeeCode ?? emp.employeecode ?? idx} value={emp.EmployeeCode || emp.employeecode}>{emp.fname} {emp.mname||''} {emp.lname}</option>
+                    ))}
+                  </select>
+
+                  <label className="font-bold">Month:</label>
+                  <select value={month} onChange={(e) => setMonth(Number(e.target.value))} className="border p-2 rounded bg-white">
+                    {Array.from({length:12}, (_,i)=>i+1).map(m=> (
+                      <option key={m} value={m}>{new Date(0,m-1).toLocaleString('default',{month:'long'})}</option>
+                    ))}
+                  </select>
+
+                  <label className="font-bold">Year:</label>
+                  <select value={year} onChange={(e) => setYear(Number(e.target.value))} className="border p-2 rounded bg-white">
+                    {Array.from({length: (new Date().getFullYear()-2023)}, (_,i)=>2024+i).map(y=> (<option key={y} value={y}>{y}</option>))}
+                  </select>
+
+                  <button type="submit" className="rounded bg-blue-600 px-4 py-2 text-white transition-colors hover:bg-blue-700">Search</button>
+                  {isHodUser && (
+                    <button
+                      type="button"
+                      onClick={downloadHodMonthlyReport}
+                      disabled={downloadingReport}
+                      className="rounded bg-emerald-600 px-4 py-2 text-white transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {downloadingReport ? 'Downloading...' : 'Download Report'}
+                    </button>
+                  )}
+                </form>
+              </div>
+
+              {loading && <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">Loading...</div>}
+
+              {isHodUser && !selectedEmployee && summaryLoading && (
+                <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">Loading monthly department summary...</div>
               )}
-              <select value={selectedEmployee} onChange={(e) => setSelectedEmployee(e.target.value)} className="border p-2 rounded">
-                <option value="">Select Employee</option>
-                {employees.sort((a,b)=> (a.fname||'').localeCompare(b.fname||'')).map((emp, idx) => (
-                  <option key={emp.id ?? emp.EmployeeCode ?? emp.employeecode ?? idx} value={emp.EmployeeCode || emp.employeecode}>{emp.fname} {emp.mname||''} {emp.lname}</option>
-                ))}
-              </select>
 
-              <label className="font-bold">Month:</label>
-              <select value={month} onChange={(e) => setMonth(Number(e.target.value))} className="border p-2 rounded">
-                {Array.from({length:12}, (_,i)=>i+1).map(m=> (
-                  <option key={m} value={m}>{new Date(0,m-1).toLocaleString('default',{month:'long'})}</option>
-                ))}
-              </select>
+              {isHodUser && !selectedEmployee && summaryError && (
+                <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{summaryError}</div>
+              )}
 
-              <label className="font-bold">Year:</label>
-              <select value={year} onChange={(e) => setYear(Number(e.target.value))} className="border p-2 rounded">
-                {Array.from({length: (new Date().getFullYear()-2023)}, (_,i)=>2024+i).map(y=> (<option key={y} value={y}>{y}</option>))}
-              </select>
-
-              <button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded">Search</button>
-            </form>
-
-            <div className="mt-6">
-              {loading && <div className="p-4">Loading...</div>}
+              {isHodUser && !selectedEmployee && hodMonthlySummary && Array.isArray(hodMonthlySummary.rows) && hodMonthlySummary.rows.length > 0 && (
+                <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl">
+                  <div className="border-b border-slate-200 px-4 py-3">
+                    <h4 className="text-base font-bold text-slate-900">
+                      Department Monthly Report Preview ({new Date(year, month - 1).toLocaleString('default', { month: 'long' })} {year})
+                    </h4>
+                    {/* <p className="text-xs text-slate-600">This table mirrors the Download Report sheet for all staff.</p> */}
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full border-collapse text-xs">
+                      <thead>
+                        <tr className="bg-slate-100">
+                          <th rowSpan={2} className="sticky left-0 z-10 border border-slate-200 bg-slate-100 px-3 py-2 text-left font-semibold">Employee Name</th>
+                          {hodMonthlySummary.days.map((d) => (
+                            <th key={`d-${d.date}`} colSpan={2} className="border border-slate-200 px-2 py-2 text-center font-semibold">{d.label}</th>
+                          ))}
+                        </tr>
+                        <tr className="bg-slate-50">
+                          {hodMonthlySummary.days.flatMap((d) => ([
+                            <th key={`in-${d.date}`} className="border border-slate-200 px-2 py-1 text-center font-medium">In</th>,
+                            <th key={`out-${d.date}`} className="border border-slate-200 px-2 py-1 text-center font-medium">Out</th>
+                          ]))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {hodMonthlySummary.rows.map((row, rowIdx) => (
+                          <tr key={`${row.employeeCode}-${rowIdx}`} className={rowIdx % 2 === 0 ? 'bg-white' : 'bg-slate-50'}>
+                            <td className="sticky left-0 z-10 border border-slate-200 bg-inherit px-3 py-2 font-medium">{row.employeeName}</td>
+                            {hodMonthlySummary.days.flatMap((d) => ([
+                              <td key={`${row.employeeCode}-${d.date}-in`} className="border border-slate-200 px-2 py-1 text-center">{row.punches?.[d.date]?.in || ''}</td>,
+                              <td key={`${row.employeeCode}-${d.date}-out`} className="border border-slate-200 px-2 py-1 text-center">{row.punches?.[d.date]?.out || ''}</td>
+                            ]))}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
 
               {monthlyData && (
-                <div className="mt-4">
-                  <div className="flex justify-between items-center mb-4">
-                    <h4 className="text-lg font-bold">Employee Logs for {new Date(year, month-1).toLocaleString('default',{month:'long'})} {year}</h4>
-                    <h4 className="text-sm font-semibold">Employee Name: {selectedEmpObj ? `${selectedEmpObj.fname} ${selectedEmpObj.mname? selectedEmpObj.mname+' ':''}${selectedEmpObj.lname}` : ''}</h4>
-                  </div>
+                <div className="space-y-6">
+                  <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                    <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                      <h4 className="text-lg font-bold">Employee Logs for {new Date(year, month-1).toLocaleString('default',{month:'long'})} {year}</h4>
+                      <h4 className="text-sm font-semibold">Employee Name: {selectedEmpObj ? `${selectedEmpObj.fname} ${selectedEmpObj.mname? selectedEmpObj.mname+' ':''}${selectedEmpObj.lname}` : ''}</h4>
+                    </div>
 
-                  <div className="flex items-center justify-between mb-3">
-                    <h5 className="text-lg font-bold">Employee Code: {selectedEmployee}</h5>
-                    <h5 className="text-lg font-bold">Average work Duration : {monthlyData?.averageDurations?.[selectedEmployee] ?? ''}</h5>
+                    <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                      <h5 className="text-lg font-bold">Employee Code: {selectedEmployee}</h5>
+                      <h5 className="text-lg font-bold">Average work Duration : {monthlyData?.averageDurations?.[selectedEmployee] ?? ''}</h5>
+                    </div>
                   </div>
 
                   <div className="grid grid-cols-12 gap-4">
-                    <div className="col-span-8">
-                      <div className="box bg-white p-4 rounded shadow">
+                    <div className="col-span-12 lg:col-span-8">
+                      <div className="overflow-hidden rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
                         <canvas ref={canvasRef} style={{width:'100%',height:200}} />
                       </div>
                     </div>
-                    <div className="col-span-4">
-                      <div className="box bg-white p-4 rounded shadow">
+                    <div className="col-span-12 lg:col-span-4">
+                      <div className="overflow-hidden rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
                         <h5 className="font-bold">Punch Missing Dates</h5>
-                            <div className="mt-2 rounded-md border border-gray-200 overflow-hidden">
-                              <table className="w-full text-sm">
-                                <thead className="bg-gray-50">
-                                  <tr className="text-left text-sm font-semibold text-gray-700"><th className="px-3 py-2 border-b">Date</th></tr>
-                                </thead>
-                                <tbody>
-                                  {(missingDates || []).map((d,i)=> {
-                                    const highlightSaturday = isFirstOrThirdSaturday(d);
-                                    const highlightLeave = isOnLeaveDate(d);
-                                    const rowClass = highlightLeave
-                                      ? 'bg-emerald-100'
-                                      : (highlightSaturday
-                                        ? 'bg-amber-100'
-                                        : (i % 2 === 0 ? 'bg-white' : 'bg-slate-50'));
-                                    return (
-                                      <tr key={i} className={rowClass}>
-                                        <td className={`px-3 py-2 border-b ${highlightLeave ? 'font-semibold text-emerald-900' : (highlightSaturday ? 'font-semibold text-amber-900' : '')}`}>
-                                          {formatDate(d)}{highlightLeave ? ' (On Leave)' : (highlightSaturday ? ' (1st/3rd Sat)' : '')}
-                                        </td>
-                                      </tr>
-                                    );
-                                  })}
-                                </tbody>
-                              </table>
-                            </div>
+                        <div className="mt-3 rounded-md border border-gray-200 overflow-hidden">
+                          <table className="w-full text-sm">
+                            <thead className="bg-gray-50">
+                              <tr className="text-left text-sm font-semibold text-gray-700"><th className="px-3 py-2 border-b">Date</th></tr>
+                            </thead>
+                            <tbody>
+                              {(missingDates || []).map((d,i)=> {
+                                const highlightSaturday = isFirstOrThirdSaturday(d);
+                                const highlightLeave = isOnLeaveDate(d);
+                                const rowClass = highlightLeave
+                                  ? 'bg-emerald-100'
+                                  : (highlightSaturday
+                                    ? 'bg-amber-100'
+                                    : (i % 2 === 0 ? 'bg-white' : 'bg-slate-50'));
+                                return (
+                                  <tr key={i} className={rowClass}>
+                                    <td className={`px-3 py-2 border-b ${highlightLeave ? 'font-semibold text-emerald-900' : (highlightSaturday ? 'font-semibold text-amber-900' : '')}`}>
+                                      {formatDate(d)}{highlightLeave ? ' (On Leave)' : (highlightSaturday ? ' (1st/3rd Sat)' : '')}
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
                       </div>
                     </div>
                   </div>
 
                   {/* Daily table */}
-                  <div className="mt-4 mb-6 overflow-hidden bg-white shadow-xl rounded-xl">
-                    <div className="flex items-center justify-between p-4">
-                      <div className="relative w-64">
-                        <input value={tableSearch} onChange={(e)=>{ setTableSearch(e.target.value); setTablePage(1); }} placeholder="Search table..." className="w-full py-2 pl-10 pr-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500" />
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-400 absolute left-3 top-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                  <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl">
+                    <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="relative w-full sm:w-64">
+                        <input value={tableSearch} onChange={(e)=>{ setTableSearch(e.target.value); setTablePage(1); }} placeholder="Search table..." className="w-full rounded-lg border border-gray-300 py-2 pl-10 pr-4 focus:border-blue-500 focus:ring-2 focus:ring-blue-500" />
+                        <svg xmlns="http://www.w3.org/2000/svg" className="absolute left-3 top-2.5 h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
                       </div>
                       <div className="text-sm text-gray-700">Showing {Math.min((tablePage-1)*TABLE_PAGE_SIZE+1,0)} - {Math.min(tablePage*TABLE_PAGE_SIZE, Object.keys(monthlyData.employeeLogs||{}).length)} of {Object.keys(monthlyData.employeeLogs||{}).length}</div>
                     </div>
@@ -403,7 +539,7 @@ export default function MonthlyDataPage() {
                           {(() => {
                             const rowsArr = monthlyData.employeeLogs ? Object.entries(monthlyData.employeeLogs).map(([dateKey, log]) => ({ dateKey, ...log })) : [];
                             const q = tableSearch.trim().toLowerCase();
-                              const filteredRows = rowsArr.filter((r) => (
+                            const filteredRows = rowsArr.filter((r) => (
                               formatDate(r.dateKey).toLowerCase().includes(q) ||
                               (r.entryDevice||'').toLowerCase().includes(q) ||
                               (r.exitDevice||'').toLowerCase().includes(q)
@@ -422,8 +558,8 @@ export default function MonthlyDataPage() {
                                 <td className="px-3 py-2 align-middle">{r.duration || ''}</td>
                                 <td className="px-3 py-2 align-middle">
                                   <div className="flex items-center justify-center space-x-2">
-                                    <button onClick={() => handleOpenModal(r.dateKey)} className="p-2 text-blue-600 transition-colors duration-200 bg-white rounded-lg hover:bg-blue-100 border border-blue-300">
-                                      <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d="M12.0003 3C17.3924 3 21.8784 6.87976 22.8189 12C21.8784 17.1202 17.3924 21 12.0003 21C6.60812 21 2.12215 17.1202 1.18164 12C2.12215 6.87976 6.60812 3 12.0003 3ZM12.0003 19C16.2359 19 19.8603 16.052 20.7777 12C19.8603 7.94803 16.2359 5 12.0003 5C7.7646 5 4.14022 7.94803 3.22278 12C4.14022 16.052 7.7646 19 12.0003 19ZM12.0003 16.5C9.51498 16.5 7.50026 14.4853 7.50026 12C7.50026 9.51472 9.51498 7.5 12.0003 7.5C14.4855 7.5 16.5003 9.51472 16.5003 12C16.5003 14.4853 14.4855 16.5 12.0003 16.5ZM12.0003 14.5C13.381 14.5 14.5003 13.3807 14.5003 12C14.5003 10.6193 13.381 9.5 12.0003 9.5C10.6196 9.5 9.50026 10.6193 9.50026 12C9.50026 13.3807 10.6196 14.5 12.0003 14.5Z" /></svg>
+                                    <button onClick={() => handleOpenModal(r.dateKey)} className="rounded-lg border border-blue-300 bg-white p-2 text-blue-600 transition-colors duration-200 hover:bg-blue-100">
+                                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor"><path d="M12.0003 3C17.3924 3 21.8784 6.87976 22.8189 12C21.8784 17.1202 17.3924 21 12.0003 21C6.60812 21 2.12215 17.1202 1.18164 12C2.12215 6.87976 6.60812 3 12.0003 3ZM12.0003 19C16.2359 19 19.8603 16.052 20.7777 12C19.8603 7.94803 16.2359 5 12.0003 5C7.7646 5 4.14022 7.94803 3.22278 12C4.14022 16.052 7.7646 19 12.0003 19ZM12.0003 16.5C9.51498 16.5 7.50026 14.4853 7.50026 12C7.50026 9.51472 9.51498 7.5 12.0003 7.5C14.4855 7.5 16.5003 9.51472 16.5003 12C16.5003 14.4853 14.4855 16.5 12.0003 16.5ZM12.0003 14.5C13.381 14.5 14.5003 13.3807 14.5003 12C14.5003 10.6193 13.381 9.5 12.0003 9.5C10.6196 9.5 9.50026 10.6193 9.50026 12C9.50026 13.3807 10.6196 14.5 12.0003 14.5Z" /></svg>
                                     </button>
                                   </div>
                                 </td>
@@ -434,9 +570,9 @@ export default function MonthlyDataPage() {
                       </table>
                     </div>
                     {/* Pagination Controls */}
-                    <div className="flex justify-end items-center gap-2 px-6 py-4">
+                    <div className="flex items-center justify-end gap-2 px-6 py-4">
                       <button
-                        className="px-3 py-1 rounded border border-gray-300 bg-white text-gray-700 disabled:opacity-50"
+                        className="rounded border border-gray-300 bg-white px-3 py-1 text-gray-700 disabled:opacity-50"
                         onClick={() => setTablePage(p => Math.max(1, p - 1))}
                         disabled={tablePage === 1}
                       >
@@ -449,7 +585,7 @@ export default function MonthlyDataPage() {
                         }).length) / TABLE_PAGE_SIZE))}
                       </span>
                       <button
-                        className="px-3 py-1 rounded border border-gray-300 bg-white text-gray-700 disabled:opacity-50"
+                        className="rounded border border-gray-300 bg-white px-3 py-1 text-gray-700 disabled:opacity-50"
                         onClick={() => setTablePage(p => Math.min(Math.ceil(Object.entries(monthlyData.employeeLogs||{}).filter(([dateKey, log]) => {
                           const q = tableSearch.trim().toLowerCase();
                           return formatDate(dateKey).toLowerCase().includes(q) || (log.entryDevice||'').toLowerCase().includes(q) || (log.exitDevice||'').toLowerCase().includes(q);
@@ -469,8 +605,8 @@ export default function MonthlyDataPage() {
               {/* Modal for logs on date */}
               {showModalFor && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
-                  <div className="bg-white rounded-lg max-w-4xl w-full p-4">
-                      <div className="flex justify-between items-center mb-2">
+                  <div className="w-full max-w-4xl rounded-lg bg-white p-4">
+                    <div className="mb-2 flex items-center justify-between">
                       <h3 className="font-bold">Log Details - {formatDate(showModalFor)}</h3>
                       <button onClick={handleCloseModal} className="px-2 py-1">Close</button>
                     </div>

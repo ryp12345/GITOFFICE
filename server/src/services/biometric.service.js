@@ -1,6 +1,8 @@
 const mysql = require('mysql2/promise');
 require('dotenv').config();
 const { pool: pgPool } = require('../config/db');
+const ExcelJS = require('exceljs');
+const { findDepartmentByHodUserId } = require('../models/hodDepartmentOverview.model');
 
 const SECONDARY_DB = {
   host: process.env.DB_SECONDARY_HOST || process.env.DB_SECONDARY_HOST || '127.0.0.1',
@@ -544,3 +546,298 @@ async function getMonthlyForEmployee(empcode, monthParam, yearParam) {
 }
 
 module.exports.getMonthlyForEmployee = getMonthlyForEmployee;
+
+async function buildHodMonthlyDataset(userId, monthParam, yearParam) {
+  const month = Number(monthParam) || (new Date().getMonth() + 1);
+  const year = Number(yearParam) || new Date().getFullYear();
+  const department = await findDepartmentByHodUserId(userId);
+
+  if (!department) {
+    const err = new Error('No department mapping found for this HOD user');
+    err.statusCode = 404;
+    throw err;
+  }
+
+  const assocNames = [
+    'Confirmed',
+    'Probationary',
+    'Contractual',
+    'Promotional Probationary',
+    'Temporary (non teaching)'
+  ];
+
+  const employeesSql = `
+    SELECT s.id, s.employeecode::text AS employeecode, s.fname, s.mname, s.lname
+    FROM staff s
+    WHERE s.id IN (
+      SELECT ds.staff_id
+      FROM department_staff ds
+      WHERE ds.department_id = $1
+        AND LOWER(COALESCE(ds.status, 'active')) = 'active'
+    )
+    AND s.id IN (
+      SELECT ast.staff_id
+      FROM association_staff ast
+      WHERE LOWER(COALESCE(ast.status, 'active')) = 'active'
+        AND ast.association_id IN (
+          SELECT id FROM associations WHERE asso_name = ANY($2::text[])
+        )
+    )
+    ORDER BY s.fname ASC, s.mname ASC, s.lname ASC
+  `;
+
+  const employeesRes = await pgPool.query(employeesSql, [department.id, assocNames]);
+  const employees = (employeesRes.rows || []).map((r) => ({
+    code: String(r.employeecode || '').trim(),
+    name: [r.fname, r.mname, r.lname].filter(Boolean).join(' ').trim()
+  })).filter((r) => r.code);
+
+  const tableName = `DeviceLogs_${month}_${year}`;
+  const firstDay = `${year}-${String(month).padStart(2, '0')}-01`;
+  const lastDay = new Date(year, month, 0).toISOString().slice(0, 10);
+  const daysInMonth = new Date(year, month, 0).getDate();
+
+  function normalizeYmd(value) {
+    if (!value) return '';
+    if (value instanceof Date && !Number.isNaN(value.getTime())) {
+      const y = value.getFullYear();
+      const m = String(value.getMonth() + 1).padStart(2, '0');
+      const d = String(value.getDate()).padStart(2, '0');
+      return `${y}-${m}-${d}`;
+    }
+    const asString = String(value);
+    if (/^\d{4}-\d{2}-\d{2}/.test(asString)) return asString.slice(0, 10);
+    const parsed = new Date(asString);
+    if (!Number.isNaN(parsed.getTime())) {
+      const y = parsed.getFullYear();
+      const m = String(parsed.getMonth() + 1).padStart(2, '0');
+      const d = String(parsed.getDate()).padStart(2, '0');
+      return `${y}-${m}-${d}`;
+    }
+    return '';
+  }
+
+  let rawLogs = [];
+  if (employees.length > 0) {
+    const mysqlPool = mysql.createPool(SECONDARY_DB);
+    const conn = await mysqlPool.getConnection();
+    try {
+      const employeeCodes = employees.map((e) => String(e.code).trim()).filter(Boolean);
+      const [rows] = await conn.query(
+        `SELECT l.EmployeeCode, l.LogDate, l.LogDate_Date
+         FROM \`${tableName}\` l
+         WHERE l.LogDate_Date BETWEEN ? AND ?
+           AND l.EmployeeCode IN (?)
+         ORDER BY l.EmployeeCode ASC, l.LogDate ASC`,
+        [firstDay, lastDay, employeeCodes]
+      );
+      const codeSet = new Set(employeeCodes);
+      rawLogs = (rows || []).filter((r) => codeSet.has(String(r.EmployeeCode || '').trim()));
+    } catch (err) {
+      const exportErr = new Error(`Unable to fetch biometric logs for ${month}/${year}: ${err.message || 'query failed'}`);
+      exportErr.statusCode = 500;
+      throw exportErr;
+    } finally {
+      try { conn.release(); } catch (_e) {}
+      try { await mysqlPool.end(); } catch (_e) {}
+    }
+  }
+
+  const logsByEmployeeDate = new Map();
+  for (const log of rawLogs) {
+    const code = String(log.EmployeeCode || '').trim();
+    const dateKey = normalizeYmd(log.LogDate_Date);
+    if (!code || !dateKey) continue;
+    if (!logsByEmployeeDate.has(code)) logsByEmployeeDate.set(code, new Map());
+    const perDate = logsByEmployeeDate.get(code);
+    if (!perDate.has(dateKey)) perDate.set(dateKey, []);
+    perDate.get(dateKey).push(log);
+  }
+
+  return {
+    month,
+    year,
+    daysInMonth,
+    employees,
+    logsByEmployeeDate
+  };
+}
+
+async function getMonthlyReportWorkbookBufferForHod(userId, monthParam, yearParam) {
+  const { month, year, daysInMonth, employees, logsByEmployeeDate } = await buildHodMonthlyDataset(userId, monthParam, yearParam);
+
+  const workbook = new ExcelJS.Workbook();
+  const sheet = workbook.addWorksheet('Monthly Biometric');
+
+  const headerFill = {
+    type: 'pattern',
+    pattern: 'solid',
+    fgColor: { argb: 'FFB8CCE4' }
+  };
+  const subHeaderFill = {
+    type: 'pattern',
+    pattern: 'solid',
+    fgColor: { argb: 'FFD9E1F2' }
+  };
+  const thinBorder = {
+    top: { style: 'thin' },
+    left: { style: 'thin' },
+    bottom: { style: 'thin' },
+    right: { style: 'thin' }
+  };
+
+  sheet.mergeCells(1, 1, 2, 1);
+  const nameHeader = sheet.getCell(1, 1);
+  nameHeader.value = 'Employee Name';
+  nameHeader.font = { bold: true };
+  nameHeader.alignment = { horizontal: 'center', vertical: 'middle' };
+  nameHeader.fill = headerFill;
+  sheet.getCell(2, 1).fill = headerFill;
+  sheet.getCell(2, 1).border = thinBorder;
+  nameHeader.border = thinBorder;
+  sheet.getColumn(1).width = 30;
+
+  let col = 2;
+  for (let day = 1; day <= daysInMonth; day++) {
+    const dateObj = new Date(year, month - 1, day);
+    const dayLabel = dateObj.toLocaleDateString('en-GB', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric'
+    }).replace(/ /g, ' ');
+
+    sheet.mergeCells(1, col, 1, col + 1);
+    const dayCell = sheet.getCell(1, col);
+    dayCell.value = dayLabel;
+    dayCell.font = { bold: true };
+    dayCell.alignment = { horizontal: 'center', vertical: 'middle' };
+    dayCell.fill = headerFill;
+    dayCell.border = thinBorder;
+    sheet.getCell(1, col + 1).fill = headerFill;
+    sheet.getCell(1, col + 1).border = thinBorder;
+
+    const punchInCell = sheet.getCell(2, col);
+    punchInCell.value = 'Punch In';
+    punchInCell.font = { bold: true };
+    punchInCell.alignment = { horizontal: 'center', vertical: 'middle' };
+    punchInCell.fill = subHeaderFill;
+    punchInCell.border = thinBorder;
+
+    const punchOutCell = sheet.getCell(2, col + 1);
+    punchOutCell.value = 'Punch Out';
+    punchOutCell.font = { bold: true };
+    punchOutCell.alignment = { horizontal: 'center', vertical: 'middle' };
+    punchOutCell.fill = subHeaderFill;
+    punchOutCell.border = thinBorder;
+
+    sheet.getColumn(col).width = 12;
+    sheet.getColumn(col + 1).width = 12;
+    col += 2;
+  }
+
+  sheet.getRow(1).height = 20;
+  sheet.getRow(2).height = 18;
+
+  let rowIndex = 3;
+  for (const employee of employees) {
+    sheet.getCell(rowIndex, 1).value = employee.name;
+    sheet.getCell(rowIndex, 1).border = thinBorder;
+
+    const perDate = logsByEmployeeDate.get(employee.code) || new Map();
+    let rowCol = 2;
+
+    for (let day = 1; day <= daysInMonth; day++) {
+      const dateKey = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+      const logs = (perDate.get(dateKey) || []).slice().sort((a, b) => new Date(a.LogDate) - new Date(b.LogDate));
+
+      let entryTime = '';
+      let exitTime = '';
+      if (logs.length > 0) {
+        const first = new Date(logs[0].LogDate);
+        if (!Number.isNaN(first.getTime())) {
+          entryTime = first.toTimeString().slice(0, 8);
+        }
+      }
+      if (logs.length > 1) {
+        const last = new Date(logs[logs.length - 1].LogDate);
+        if (!Number.isNaN(last.getTime())) {
+          exitTime = last.toTimeString().slice(0, 8);
+        }
+      }
+
+      const entryCell = sheet.getCell(rowIndex, rowCol);
+      entryCell.value = entryTime;
+      entryCell.border = thinBorder;
+
+      const exitCell = sheet.getCell(rowIndex, rowCol + 1);
+      exitCell.value = exitTime;
+      exitCell.border = thinBorder;
+
+      rowCol += 2;
+    }
+
+    rowIndex += 1;
+  }
+
+  const monthName = new Date(year, month - 1, 1).toLocaleString('en-US', { month: 'long' });
+  const filename = `Biometric_Report_${monthName}_${year}.xlsx`;
+  const buffer = await workbook.xlsx.writeBuffer();
+
+  return { buffer, filename };
+}
+
+module.exports.getMonthlyReportWorkbookBufferForHod = getMonthlyReportWorkbookBufferForHod;
+
+async function getMonthlyMatrixForHod(userId, monthParam, yearParam) {
+  const { month, year, daysInMonth, employees, logsByEmployeeDate } = await buildHodMonthlyDataset(userId, monthParam, yearParam);
+
+  const days = [];
+  for (let day = 1; day <= daysInMonth; day++) {
+    const iso = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    days.push({
+      day,
+      date: iso,
+      label: new Date(year, month - 1, day).toLocaleDateString('en-GB', {
+        day: '2-digit',
+        month: 'short'
+      })
+    });
+  }
+
+  const rows = employees.map((employee) => {
+    const perDate = logsByEmployeeDate.get(employee.code) || new Map();
+    const punches = {};
+
+    for (const d of days) {
+      const logs = (perDate.get(d.date) || []).slice().sort((a, b) => new Date(a.LogDate) - new Date(b.LogDate));
+      let punchIn = '';
+      let punchOut = '';
+
+      if (logs.length > 0) {
+        const first = new Date(logs[0].LogDate);
+        if (!Number.isNaN(first.getTime())) punchIn = first.toTimeString().slice(0, 8);
+      }
+      if (logs.length > 1) {
+        const last = new Date(logs[logs.length - 1].LogDate);
+        if (!Number.isNaN(last.getTime())) punchOut = last.toTimeString().slice(0, 8);
+      }
+
+      punches[d.date] = { in: punchIn, out: punchOut };
+    }
+
+    return {
+      employeeCode: employee.code,
+      employeeName: employee.name,
+      punches
+    };
+  });
+
+  return {
+    month,
+    year,
+    days,
+    rows
+  };
+}
+
+module.exports.getMonthlyMatrixForHod = getMonthlyMatrixForHod;

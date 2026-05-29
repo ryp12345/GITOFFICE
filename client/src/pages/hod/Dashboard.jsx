@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Header from '../../components/layout/Header';
-import SidebarHOD from '../../components/layout/SidebarHOD';
+import Sidebar from '../../components/layout/Sidebar';
 import Notification from '../../components/common/Notification';
 import { useAuth } from '../../context/AuthContext';
 import { getMyStaff } from '../../api/hodApi';
@@ -118,7 +118,7 @@ export default function Dashboard() {
     <div className="min-h-screen bg-slate-100 flex flex-col">
       <Header />
       <div className="flex flex-1 min-h-0">
-        <SidebarHOD />
+        <Sidebar />
         <main className="flex-1 overflow-auto p-6">
           <div className="max-w-7xl mx-auto">
             <Notification show={notification.show} message={notification.message} type={notification.type} onClose={() => setNotification({ show: false, message: '', type: '' })} />

@@ -1,11 +1,11 @@
 import LeaveEntitlementBase from '../leave_management/LeaveEntitlementBase';
-import SidebarHOD from '../../components/layout/SidebarHOD';
+import Sidebar from '../../components/layout/Sidebar';
 import { getLeaveEntitlementMeta, getLeaveEntitlementsForHod } from '../../api/leaveEntitlementApi';
 
 export default function HODLeaveEntitlementPage() {
   return (
     <LeaveEntitlementBase
-      Sidebar={SidebarHOD}
+      Sidebar={Sidebar}
       headerTitle="HOD"
       fetchMeta={getLeaveEntitlementMeta}
       fetchRows={getLeaveEntitlementsForHod}

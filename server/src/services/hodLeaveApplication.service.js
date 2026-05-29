@@ -1,7 +1,25 @@
 const { findDepartmentByHodUserId } = require('../models/hodDepartmentOverview.model');
+const { findByName } = require('../models/department.model');
 const hodLeaveApplicationModel = require('../models/hodLeaveApplication.model');
 
-async function resolveDepartmentOrThrow(userId) {
+async function resolveDepartmentOrThrow(userOrId) {
+  const isObject = typeof userOrId === 'object' && userOrId !== null;
+  const userId = isObject ? Number(userOrId.id) : Number(userOrId);
+  const role = isObject && userOrId.role ? String(userOrId.role).trim().toLowerCase() : '';
+  const userDept = isObject && userOrId.department && userOrId.department.dept_name
+    ? String(userOrId.department.dept_name).trim().toLowerCase()
+    : '';
+
+  if (role === 'registrar' || userDept === 'office') {
+    const officeDepartment = await findByName('Office');
+    if (!officeDepartment) {
+      const err = new Error('Office department not found');
+      err.statusCode = 404;
+      throw err;
+    }
+    return officeDepartment;
+  }
+
   const department = await findDepartmentByHodUserId(userId);
   if (!department) {
     const err = new Error('No department mapping found for this HOD user');
@@ -36,11 +54,12 @@ async function listLeaveApplicationsForHod(userId, query = {}) {
 
 async function recommendLeaveForHod(userId, applicationId) {
   const department = await resolveDepartmentOrThrow(userId);
+  const actorUserId = typeof userId === 'object' && userId !== null ? Number(userId.id) : Number(userId);
   const updated = await hodLeaveApplicationModel.updateApplicationStatusForDepartment({
     applicationId,
     departmentId: department.id,
     status: 'recommended',
-    recommenderUserId: userId,
+    recommenderUserId: actorUserId,
   });
 
   return {
@@ -51,11 +70,12 @@ async function recommendLeaveForHod(userId, applicationId) {
 
 async function rejectLeaveForHod(userId, applicationId) {
   const department = await resolveDepartmentOrThrow(userId);
+  const actorUserId = typeof userId === 'object' && userId !== null ? Number(userId.id) : Number(userId);
   const updated = await hodLeaveApplicationModel.updateApplicationStatusForDepartment({
     applicationId,
     departmentId: department.id,
     status: 'rejected',
-    recommenderUserId: userId,
+    recommenderUserId: actorUserId,
   });
 
   return {
@@ -79,6 +99,7 @@ async function bulkUpdateLeaveStatusForHod(userId, { action, ids }) {
   }
 
   const department = await resolveDepartmentOrThrow(userId);
+  const actorUserId = typeof userId === 'object' && userId !== null ? Number(userId.id) : Number(userId);
   const uniqueIds = [...new Set(ids.map((value) => Number(value)).filter((value) => Number.isFinite(value) && value > 0))];
 
   const updated = [];
@@ -90,7 +111,7 @@ async function bulkUpdateLeaveStatusForHod(userId, { action, ids }) {
         applicationId,
         departmentId: department.id,
         status: normalizedAction,
-        recommenderUserId: userId,
+        recommenderUserId: actorUserId,
       });
       if (row) updated.push(row.id);
     } catch (error) {

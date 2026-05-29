@@ -26,28 +26,28 @@ router.get(
 router.get(
   '/leave-applications',
   authMiddleware,
-  roleMiddleware('Head of Department', 'hod'),
+  roleMiddleware('Head of Department', 'hod', 'Registrar', 'registrar'),
   hodLeaveApplicationController.listLeaveApplications
 );
 
 router.post(
   '/leave-applications/:id/recommend',
   authMiddleware,
-  roleMiddleware('Head of Department', 'hod'),
+  roleMiddleware('Head of Department', 'hod', 'Registrar', 'registrar'),
   hodLeaveApplicationController.recommendLeave
 );
 
 router.post(
   '/leave-applications/:id/reject',
   authMiddleware,
-  roleMiddleware('Head of Department', 'hod'),
+  roleMiddleware('Head of Department', 'hod', 'Registrar', 'registrar'),
   hodLeaveApplicationController.rejectLeave
 );
 
 router.post(
   '/leave-applications/bulk-action',
   authMiddleware,
-  roleMiddleware('Head of Department', 'hod'),
+  roleMiddleware('Head of Department', 'hod', 'Registrar', 'registrar'),
   hodLeaveApplicationController.bulkUpdate
 );
 

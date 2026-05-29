@@ -1,4 +1,9 @@
-const { getDailyBiometric, getMonthlyForEmployee } = require('../services/biometric.service');
+const {
+  getDailyBiometric,
+  getMonthlyForEmployee,
+  getMonthlyReportWorkbookBufferForHod,
+  getMonthlyMatrixForHod
+} = require('../services/biometric.service');
 const { getMuster } = require('../services/biometric.service');
 
 async function daily(req, res, next) {
@@ -41,3 +46,32 @@ async function monthly(req, res, next) {
 }
 
 module.exports.monthly = monthly;
+
+async function downloadMonthlyForHod(req, res, next) {
+  try {
+    const month = req.query.month || req.body.month;
+    const year = req.query.year || req.body.year;
+    const { buffer, filename } = await getMonthlyReportWorkbookBufferForHod(req.user.id, month, year);
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(buffer);
+  } catch (err) {
+    next(err);
+  }
+}
+
+module.exports.downloadMonthlyForHod = downloadMonthlyForHod;
+
+async function monthlySummaryForHod(req, res, next) {
+  try {
+    const month = req.query.month || req.body.month;
+    const year = req.query.year || req.body.year;
+    const data = await getMonthlyMatrixForHod(req.user.id, month, year);
+    res.json(data);
+  } catch (err) {
+    next(err);
+  }
+}
+
+module.exports.monthlySummaryForHod = monthlySummaryForHod;

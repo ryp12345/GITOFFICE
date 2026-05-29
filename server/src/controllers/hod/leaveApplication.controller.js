@@ -2,7 +2,7 @@ const hodLeaveApplicationService = require('../../services/hodLeaveApplication.s
 
 async function listLeaveApplications(req, res, next) {
   try {
-    const data = await hodLeaveApplicationService.listLeaveApplicationsForHod(req.user.id, req.query || {});
+    const data = await hodLeaveApplicationService.listLeaveApplicationsForHod(req.user, req.query || {});
     res.json({ success: true, data });
   } catch (error) {
     next(error);
@@ -11,7 +11,7 @@ async function listLeaveApplications(req, res, next) {
 
 async function recommendLeave(req, res, next) {
   try {
-    const data = await hodLeaveApplicationService.recommendLeaveForHod(req.user.id, req.params.id);
+    const data = await hodLeaveApplicationService.recommendLeaveForHod(req.user, req.params.id);
     res.json({ success: true, message: 'Leave recommended successfully', data });
   } catch (error) {
     next(error);
@@ -20,7 +20,7 @@ async function recommendLeave(req, res, next) {
 
 async function rejectLeave(req, res, next) {
   try {
-    const data = await hodLeaveApplicationService.rejectLeaveForHod(req.user.id, req.params.id);
+    const data = await hodLeaveApplicationService.rejectLeaveForHod(req.user, req.params.id);
     res.json({ success: true, message: 'Leave rejected successfully', data });
   } catch (error) {
     next(error);
@@ -29,7 +29,7 @@ async function rejectLeave(req, res, next) {
 
 async function bulkUpdate(req, res, next) {
   try {
-    const data = await hodLeaveApplicationService.bulkUpdateLeaveStatusForHod(req.user.id, req.body || {});
+    const data = await hodLeaveApplicationService.bulkUpdateLeaveStatusForHod(req.user, req.body || {});
     res.json({ success: true, message: 'Bulk leave action completed', data });
   } catch (error) {
     next(error);

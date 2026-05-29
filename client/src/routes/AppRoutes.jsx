@@ -56,6 +56,8 @@ import ForgotPassword from '../pages/auth/ForgotPassword';
 import ResetPassword from '../pages/auth/ResetPassword';
 import AssoProRecruitmentPage from '../pages/Faculty Recruitment/asso_pro_recruitment';
 import ProRecruitmentPage from '../pages/Faculty Recruitment/pro_recruitment';
+import RegistrarDashboard from '../pages/Registrar/Dashboard';
+import SidebarRegistrar from '../components/layout/SidebarRegistrar';
 
 // StaffViewPage now fetches its own data from API using id
 function StaffViewPageWrapper() {
@@ -145,6 +147,20 @@ export default function AppRoutes() {
           <Route path="/biometric/daily" element={<DailyDataPage />} />
           <Route path="/biometric/monthly" element={<MonthlyDataPage />} />
           <Route path="/biometric/muster" element={<MusterPage />} />
+        </Route>
+        <Route element={<RoleRoute role="Registrar" />}>
+          <Route path="/registrar" element={<RegistrarDashboard />} />
+          <Route path="/registrar/dashboard" element={<Navigate to="/registrar" replace />} />
+          <Route path="/registrar/department-overview" element={<Navigate to="/registrar" replace />} />
+          <Route path="/registrar/staff" element={<StaffPage readOnly SidebarComponent={SidebarRegistrar} viewBasePath="/registrar/staff" />} />
+          <Route path="/registrar/staff/:id" element={<StaffViewPage readOnly SidebarComponent={SidebarRegistrar} listPath="/registrar/staff" />} />
+          <Route path="/registrar/my-staff" element={<Navigate to="/registrar/staff" replace />} />
+          <Route path="/registrar/leave-entitlement" element={<HODLeaveEntitlementPage />} />
+          <Route path="/registrar/leave-application" element={<LeaveApplicationPage />} />
+          <Route path="/registrar/holidays" element={<HolidayRHListPage SidebarComponent={SidebarRegistrar} />} />
+          <Route path="/registrar/biometric/daily" element={<DailyDataPage />} />
+          <Route path="/registrar/biometric/monthly" element={<MonthlyDataPage />} />
+          <Route path="/registrar/biometric/muster" element={<MusterPage />} />
         </Route>
         <Route element={<RoleRoute role="Principal" />}>
           <Route path="/principal" element={<PrincipalDeanDashboard />} />

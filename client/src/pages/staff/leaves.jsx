@@ -1509,14 +1509,16 @@ export default function StaffLeavesPage() {
   };
 
   const statusBadge = (status) => {
+    const normalized = String(status || '').trim().toLowerCase();
     const map = {
-      Pending:  'bg-yellow-100 text-yellow-800',
-      Approved: 'bg-green-100 text-green-800',
-      Rejected: 'bg-red-100 text-red-800',
-      Cancelled:'bg-slate-100 text-slate-600',
+      pending: 'bg-yellow-100 text-yellow-800',
+      recommended: 'bg-yellow-100 text-yellow-800',
+      approved: 'bg-green-100 text-green-800',
+      rejected: 'bg-red-100 text-red-800',
+      cancelled: 'bg-slate-100 text-slate-600',
     };
     return (
-      <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${map[status] || 'bg-slate-100 text-slate-600'}`}>
+      <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${map[normalized] || 'bg-slate-100 text-slate-600'}`}>
         {status || 'Pending'}
       </span>
     );
@@ -1889,7 +1891,7 @@ export default function StaffLeavesPage() {
                       <div key={app.id} className="rounded-lg border border-slate-200 bg-white p-3">
                         <div className="flex items-center justify-between gap-2">
                           <p className="text-xs text-slate-400">#{(applicationsPage - 1) * MY_APPLICATIONS_PAGE_SIZE + idx + 1}</p>
-                          {statusBadge(app.status)}
+                          {statusBadge(app.appl_status || app.status)}
                         </div>
                         <p className="mt-2 text-sm font-semibold text-slate-800">{app.leave_longname || app.leave_shortname || '—'}</p>
                         <div className="mt-2 grid grid-cols-2 gap-2 text-xs text-slate-500">
@@ -1931,7 +1933,7 @@ export default function StaffLeavesPage() {
                           <td className="px-3 py-2 border-b text-sm whitespace-nowrap">{formatDate(app.end_date)}</td>
                           <td className="px-3 py-2 border-b text-sm">{app.no_of_days ?? '—'}</td>
                           <td className="px-3 py-2 border-b text-sm max-w-xs truncate text-slate-500">{app.reason || '—'}</td>
-                          <td className="px-3 py-2 border-b text-sm">{statusBadge(app.status)}</td>
+                          <td className="px-3 py-2 border-b text-sm">{statusBadge(app.appl_status || app.status)}</td>
                         </tr>
                       ))}
                     </tbody>

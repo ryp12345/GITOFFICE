@@ -6,6 +6,7 @@ export const ROLE_TEACHING = 'Teaching';
 export const ROLE_NON_TEACHING = 'Non-Teaching';
 export const ROLE_PRINCIPAL = 'Principal';
 export const ROLE_DEAN_ADMIN = 'Dean_admin';
+export const ROLE_REGISTRAR = 'Registrar';
 
 const ROLE_ALIAS_MAP = {
   'super admin': ROLE_SUPER_ADMIN,
@@ -23,6 +24,8 @@ const ROLE_ALIAS_MAP = {
   'dean_admin': ROLE_DEAN_ADMIN,
   'dean admin': ROLE_DEAN_ADMIN,
   dean_admin: ROLE_DEAN_ADMIN
+  ,registrar: ROLE_REGISTRAR,
+
 };
 
 export function normalizeRole(role) {
@@ -46,6 +49,7 @@ export function getDashboardPathByRole(role) {
   if (normalizedRole === ROLE_DEAN_ADMIN) return '/dean_admin';
   if (normalizedRole === ROLE_TEACHING) return '/teaching';
   if (normalizedRole === ROLE_NON_TEACHING) return '/nonteaching';
+  if (normalizedRole === ROLE_REGISTRAR) return '/registrar';
   return '/login';
 }
 
@@ -57,6 +61,7 @@ export function isAllowedRole(role) {
     ROLE_HOD,
     ROLE_PRINCIPAL,
     ROLE_DEAN_ADMIN,
+      ROLE_REGISTRAR,
     ROLE_TEACHING,
     ROLE_NON_TEACHING
   ].includes(normalizeRole(role));

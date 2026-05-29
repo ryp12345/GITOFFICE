@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, useRef } from 'react';
-import { isRoleMatch, ROLE_DEAN_ADMIN, ROLE_PRINCIPAL, ROLE_SUPER_ADMIN } from '../../utils/role';
+import { isRoleMatch, ROLE_DEAN_ADMIN, ROLE_PRINCIPAL, ROLE_SUPER_ADMIN, ROLE_REGISTRAR } from '../../utils/role';
 import Notification from '../../components/common/Notification';
 import Header from '../../components/layout/Header';
 import Sidebar from '../../components/layout/Sidebar';
@@ -322,7 +322,7 @@ export default function LeaveApplicationPage() {
         response = await getDeanLeaveApplications(token, params);
       } else if (isPrincipal) {
         response = await getPrincipalLeaveApplications(token, params);
-      } else if (isRoleMatch(user?.role, 'Head of Department')) {
+      } else if (isRoleMatch(user?.role, 'Head of Department') || isRoleMatch(user?.role, ROLE_REGISTRAR) || String(user?.department?.dept_name || '').toLowerCase() === 'office') {
         response = await getHodLeaveApplications(token, params);
       } else {
         // fallback or staff logic if needed

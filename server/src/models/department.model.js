@@ -10,6 +10,13 @@ async function findById(id) {
   return rows[0] || null;
 }
 
+async function findByName(name) {
+  if (!name) return null;
+  const key = String(name).trim().toLowerCase();
+  const { rows } = await pool.query('SELECT id, dept_name, dept_shortname, yoe, status, created_at, updated_at FROM departments WHERE LOWER(dept_name) = $1 LIMIT 1', [key]);
+  return rows[0] || null;
+}
+
 async function create({ dept_name, dept_shortname, yoe, status = 'active' }) {
   const { rows } = await pool.query(
     'INSERT INTO departments (dept_name, dept_shortname, yoe, status, created_at, updated_at) VALUES ($1, $2, $3, $4, NOW(), NOW()) RETURNING id, dept_name, dept_shortname, yoe, status, created_at, updated_at',
@@ -51,4 +58,4 @@ async function remove(id) {
   return true;
 }
 
-module.exports = { findAll, findById, create, update, remove };
+module.exports = { findAll, findById, findByName, create, update, remove };
