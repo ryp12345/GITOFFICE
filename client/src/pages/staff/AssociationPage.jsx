@@ -10,6 +10,44 @@ export default function AssociationPage() {
   const [associations, setAssociations] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  // Welcome and staff name logic (copied from StaffDashboard)
+  const fullNameParts = [user?.fname, user?.mname, user?.lname].filter(Boolean);
+  const fallbackName = user?.name || user?.full_name || (fullNameParts.length ? fullNameParts.join(' ') : '') || user?.username || user?.email || '';
+  const [resolvedName, setResolvedName] = useState(null);
+
+  useEffect(() => {
+    let mounted = true;
+    async function resolveName() {
+      try {
+        if (user?.staff_id) {
+          const res = await api.get(`/staff/${user.staff_id}`);
+          const s = res?.data?.data || res?.data || null;
+          if (!mounted) return;
+          if (s) {
+            const parts = [s.fname, s.mname, s.lname].filter(Boolean);
+            setResolvedName(s.name || (parts.length ? parts.join(' ') : null) || null);
+            return;
+          }
+        }
+        if (user?.id) {
+          const listRes = await api.get('/staff');
+          const rows = Array.isArray(listRes?.data?.data) ? listRes.data.data : [];
+          const row = rows.find((item) => Number(item?.user_id) === Number(user.id));
+          if (!mounted) return;
+          if (row) {
+            const parts = [row.fname, row.mname, row.lname].filter(Boolean);
+            setResolvedName(row.name || (parts.length ? parts.join(' ') : null) || null);
+            return;
+          }
+        }
+      } catch (e) {
+        // ignore
+      }
+    }
+    resolveName();
+    return () => { mounted = false; };
+  }, [user?.id, user?.staff_id]);
+
   const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
   const getDateParts = (value) => {
@@ -147,8 +185,11 @@ export default function AssociationPage() {
         <StaffSidebar />
         <main className="flex-1 overflow-auto p-6">
           <div className="max-w-7xl mx-auto">
-            <div className="mb-8 text-center">
+            <div className="mb-8 text-left">
               <h2 className="text-3xl font-extrabold text-slate-900">My Association</h2>
+              <p className="mt-1 text-lg font-medium text-blue-700">
+                Welcome{(resolvedName || fallbackName) ? `, ${resolvedName || fallbackName}` : ''}
+              </p>
             </div>
 
             <div className="overflow-hidden bg-white shadow-xl rounded-xl">

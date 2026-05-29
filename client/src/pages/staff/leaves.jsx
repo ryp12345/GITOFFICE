@@ -531,6 +531,7 @@ export default function StaffLeavesPage() {
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
   const [viewApplication, setViewApplication] = useState(null);
   const [editingApplicationId, setEditingApplicationId] = useState(null);
+  const [resolvedName, setResolvedName] = useState('');
 
   useEffect(() => {
     let isMounted = true;
@@ -686,6 +687,14 @@ export default function StaffLeavesPage() {
     })
       .then((response) => {
         const staff = response?.data?.data || null;
+        // resolve display name for header greeting
+        const fullName = [staff?.fname, staff?.mname, staff?.lname]
+          .filter(Boolean)
+          .join(' ')
+          .replace(/\s+/g, ' ')
+          .trim();
+        if (fullName) setResolvedName(fullName);
+
         const additionalDesignation = Array.isArray(staff?.latest_additional_designation)
           ? staff.latest_additional_designation[0]
           : staff?.latest_additional_designation || null;
@@ -1579,8 +1588,9 @@ export default function StaffLeavesPage() {
         <main className="flex-1 overflow-auto p-3 sm:p-4 lg:p-6">
           <div className="mx-auto w-full max-w-5xl space-y-6">
             {/* Page title */}
-            <div>
+            <div className="text-left">
               <h2 className="text-2xl font-semibold text-slate-900">Leave Application</h2>
+              <p className="mt-1 text-lg font-medium text-blue-700">Welcome{(resolvedName || (user && ([user?.fname, user?.mname, user?.lname].filter(Boolean).join(' ') || user?.staffname || user?.name || user?.full_name || user?.display_name || user?.email))) ? `, ${resolvedName || ([user?.fname, user?.mname, user?.lname].filter(Boolean).join(' ') || user?.staffname || user?.name || user?.full_name || user?.display_name || user?.email)}` : ''}</p>
 
             </div>
 

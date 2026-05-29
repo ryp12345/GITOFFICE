@@ -252,6 +252,43 @@ async function createLeaveApplication(payload) {
     );
 
     await syncConsumedEntitlement(client, staffId, payload.leaveId, year);
+    // Insert notifications for requester and alternates
+    try {
+      const staffRowRes = await client.query('SELECT user_id, fname, mname, lname FROM staff WHERE id = $1 LIMIT 1', [staffId]);
+      const staffRow = staffRowRes.rows[0] || null;
+      const requesterUserId = staffRow ? staffRow.user_id : null;
+      const fullName = staffRow ? [staffRow.fname, staffRow.mname, staffRow.lname].filter(Boolean).join(' ') : 'Staff';
+
+      if (requesterUserId) {
+        await insertNotificationWithClient(client, requesterUserId, 'Leave Application', 'Leave', 'A leave application has been submitted successfully.');
+      }
+
+      if (payload.alternate) {
+        const altRes = await client.query('SELECT user_id FROM staff WHERE id = $1 LIMIT 1', [payload.alternate]);
+        const altUserId = altRes.rows[0]?.user_id || null;
+        if (altUserId) {
+          const period = payload.startDate && payload.endDate ? `${payload.startDate} to ${payload.endDate}` : '';
+          const desc = period
+            ? `You have been assigned as an alternate for a leave application submitted by ${fullName} (${period}).`
+            : `You have been assigned as an alternate for a leave application submitted by ${fullName}.`;
+          await insertNotificationWithClient(client, altUserId, 'Leave Assignment', 'Leave', desc);
+        }
+      }
+
+      if (payload.additionalAlternate) {
+        const addRes = await client.query('SELECT user_id FROM staff WHERE id = $1 LIMIT 1', [payload.additionalAlternate]);
+        const addUserId = addRes.rows[0]?.user_id || null;
+        if (addUserId) {
+          const period = payload.startDate && payload.endDate ? `${payload.startDate} to ${payload.endDate}` : '';
+          const desc = period
+            ? `You have been assigned as an additional alternate for a leave application submitted by ${fullName} (${period}).`
+            : `You have been assigned as an additional alternate for a leave application submitted by ${fullName}.`;
+          await insertNotificationWithClient(client, addUserId, 'Leave Assignment', 'Leave', desc);
+        }
+      }
+    } catch (nfErr) {
+      // don't fail the whole transaction for notification errors
+    }
     await client.query('COMMIT');
 
     return rows[0] || null;
@@ -273,7 +310,7 @@ async function updateLeaveApplication(applicationId, payload) {
 
     const beforeResult = await client.query(
       `
-        SELECT staff_id, leave_id, EXTRACT(YEAR FROM start::date)::int AS year
+        SELECT staff_id, leave_id, EXTRACT(YEAR FROM start::date)::int AS year, alternate, additional_alternate
         FROM leave_staff_applications
         WHERE id = $1
         LIMIT 1
@@ -331,8 +368,45 @@ async function updateLeaveApplication(applicationId, payload) {
       await syncConsumedEntitlement(client, Number(updated.staff_id), Number(updated.leave_id), Number(updated.year));
     }
 
-    await client.query('COMMIT');
-    return { id: updated.id };
+      // Insert notifications about the update (requester + alternates)
+      try {
+        const appRes = await client.query(`SELECT s.user_id, s.fname, s.mname, s.lname, la.alternate, la.additional_alternate, TO_CHAR(la.start::date, 'YYYY-MM-DD') AS start_date, TO_CHAR(la.end::date, 'YYYY-MM-DD') AS end_date FROM leave_staff_applications la JOIN staff s ON s.id = la.staff_id WHERE la.id = $1 LIMIT 1`, [id]);
+        const appRow = appRes.rows[0] || null;
+        const requesterUserId = appRow ? appRow.user_id : null;
+        const fullName = appRow ? [appRow.fname, appRow.mname, appRow.lname].filter(Boolean).join(' ') : 'Staff';
+
+        if (requesterUserId) {
+          await insertNotificationWithClient(client, requesterUserId, 'Leave Application', 'Leave', 'Leave application updated successfully.');
+        }
+
+        const period = appRow && appRow.start_date && appRow.end_date ? `${appRow.start_date} to ${appRow.end_date}` : '';
+        if (appRow && appRow.alternate) {
+          const altRes = await client.query('SELECT user_id FROM staff WHERE id = $1 LIMIT 1', [appRow.alternate]);
+          const altUserId = altRes.rows[0]?.user_id || null;
+          if (altUserId) {
+            const desc = period
+              ? `Leave application for ${fullName} (${period}) has been updated.`
+              : `Leave application for ${fullName} has been updated.`;
+            await insertNotificationWithClient(client, altUserId, 'Leave Assignment', 'Leave', desc);
+          }
+        }
+
+        if (appRow && appRow.additional_alternate) {
+          const addRes = await client.query('SELECT user_id FROM staff WHERE id = $1 LIMIT 1', [appRow.additional_alternate]);
+          const addUserId = addRes.rows[0]?.user_id || null;
+          if (addUserId) {
+            const desc = period
+              ? `Leave application for ${fullName} (${period}) has been updated.`
+              : `Leave application for ${fullName} has been updated.`;
+            await insertNotificationWithClient(client, addUserId, 'Leave Assignment', 'Leave', desc);
+          }
+        }
+      } catch (nfErr) {
+        // ignore notification errors
+      }
+
+      await client.query('COMMIT');
+      return { id: updated.id };
   } catch (error) {
     await client.query('ROLLBACK');
     throw error;
@@ -351,7 +425,7 @@ async function cancelLeaveApplication(applicationId) {
 
     const beforeResult = await client.query(
       `
-        SELECT staff_id, leave_id, EXTRACT(YEAR FROM start::date)::int AS year
+        SELECT staff_id, leave_id, EXTRACT(YEAR FROM start::date)::int AS year, TO_CHAR(start::date, 'YYYY-MM-DD') AS start_date, TO_CHAR("end"::date, 'YYYY-MM-DD') AS end_date, alternate, additional_alternate
         FROM leave_staff_applications
         WHERE id = $1
         LIMIT 1
@@ -373,8 +447,44 @@ async function cancelLeaveApplication(applicationId) {
       `,
       [id]
     );
-
     await syncConsumedEntitlement(client, Number(before.staff_id), Number(before.leave_id), Number(before.year));
+
+    // send notifications about cancellation (requester + alternates)
+    try {
+      const staffRes = await client.query('SELECT user_id, fname, mname, lname FROM staff WHERE id = $1 LIMIT 1', [before.staff_id]);
+      const staffRow = staffRes.rows[0] || null;
+      const requesterUserId = staffRow ? staffRow.user_id : null;
+      const fullName = staffRow ? [staffRow.fname, staffRow.mname, staffRow.lname].filter(Boolean).join(' ') : 'Staff';
+
+      if (requesterUserId) {
+        await insertNotificationWithClient(client, requesterUserId, 'Leave Application', 'Leave', 'Leave application cancelled.');
+      }
+
+      const period = before && before.start_date && before.end_date ? `${before.start_date} to ${before.end_date}` : '';
+      if (before.alternate) {
+        const altRes = await client.query('SELECT user_id FROM staff WHERE id = $1 LIMIT 1', [before.alternate]);
+        const altUserId = altRes.rows[0]?.user_id || null;
+        if (altUserId) {
+          const desc = period
+            ? `Leave application for ${fullName} (${period}) has been cancelled.`
+            : `Leave application for ${fullName} has been cancelled.`;
+          await insertNotificationWithClient(client, altUserId, 'Leave Assignment', 'Leave', desc);
+        }
+      }
+
+      if (before.additional_alternate) {
+        const addRes = await client.query('SELECT user_id FROM staff WHERE id = $1 LIMIT 1', [before.additional_alternate]);
+        const addUserId = addRes.rows[0]?.user_id || null;
+        if (addUserId) {
+          const desc = period
+            ? `Leave application for ${fullName} (${period}) has been cancelled.`
+            : `Leave application for ${fullName} has been cancelled.`;
+          await insertNotificationWithClient(client, addUserId, 'Leave Assignment', 'Leave', desc);
+        }
+      }
+    } catch (nfErr) {
+      // ignore notification errors
+    }
     await client.query('COMMIT');
 
     return rows[0] || null;
@@ -567,6 +677,23 @@ async function getAlternateStaffOptions(userId, employeeTypeHint = null) {
   }
 
   return Array.from(merged.values());
+}
+
+async function resolveUserIdFromStaffId(staffId) {
+  const id = Number(staffId);
+  if (!id) return null;
+  const { rows } = await pool.query('SELECT user_id FROM staff WHERE id = $1 LIMIT 1', [id]);
+  return rows[0]?.user_id || null;
+}
+
+async function insertNotificationWithClient(client, userId, title, type, description, date = null) {
+  if (!userId) return;
+  const notifDate = date ? date : new Date().toISOString().slice(0, 10);
+  await client.query(
+    `INSERT INTO notifications (user_id, notification_title, notification_type, date, description, created_at, updated_at)
+     VALUES ($1, $2, $3, $4::date, $5, NOW(), NOW())`,
+    [userId, title, type, notifDate, description]
+  );
 }
 
 module.exports = {

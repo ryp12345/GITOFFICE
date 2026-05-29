@@ -35,6 +35,44 @@ export default function QualificationPage() {
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
 
+  // Welcome and staff name logic (copied from StaffDashboard)
+  const fullNameParts = [user?.fname, user?.mname, user?.lname].filter(Boolean);
+  const fallbackName = user?.name || user?.full_name || (fullNameParts.length ? fullNameParts.join(' ') : '') || user?.username || user?.email || '';
+  const [resolvedName, setResolvedName] = useState(null);
+
+  useEffect(() => {
+    let mounted = true;
+    async function resolveName() {
+      try {
+        if (user?.staff_id) {
+          const res = await api.get(`/staff/${user.staff_id}`);
+          const s = res?.data?.data || res?.data || null;
+          if (!mounted) return;
+          if (s) {
+            const parts = [s.fname, s.mname, s.lname].filter(Boolean);
+            setResolvedName(s.name || (parts.length ? parts.join(' ') : null) || null);
+            return;
+          }
+        }
+        if (user?.id) {
+          const listRes = await api.get('/staff');
+          const rows = Array.isArray(listRes?.data?.data) ? listRes.data.data : [];
+          const row = rows.find((item) => Number(item?.user_id) === Number(user.id));
+          if (!mounted) return;
+          if (row) {
+            const parts = [row.fname, row.mname, row.lname].filter(Boolean);
+            setResolvedName(row.name || (parts.length ? parts.join(' ') : null) || null);
+            return;
+          }
+        }
+      } catch (e) {
+        // ignore
+      }
+    }
+    resolveName();
+    return () => { mounted = false; };
+  }, [user?.id, user?.staff_id]);
+
   const PAGE_SIZE = 10;
 
   const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -302,9 +340,9 @@ export default function QualificationPage() {
           <div className="max-w-7xl mx-auto">
             <Notification show={notification.show} message={notification.message} type={notification.type} onClose={() => setNotification({ show: false, message: '', type: '' })} />
 
-            <div className="mb-12 text-center">
+            <div className="mb-12 text-left">
               <h1 className="mb-2 text-4xl font-extrabold text-gray-900">My Qualification</h1>
-              <p className="text-lg text-gray-600">Create, update and manage qualification records</p>
+              <p className="mt-1 text-lg font-medium text-blue-700">Welcome{(resolvedName || fallbackName) ? `, ${resolvedName || fallbackName}` : ''}</p>
             </div>
 
             <div className="flex flex-col items-start justify-between gap-4 mb-6 sm:flex-row sm:items-center">

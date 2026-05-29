@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { stopImpersonation } from '../../api/userApi';
 import { useAuth } from '../../context/AuthContext';
 import { getDashboardPathByRole } from '../../utils/role';
+import api from '../../api/axios';
 
 export default function Header() {
   const navigate = useNavigate();
@@ -16,12 +17,35 @@ export default function Header() {
   const profileRef = useRef(null);
   const mobileMenuRef = useRef(null);
 
-  const notifications = useMemo(
-    () => [
-      { id: 1, message: 'Welcome to GITOFFICE dashboard', is_read: false, created_at: new Date().toISOString() }
-    ],
-    []
-  );
+  const [notifications, setNotifications] = useState([]);
+
+  useEffect(() => {
+    let mounted = true;
+    let timer = null;
+
+    const load = async () => {
+      if (!user?.id) return;
+      try {
+        const res = await api.get('/notifications', { params: { user_id: user.id } });
+        if (!mounted) return;
+        const rows = res.data?.data || [];
+        const mapped = rows.map((r) => ({
+          id: r.id,
+          message: r.description || r.notification_title,
+          is_read: false,
+          created_at: r.created_at || r.date,
+        }));
+        setNotifications(mapped);
+      } catch (err) {
+        // ignore
+      }
+    };
+
+    load();
+    timer = setInterval(load, 30000);
+
+    return () => { mounted = false; if (timer) clearInterval(timer); };
+  }, [user?.id]);
 
   useEffect(() => {
     if (!showNotifications) return;
