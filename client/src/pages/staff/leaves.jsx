@@ -129,6 +129,11 @@ function extractDateKey(value) {
   return toDateStr(parsed);
 }
 
+function isDateWithinRange(dateKey, startDateKey, endDateKey) {
+  if (!dateKey || !startDateKey || !endDateKey) return false;
+  return dateKey >= startDateKey && dateKey <= endDateKey;
+}
+
 function normalizeHolidayType(type) {
   return String(type || '').trim().toLowerCase();
 }
@@ -378,18 +383,10 @@ function LeaveCalendar({ year, month, onYearChange, onMonthChange, holidayMap, r
               const isFTS = isFirstOrThirdSaturday(date);
               const isSun = date.getDay() === 0;
 
-              const leaveStatusColor = leaveEntry
-                ? leaveEntry.status === 'approved'
-                  ? 'bg-green-100'
-                  : leaveEntry.status === 'rejected'
-                    ? 'bg-red-50'
-                    : 'bg-indigo-100'
-                : '';
-
                   return (
                 <div
                   key={di}
-                  className={`h-14 sm:h-16 p-1 border-l border-slate-100 first:border-l-0 flex flex-col cursor-pointer hover:ring-1 hover:ring-blue-300 ${leaveEntry ? leaveStatusColor : getDayStyle(date)}`}
+                  className={`h-14 sm:h-16 p-1 border-l border-slate-100 first:border-l-0 flex flex-col cursor-pointer hover:ring-1 hover:ring-blue-300 ${getDayStyle(date)}`}
                   onClick={() => onDateClick?.(key, leaveEntry)}
                   role="button"
                   tabIndex={0}
@@ -426,14 +423,17 @@ function LeaveCalendar({ year, month, onYearChange, onMonthChange, holidayMap, r
                   )}
                   {leaveEntry && (
                     <span
-                      className={`text-[9px] sm:text-[10px] leading-tight mt-auto line-clamp-2 font-medium ${
+                      className={`leave-list-box mt-auto px-1 py-0.5 rounded text-[10px] sm:text-[11px] font-semibold border cursor-pointer ${
                         leaveEntry.status === 'approved'
-                          ? 'text-green-700'
+                          ? 'bg-green-100 text-green-800 border-green-300'
                           : leaveEntry.status === 'rejected'
-                            ? 'text-red-500 line-through'
-                            : 'text-indigo-700'
+                            ? 'bg-red-50 text-red-700 border-red-200 line-through'
+                            : 'bg-indigo-100 text-indigo-800 border-indigo-300'
                       }`}
                       title={`${leaveEntry.longname || leaveEntry.shortname} (${leaveEntry.status})`}
+                      onClick={(e) => { e.stopPropagation(); onDateClick?.(key, leaveEntry); }}
+                      role="button"
+                      tabIndex={0}
                     >
                       {leaveEntry.shortname}
                     </span>
@@ -510,6 +510,7 @@ export default function StaffLeavesPage() {
   const [holidays, setHolidays] = useState([]);
   const [leaveTypes, setLeaveTypes] = useState([]);
   const [alternateOptions, setAlternateOptions] = useState([]);
+  const [staffOnLeaveToday, setStaffOnLeaveToday] = useState([]);
   const [employeeVacationType, setEmployeeVacationType] = useState('');
   const [leaveEntitlementRowsByYear, setLeaveEntitlementRowsByYear] = useState({});
   const [combineLeaveRows, setCombineLeaveRows] = useState([]);
@@ -748,6 +749,62 @@ export default function StaffLeavesPage() {
       .catch(() => setAlternateOptions([]));
   }, [requesterUserId, isNonTeachingUser, token]);
 
+  useEffect(() => {
+    let mounted = true;
+    if (!form.start_date) {
+      setStaffOnLeaveToday([]);
+      return () => {
+        mounted = false;
+      };
+    }
+
+    const selectedDate = new Date(form.start_date);
+    if (Number.isNaN(selectedDate.getTime())) {
+      setStaffOnLeaveToday([]);
+      return () => {
+        mounted = false;
+      };
+    }
+
+    const selectedDateKey = toDateStr(selectedDate);
+
+    axios.get('/leave-calendar/events', {
+      params: {
+        year: selectedDate.getFullYear(),
+        month: selectedDate.getMonth() + 1,
+      },
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
+      .then((response) => {
+        if (!mounted) return;
+
+        const rows = response?.data?.data || [];
+        const staffIds = new Set();
+
+        rows.forEach((row) => {
+          const status = normalizeLeaveStatus(row?.appl_status || row?.status);
+          if (status === 'cancelled' || status === 'rejected') return;
+
+          const staffId = Number(row?.staff_id || 0);
+          const startDate = extractDateKey(row?.start_date || row?.start);
+          const endDate = extractDateKey(row?.end_date || row?.end);
+          if (!staffId || !isDateWithinRange(selectedDateKey, startDate, endDate)) return;
+
+          staffIds.add(staffId);
+        });
+
+        setStaffOnLeaveToday(Array.from(staffIds));
+      })
+      .catch(() => {
+        if (!mounted) return;
+        setStaffOnLeaveToday([]);
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, [token, form.start_date]);
+
   // ── build holiday / RH maps keyed by date string ─────────────────────────
   const holidayMap = useMemo(() => {
     const map = {};
@@ -923,6 +980,11 @@ export default function StaffLeavesPage() {
     [filteredAlternateOptions],
   );
 
+  const staffOnLeaveTodaySet = useMemo(
+    () => new Set(staffOnLeaveToday.map((id) => Number(id)).filter(Boolean)),
+    [staffOnLeaveToday],
+  );
+
   const renderGroupedStaffOptions = (groups) => {
     const entries = Array.from(groups.entries());
     if (entries.length <= 1) {
@@ -930,7 +992,19 @@ export default function StaffLeavesPage() {
         const optionId = getStaffOptionId(a);
         const label = getStaffOptionLabel(a);
         if (!optionId || !label) return null;
-        return <option key={optionId} value={optionId}>{label}</option>;
+        const isOnLeaveToday = staffOnLeaveTodaySet.has(Number(optionId));
+
+        return (
+          <option
+            key={optionId}
+            value={optionId}
+            disabled={isOnLeaveToday}
+            className={isOnLeaveToday ? 'text-red-700' : undefined}
+            style={isOnLeaveToday ? { backgroundColor: '#fee2e2', color: '#b91c1c' } : undefined}
+          >
+            {isOnLeaveToday ? `${label} - On Leave` : label}
+          </option>
+        );
       });
     }
     return entries.map(([dept, members]) => (
@@ -939,7 +1013,19 @@ export default function StaffLeavesPage() {
           const optionId = getStaffOptionId(a);
           const label = getStaffOptionLabel(a);
           if (!optionId || !label) return null;
-          return <option key={optionId} value={optionId}>{label}</option>;
+          const isOnLeaveToday = staffOnLeaveTodaySet.has(Number(optionId));
+
+          return (
+            <option
+              key={optionId}
+              value={optionId}
+              disabled={isOnLeaveToday}
+              className={isOnLeaveToday ? 'text-red-700' : undefined}
+              style={isOnLeaveToday ? { backgroundColor: '#fee2e2', color: '#b91c1c' } : undefined}
+            >
+              {isOnLeaveToday ? `${label} - On Leave` : label}
+            </option>
+          );
         })}
       </optgroup>
     ));
@@ -1169,8 +1255,14 @@ export default function StaffLeavesPage() {
   }, [selectableLeaveTypes, form.leave_id]);
 
   useEffect(() => {
-    const alternateExists = filteredAlternateOptions.some((option) => String(getStaffOptionId(option)) === String(form.alternate));
-    const additionalAlternateExists = filteredAlternateOptions.some((option) => String(getStaffOptionId(option)) === String(form.additional_alternate));
+    const alternateExists = filteredAlternateOptions.some((option) => {
+      const optionId = Number(getStaffOptionId(option) || 0);
+      return String(optionId) === String(form.alternate) && !staffOnLeaveTodaySet.has(optionId);
+    });
+    const additionalAlternateExists = filteredAlternateOptions.some((option) => {
+      const optionId = Number(getStaffOptionId(option) || 0);
+      return String(optionId) === String(form.additional_alternate) && !staffOnLeaveTodaySet.has(optionId);
+    });
 
     if (form.alternate && !alternateExists) {
       setForm((currentForm) => ({ ...currentForm, alternate: '' }));
@@ -1180,7 +1272,7 @@ export default function StaffLeavesPage() {
     if (form.additional_alternate && !additionalAlternateExists) {
       setForm((currentForm) => ({ ...currentForm, additional_alternate: '' }));
     }
-  }, [filteredAlternateOptions, form.alternate, form.additional_alternate]);
+  }, [filteredAlternateOptions, form.alternate, form.additional_alternate, staffOnLeaveTodaySet]);
 
   // ── form handlers ────────────────────────────────────────────────────────
   const handleChange = (e) => {
@@ -1492,7 +1584,14 @@ export default function StaffLeavesPage() {
   };
 
   const handleDateClick = (dateKey, leaveEntry) => {
-    if (leaveEntry && leaveEntry.app) {
+    // If there is an application on that date, open the view modal
+    // unless the application was rejected or cancelled — in which
+    // case allow opening the apply modal so users can submit again.
+    const status = normalizeLeaveStatus(
+      leaveEntry?.status || leaveEntry?.app?.appl_status || leaveEntry?.app?.status,
+    );
+
+    if (leaveEntry && leaveEntry.app && status !== 'rejected' && status !== 'cancelled') {
       openViewModalForDate(dateKey, leaveEntry.app);
     } else {
       openApplyModalForDate(dateKey);
@@ -1621,7 +1720,7 @@ export default function StaffLeavesPage() {
 
           {isApplyModalOpen && (
             <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 p-2 sm:p-4">
-              <div className="w-full max-w-[96vw] sm:max-w-md rounded-xl bg-white shadow-xl border border-slate-200 max-h-[92vh] overflow-y-auto">
+              <div className="w-full max-w-[96vw] sm:max-w-4xl rounded-xl bg-white shadow-xl border border-slate-200 max-h-[92vh] overflow-y-auto">
                 <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200">
                   <h3 className="text-base font-semibold text-slate-800">Apply for Leave</h3>
                   <button
@@ -1790,7 +1889,7 @@ export default function StaffLeavesPage() {
 
           {isViewModalOpen && viewApplication && (
             <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 p-2 sm:p-4">
-              <div className="w-full max-w-[96vw] sm:max-w-md rounded-xl bg-white shadow-xl border border-slate-200 max-h-[92vh] overflow-y-auto">
+              <div className="w-full max-w-[96vw] sm:max-w-4xl rounded-xl bg-white shadow-xl border border-slate-200 max-h-[92vh] overflow-y-auto">
                 <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200">
                   <h3 className="text-base font-semibold text-slate-800">Leave Application</h3>
                   <button
@@ -1804,28 +1903,60 @@ export default function StaffLeavesPage() {
                 </div>
 
                 <div className="p-5 space-y-3">
-                  <p className="text-sm font-semibold text-slate-800">{viewApplication.leave_longname || viewApplication.leave_shortname || '—'}</p>
-                  <div className="grid grid-cols-2 gap-3 text-sm text-slate-600">
-                    <div>
-                      <p className="text-slate-400">From</p>
-                      <p className="font-medium text-slate-700">{formatDate(viewApplication.start_date)}</p>
-                    </div>
-                    <div>
-                      <p className="text-slate-400">To</p>
-                      <p className="font-medium text-slate-700">{formatDate(viewApplication.end_date)}</p>
-                    </div>
-                    <div>
-                      <p className="text-slate-400">Days</p>
-                      <p className="font-medium text-slate-700">{viewApplication.no_of_days ?? '—'}</p>
-                    </div>
-                    <div>
-                      <p className="text-slate-400">Status</p>
-                      <p className="font-medium text-slate-700">{statusBadge(viewApplication.status)}</p>
-                    </div>
-                  </div>
-                  <div>
-                    <p className="text-slate-400">Reason</p>
-                    <p className="text-sm text-slate-600 mt-1">{viewApplication.reason || '—'}</p>
+                  <div className="overflow-x-auto rounded-lg border border-slate-200">
+                    <table className="min-w-[840px] w-full text-sm">
+                      <thead className="bg-slate-50">
+                        <tr>
+                          <th className="px-3 py-2 text-left font-medium text-slate-600">Leave Type</th>
+                          <th className="px-3 py-2 text-left font-medium text-slate-600">From</th>
+                          <th className="px-3 py-2 text-left font-medium text-slate-600">To</th>
+                          <th className="px-3 py-2 text-left font-medium text-slate-600">Days</th>
+                          <th className="px-3 py-2 text-left font-medium text-slate-600">Status</th>
+                          <th className="px-3 py-2 text-left font-medium text-slate-600">Reason</th>
+                          <th className="px-3 py-2 text-left font-medium text-slate-600">Action</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-200">
+                        <tr>
+                          <td className="px-3 py-2 font-medium text-slate-800">{viewApplication.leave_longname || viewApplication.leave_shortname || '—'}</td>
+                          <td className="px-3 py-2 text-slate-700 whitespace-nowrap">{formatDate(viewApplication.start_date)}</td>
+                          <td className="px-3 py-2 text-slate-700 whitespace-nowrap">{formatDate(viewApplication.end_date)}</td>
+                          <td className="px-3 py-2 text-slate-700">{viewApplication.no_of_days ?? '—'}</td>
+                          <td className="px-3 py-2">{statusBadge(viewApplication.status)}</td>
+                          <td className="px-3 py-2 text-slate-700 whitespace-pre-wrap">{viewApplication.reason || '—'}</td>
+                          <td className="px-3 py-2 whitespace-nowrap">
+                            {(viewApplication.appl_status === 'pending' || viewApplication.status === 'pending') ? (
+                              <div className="flex items-center gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => handleEditFromView(viewApplication)}
+                                  className="rounded border border-slate-300 p-2 text-slate-700 hover:bg-slate-50"
+                                  aria-label="Edit application"
+                                  title="Edit"
+                                >
+                                  <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                  </svg>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleCancelApplication(viewApplication.id || viewApplication.Application_id || viewApplication.application_id)}
+                                  className="rounded bg-red-600 hover:bg-red-700 text-white p-2"
+                                  aria-label="Cancel application"
+                                  title="Cancel"
+                                >
+                                  <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                  </svg>
+                                </button>
+                              </div>
+                            ) : (
+                              <span className="text-slate-400">-</span>
+                            )}
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
                   </div>
 
                   <div className="flex items-center justify-end gap-2 pt-1">
@@ -1836,24 +1967,6 @@ export default function StaffLeavesPage() {
                     >
                       Close
                     </button>
-                    {(viewApplication.appl_status === 'pending' || viewApplication.status === 'pending') && (
-                      <>
-                        <button
-                          type="button"
-                          onClick={() => handleEditFromView(viewApplication)}
-                          className="rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
-                        >
-                          Edit
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleCancelApplication(viewApplication.id || viewApplication.Application_id || viewApplication.application_id)}
-                          className="rounded-lg bg-red-600 hover:bg-red-700 disabled:opacity-60 text-white text-sm font-medium px-4 py-2"
-                        >
-                          Cancel Application
-                        </button>
-                      </>
-                    )}
                   </div>
                 </div>
               </div>
