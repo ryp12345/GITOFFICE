@@ -132,7 +132,7 @@ export default function StaffSidebar() {
         className={`fixed md:static top-16 left-0 h-screen md:h-auto z-40 transition-all duration-300 shadow-lg
           ${sidebarWidth} bg-[#001f3f] text-white
           ${isMobileOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
-          md:min-h-full md:w-64 md:flex md:flex-col`}
+          md:min-h-full md:flex md:flex-col`}
       >
         <div className="hidden md:flex justify-end p-4">
           <button
@@ -170,7 +170,7 @@ export default function StaffSidebar() {
                       setExpandedMenu(expandedMenu === link.name ? null : link.name);
                     }}
                     title={!isOpen && !expandedMenu ? link.name : ''}
-                    className={`w-full flex items-center space-x-3 px-4 py-3 md:py-3 rounded-lg transition duration-200 touch-manipulation
+                    className={`w-full flex items-center ${isOpen ? 'space-x-3' : 'justify-center'} px-4 py-3 md:py-3 rounded-lg transition duration-200 touch-manipulation
                     ${
                       expandedMenu === link.name
                         ? 'bg-blue-500 text-white'
@@ -178,8 +178,8 @@ export default function StaffSidebar() {
                     }`}
                   >
                     <span className="text-lg md:text-xl flex-shrink-0">{link.icon}</span>
-                    <span className="font-medium flex-1 text-left text-sm md:text-sm whitespace-nowrap truncate">{link.name}</span>
-                    <span className="text-sm flex-shrink-0">{expandedMenu === link.name ? '▼' : '▶'}</span>
+                    {isOpen && <span className="font-medium flex-1 text-left text-sm md:text-sm whitespace-nowrap truncate">{link.name}</span>}
+                    {isOpen && <span className="text-sm flex-shrink-0">{expandedMenu === link.name ? '▼' : '▶'}</span>}
                   </button>
                   {expandedMenu === link.name && (
                     <div className="space-y-1 mt-1">

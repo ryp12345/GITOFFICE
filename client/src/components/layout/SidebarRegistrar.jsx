@@ -66,11 +66,17 @@ export default function SidebarRegistrar() {
       )}
 
       <aside
-        className={`fixed md:static top-16 left-0 h-screen md:h-auto z-40 transition-all duration-300 shadow-lg ${sidebarWidth} max-w-[85vw] bg-[#001f3f] text-white ${isMobileOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'} md:min-h-full md:w-64 md:flex md:flex-col`}
+        className={`fixed md:static top-16 left-0 h-screen md:h-auto z-40 transition-all duration-300 shadow-lg ${sidebarWidth} max-w-[85vw] bg-[#001f3f] text-white ${isMobileOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'} md:min-h-full md:flex md:flex-col`}
       >
         <div className="hidden md:flex justify-end p-4">
           <button
-            onClick={() => setIsOpen(!isOpen)}
+            onClick={() => {
+              setIsOpen((prev) => {
+                const next = !prev;
+                if (!next) setExpandedMenus({});
+                return next;
+              });
+            }}
             className="text-slate-300 hover:text-white focus:outline-none"
             aria-label="Toggle sidebar"
           >
@@ -96,13 +102,13 @@ export default function SidebarRegistrar() {
                   <button
                     onClick={() => toggleSubmenu(index)}
                     title={!isOpen ? link.name : ''}
-                    className={`w-full flex items-center justify-between space-x-3 px-4 py-3 md:py-3 rounded-lg transition duration-200 touch-manipulation ${
+                    className={`w-full flex items-center ${isOpen ? 'justify-between space-x-3' : 'justify-center'} px-4 py-3 md:py-3 rounded-lg transition duration-200 touch-manipulation ${
                       expandedMenus[index]
                         ? 'bg-slate-700 text-white'
                         : 'text-slate-200 hover:bg-slate-700'
                     }`}
                   >
-                    <div className="flex items-center space-x-3">
+                    <div className={`flex items-center ${isOpen ? 'space-x-3' : ''}`}>
                       <span className="text-lg md:text-xl flex-shrink-0">{link.icon}</span>
                       {isOpen && <span className="font-medium text-sm">{link.name}</span>}
                     </div>
@@ -112,13 +118,16 @@ export default function SidebarRegistrar() {
                       </span>
                     )}
                   </button>
-                  {expandedMenus[index] && (
+                  {expandedMenus[index] && isOpen && (
                     <div className="ml-4 space-y-1 border-l border-slate-600 pl-3 mt-1">
                       {link.submenu.map((subitem) => (
                         <Link
                           key={subitem.path}
                           to={subitem.path}
-                          onClick={() => setIsMobileOpen(false)}
+                          onClick={() => {
+                            setIsMobileOpen(false);
+                            setExpandedMenus({});
+                          }}
                           className={`flex items-center space-x-3 px-4 py-2 rounded-lg transition duration-200 text-sm ${
                             location.pathname === subitem.path
                               ? 'bg-blue-500 text-white'

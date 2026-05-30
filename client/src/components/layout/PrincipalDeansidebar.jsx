@@ -54,9 +54,13 @@ export default function PrincipalDeansidebar() {
 
       {isMobileOpen && <div className="md:hidden fixed inset-0 bg-black bg-opacity-50 z-40 top-16" onClick={() => setIsMobileOpen(false)} />}
 
-      <aside className={`fixed md:static top-16 left-0 h-screen md:h-auto z-40 transition-all duration-300 shadow-lg ${sidebarWidth} max-w-[85vw] bg-[#001f3f] text-white ${isMobileOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'} md:min-h-full md:w-64 md:flex md:flex-col`}>
+      <aside className={`fixed md:static top-16 left-0 h-screen md:h-auto z-40 transition-all duration-300 shadow-lg ${sidebarWidth} max-w-[85vw] bg-[#001f3f] text-white ${isMobileOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'} md:min-h-full md:flex md:flex-col`}>
         <div className="hidden md:flex justify-end p-4">
-          <button onClick={() => setIsOpen(!isOpen)} className="text-slate-300 hover:text-white focus:outline-none" aria-label="Toggle sidebar">• • •</button>
+          <button onClick={() => setIsOpen((prev) => {
+            const next = !prev;
+            if (!next) setExpandedMenus({});
+            return next;
+          })} className="text-slate-300 hover:text-white focus:outline-none" aria-label="Toggle sidebar">• • •</button>
         </div>
 
         <nav className="space-y-2 px-3 pb-4 overflow-y-auto md:overflow-visible">
@@ -64,17 +68,20 @@ export default function PrincipalDeansidebar() {
             <div key={link.path || index}>
               {link.submenu ? (
                 <>
-                  <button onClick={() => toggleSubmenu(index)} title={!isOpen ? link.name : ''} className={`w-full flex items-center justify-between space-x-3 px-4 py-3 md:py-3 rounded-lg transition duration-200 touch-manipulation ${expandedMenus[index] ? 'bg-slate-700 text-white' : 'text-slate-200 hover:bg-slate-700'}`}>
-                    <div className="flex items-center space-x-3">
+                  <button onClick={() => toggleSubmenu(index)} title={!isOpen ? link.name : ''} className={`w-full flex items-center ${isOpen ? 'justify-between space-x-3' : 'justify-center'} px-4 py-3 md:py-3 rounded-lg transition duration-200 touch-manipulation ${expandedMenus[index] ? 'bg-slate-700 text-white' : 'text-slate-200 hover:bg-slate-700'}`}>
+                    <div className={`flex items-center ${isOpen ? 'space-x-3' : ''}`}>
                       <span className="text-lg md:text-xl flex-shrink-0">{link.icon}</span>
                       {isOpen && <span className="font-medium text-sm">{link.name}</span>}
                     </div>
                     {isOpen && <span className={`text-xs transition-transform ${expandedMenus[index] ? 'rotate-180' : ''}`}>▼</span>}
                   </button>
-                  {expandedMenus[index] && (
+                  {expandedMenus[index] && isOpen && (
                     <div className="ml-4 space-y-1 border-l border-slate-600 pl-3 mt-1">
                       {link.submenu.map((subitem) => (
-                        <Link key={subitem.path} to={subitem.path} className={`flex items-center space-x-3 px-4 py-2 rounded-lg transition duration-200 text-sm ${location.pathname === subitem.path ? 'bg-blue-500 text-white' : 'text-slate-300 hover:bg-slate-700'}`}>
+                        <Link key={subitem.path} to={subitem.path} onClick={() => {
+                          setIsMobileOpen(false);
+                          setExpandedMenus({});
+                        }} className={`flex items-center space-x-3 px-4 py-2 rounded-lg transition duration-200 text-sm ${location.pathname === subitem.path ? 'bg-blue-500 text-white' : 'text-slate-300 hover:bg-slate-700'}`}>
                           <span className="font-medium">{subitem.name}</span>
                         </Link>
                       ))}
