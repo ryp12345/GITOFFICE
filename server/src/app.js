@@ -93,6 +93,9 @@ app.use('/api/notifications', notificationsRoutes);
 const superAdminLeaveRoutes = require('./routes/superAdminLeave.routes');
 app.use('/api/super-admin-leaves', superAdminLeaveRoutes);
 
+const ticketRoutes = require('./routes/tickets.routes');
+app.use('/api/tickets', ticketRoutes);
+
 app.use(errorMiddleware);
 
 module.exports = app;

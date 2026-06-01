@@ -5,6 +5,7 @@ import { ROLE_TEACHING, ROLE_NON_TEACHING, isRoleMatch } from '../../utils/role'
 
 const COMMON_LINKS = [
   { name: 'My Dashboard', teachingPath: '/teaching', nonTeachingPath: '/nonteaching', icon: '📊' },
+  { name: 'Tickets', teachingPath: '/teaching/tickets', nonTeachingPath: '/nonteaching/tickets', icon: '🎫' },
   { name: 'Department History', teachingPath: '/teaching/department-history', nonTeachingPath: '/nonteaching/department-history', icon: '🏢' },
   { name: 'My Designation and Payscale', teachingPath: '/teaching/designation-payscale', nonTeachingPath: '/nonteaching/designation-payscale', icon: '💼' },
   { name: 'My Association', teachingPath: '/teaching/association', nonTeachingPath: '/nonteaching/association', icon: '🤝' },

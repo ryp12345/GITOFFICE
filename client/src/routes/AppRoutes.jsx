@@ -6,6 +6,8 @@ import SuperAdminUsersPage from '../pages/super-admin/Users';
 import SuperAdminCoordinatorsPage from '../pages/super-admin/Coordinators';
 import SuperAdminLeaveEntitlementPage from '../pages/super-admin/LeaveEntitlement';
 import SuperAdminHolidayRHListPage from '../pages/super-admin/HolidayRHList';
+import SuperAdminTicketsPage from '../pages/super-admin/Tickets';
+import SuperAdminTicketDetailsPage from '../pages/super-admin/TicketDetails';
 import EstablishmentDashboard from '../pages/establishment/Dashboard';
 import HODDashboard from '../pages/hod/Dashboard';
 import PrincipalDeanDashboard from '../pages/PrincipalDean/Dashboard';
@@ -19,6 +21,8 @@ import SidebarHOD from '../components/layout/SidebarHOD';
 import SidebarSuperAdmin from '../components/layout/SidebarSuperAdmin';
 import PrincipalDeansidebar from '../components/layout/PrincipalDeansidebar';
 import StaffDashboard from '../pages/staff/StaffDashboard';
+import StaffTicketsPage from '../pages/staff/Tickets';
+import StaffTicketDetailsPage from '../pages/staff/TicketDetails';
 import AssociationsPage from '../pages/establishment/Associations';
 import DepartmentPage from '../pages/establishment/Departments';
 import DesignationsPage from '../pages/establishment/Designations';
@@ -93,6 +97,8 @@ export default function AppRoutes() {
             <Route path="/super-admin" element={<SuperAdminDashboard />} />
             <Route path="/super-admin/users" element={<SuperAdminUsersPage />} />
             <Route path="/super-admin/coordinators" element={<SuperAdminCoordinatorsPage />} />
+            <Route path="/super-admin/tickets" element={<SuperAdminTicketsPage />} />
+            <Route path="/super-admin/tickets/:id" element={<SuperAdminTicketDetailsPage />} />
             <Route path="/super-admin/leave-management/entitlement" element={<SuperAdminLeaveEntitlementPage />} />
             <Route path="/super-admin/leave-management/holiday-rh" element={<SuperAdminHolidayRHListPage />} />
             <Route path="/super-admin/leave-management/it-cell-leave-applications" element={<LeaveApplicationPage />} />
@@ -189,6 +195,8 @@ export default function AppRoutes() {
         </Route>
         <Route element={<RoleRoute role="Teaching" />}>
           <Route path="/teaching" element={<StaffDashboard />} />
+          <Route path="/teaching/tickets" element={<StaffTicketsPage detailBasePath="/teaching/tickets" />} />
+          <Route path="/teaching/tickets/:id" element={<StaffTicketDetailsPage listPath="/teaching/tickets" />} />
           <Route path="/teaching/department-history" element={<DepartmentHistory />} />
           <Route path="/teaching/designation-payscale" element={<DesignationPayscale />} />
           <Route path="/teaching/association" element={<AssociationPage />} />
@@ -199,6 +207,8 @@ export default function AppRoutes() {
         </Route>
         <Route element={<RoleRoute role="Non-Teaching" />}>
           <Route path="/nonteaching" element={<StaffDashboard />} />
+          <Route path="/nonteaching/tickets" element={<StaffTicketsPage detailBasePath="/nonteaching/tickets" />} />
+          <Route path="/nonteaching/tickets/:id" element={<StaffTicketDetailsPage listPath="/nonteaching/tickets" />} />
           <Route path="/nonteaching/department-history" element={<DepartmentHistory />} />
           <Route path="/nonteaching/designation-payscale" element={<DesignationPayscale />} />
           <Route path="/nonteaching/association" element={<AssociationPage />} />
