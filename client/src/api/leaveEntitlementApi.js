@@ -8,10 +8,19 @@ export const getLeaveEntitlementMeta = async (token) => {
   });
 };
 
-export const getLeaveEntitlements = async ({ year, departmentId }, token) => {
-  const params = { year };
+export const getLeaveEntitlements = async ({ year, departmentId, mode } = {}, token) => {
+  const params = {};
+
+  if (Number.isFinite(Number(year)) && Number(year) > 0) {
+    params.year = Number(year);
+  }
+
   if (departmentId) {
     params.department_id = departmentId;
+  }
+
+  if (mode) {
+    params.mode = mode;
   }
 
   return axios.get('/leave-entitlements', {

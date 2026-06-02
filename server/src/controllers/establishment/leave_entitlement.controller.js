@@ -30,11 +30,23 @@ exports.getMeta = async (_req, res) => {
 
 exports.getAll = async (req, res) => {
   try {
-    const parsedYear = Number(req.query.year || new Date().getFullYear());
-    const year = Number.isFinite(parsedYear) && parsedYear > 0 ? parsedYear : new Date().getFullYear();
+    const currentYear = new Date().getFullYear();
+    const parsedYear = Number(req.query.year || currentYear);
+    const year = Number.isFinite(parsedYear) && parsedYear > 0 ? parsedYear : currentYear;
     const departmentId = req.query.department_id ? Number(req.query.department_id) : null;
+    const requestedMode = String(req.query.mode || 'auto').toLowerCase();
 
-    const data = await LeaveEntitlement.getEntitlementScreenData({ year, departmentId });
+    let mode = 'yearwise';
+    if (requestedMode === 'default' || requestedMode === 'yearwise') {
+      mode = requestedMode;
+    } else {
+      const hasDepartmentFilter = Number.isFinite(departmentId) && departmentId > 0;
+      const hasExplicitYearFilter = req.query.year !== undefined && req.query.year !== null && String(req.query.year).trim() !== '';
+
+      mode = !hasDepartmentFilter && !hasExplicitYearFilter && year === currentYear ? 'default' : 'yearwise';
+    }
+
+    const data = await LeaveEntitlement.getEntitlementScreenData({ year, departmentId, mode });
     sendSuccess(res, data);
   } catch (err) {
     sendError(res, err.message || 'Error fetching leave entitlements', err.statusCode || 500);
@@ -83,7 +95,7 @@ exports.getForHod = async (req, res) => {
       return sendError(res, 'No department mapping found for this HOD user', 404);
     }
 
-    const data = await LeaveEntitlement.getEntitlementScreenData({ year, departmentId: department.id });
+    const data = await LeaveEntitlement.getEntitlementScreenData({ year, departmentId: department.id, mode: 'yearwise' });
     // Attach resolved department so clients can display HOD's department name
     data.current_department = department;
     sendSuccess(res, data);

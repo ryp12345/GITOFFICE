@@ -8,6 +8,8 @@ const CONFIRMED_ASSOCIATION_PATTERNS = [
   '%Promotional Probationary%'
 ];
 
+const normalizeText = (value) => String(value || '').trim().toLowerCase();
+
 const toSafeNumber = (value, fallback = 0) => {
   const n = Number(value);
   return Number.isFinite(n) && n >= 0 ? n : fallback;
@@ -77,8 +79,29 @@ const getEligibleStaff = async (departmentId) => {
   return rows;
 };
 
-const getEntitlementsForStaff = async (year, staffIds) => {
+const getEntitlementsForStaff = async (year, staffIds, options = {}) => {
   if (!Array.isArray(staffIds) || staffIds.length === 0) return [];
+
+  const useYearFilter = options.useYearFilter !== false;
+  const activeOnly = options.activeOnly === true;
+
+  const conditions = [
+    'lse.staff_id = ANY($1::bigint[])',
+    "l.status = 'active'",
+    "UPPER(TRIM(l.shortname)) NOT LIKE 'SML%'",
+    "UPPER(TRIM(l.shortname)) <> 'ML'"
+  ];
+
+  const params = [staffIds];
+
+  if (useYearFilter) {
+    params.push(year);
+    conditions.unshift(`lse.year = $${params.length}`);
+  }
+
+  if (activeOnly) {
+    conditions.push("TRIM(LOWER(COALESCE(lse.status, ''))) = 'active'");
+  }
 
   const sql = `
     SELECT
@@ -91,14 +114,11 @@ const getEntitlementsForStaff = async (year, staffIds) => {
       COALESCE(lse.total_encashed, 0) AS total_encashed
     FROM leave_staff_entitlements lse
     JOIN leaves l ON l.id = lse.leave_id
-    WHERE lse.year = $1
-      AND lse.staff_id = ANY($2::bigint[])
-      AND l.status = 'active'
-        AND UPPER(TRIM(l.shortname)) NOT LIKE 'SML%'
-        AND UPPER(TRIM(l.shortname)) <> 'ML'
+    WHERE ${conditions.join('\n      AND ')}
+    ORDER BY lse.id ASC
   `;
 
-  const { rows } = await pool.query(sql, [year, staffIds]);
+  const { rows } = await pool.query(sql, params);
   return rows;
 };
 
@@ -108,7 +128,7 @@ const getUpdateLeaveTypesForStaff = async (client, staffId) => {
       SELECT employee_type
       FROM employee_types
       WHERE staff_id = $1
-        AND status = 'active'
+        AND LOWER(TRIM(COALESCE(status, ''))) = 'active'
       ORDER BY id DESC
       LIMIT 1
     `,
@@ -121,7 +141,7 @@ const getUpdateLeaveTypesForStaff = async (client, staffId) => {
       FROM association_staff ast
       JOIN associations a ON a.id = ast.association_id
       WHERE ast.staff_id = $1
-        AND ast.status = 'active'
+        AND LOWER(TRIM(COALESCE(ast.status, ''))) = 'active'
       ORDER BY ast.id DESC
       LIMIT 1
     `,
@@ -134,7 +154,7 @@ const getUpdateLeaveTypesForStaff = async (client, staffId) => {
       FROM designation_staff ds
       JOIN designations d ON d.id = ds.designation_id
       WHERE ds.staff_id = $1
-        AND ds.status = 'active'
+        AND LOWER(TRIM(COALESCE(ds.status, ''))) = 'active'
         AND COALESCE(d.isadditional, 0) = 1
         AND LOWER(TRIM(COALESCE(d.isvacational, ''))) IN ('non-vacational', 'non vacational')
       ORDER BY ds.id DESC
@@ -143,28 +163,30 @@ const getUpdateLeaveTypesForStaff = async (client, staffId) => {
     [staffId]
   );
 
-  const employeeType = (employeeTypeQuery.rows[0]?.employee_type || '').toLowerCase();
-  const associationName = activeAssociationQuery.rows[0]?.asso_name || '';
+  const employeeType = normalizeText(employeeTypeQuery.rows[0]?.employee_type);
+  const associationName = normalizeText(activeAssociationQuery.rows[0]?.asso_name);
   const hasAdditionalNonVacationalDesignation = additionalNonVacationalDesignationQuery.rows.length > 0;
 
-  let vacationType = 'Vacational';
+  let vacationType = 'vacational';
   if (employeeType === 'non-teaching') {
-    vacationType = 'Non-vacational';
+    vacationType = 'non-vacational';
   } else if (hasAdditionalNonVacationalDesignation) {
-    vacationType = 'Non-vacational';
+    vacationType = 'non-vacational';
   } else if (
     associationName === 'contractual' ||
     associationName === 'temporary (non teaching)' ||
     associationName === 'temporary non teaching'
   ) {
-    vacationType = 'Non-vacational';
+    vacationType = 'non-vacational';
   }
+
+  const vacationTypeAlias = vacationType.replace('-', ' ');
 
   const leaveTypesQuery = await client.query(
     `
       SELECT UPPER(TRIM(shortname)) AS shortname, MIN(id) AS id
       FROM leaves
-      WHERE vacation_type = $1
+      WHERE LOWER(TRIM(COALESCE(vacation_type, ''))) IN ($1, $2)
         AND COALESCE(max_entitlement, 0) > 0
         AND UPPER(TRIM(shortname)) NOT LIKE 'SML%'
         AND UPPER(TRIM(shortname)) <> 'ML'
@@ -172,10 +194,44 @@ const getUpdateLeaveTypesForStaff = async (client, staffId) => {
       GROUP BY UPPER(TRIM(shortname))
       ORDER BY shortname ASC
     `,
-    [vacationType]
+    [vacationType, vacationTypeAlias]
   );
 
   return leaveTypesQuery.rows;
+};
+
+const getLeaveTypesByShortnames = async (client, shortnames) => {
+  if (!Array.isArray(shortnames) || shortnames.length === 0) {
+    return [];
+  }
+
+  const normalized = Array.from(
+    new Set(
+      shortnames
+        .map((item) => normalizeText(item).toUpperCase())
+        .filter(Boolean)
+    )
+  );
+
+  if (!normalized.length) {
+    return [];
+  }
+
+  const query = await client.query(
+    `
+      SELECT UPPER(TRIM(shortname)) AS shortname, MIN(id) AS id
+      FROM leaves
+      WHERE TRIM(LOWER(status)) = 'active'
+        AND UPPER(TRIM(shortname)) = ANY($1::text[])
+        AND UPPER(TRIM(shortname)) NOT LIKE 'SML%'
+        AND UPPER(TRIM(shortname)) <> 'ML'
+      GROUP BY UPPER(TRIM(shortname))
+      ORDER BY shortname ASC
+    `,
+    [normalized]
+  );
+
+  return query.rows;
 };
 
 const buildRows = (staffRows, entitlementRows, year) => {
@@ -217,7 +273,9 @@ const buildRows = (staffRows, entitlementRows, year) => {
   return Array.from(byStaff.values());
 };
 
-const getEntitlementScreenData = async ({ year, departmentId }) => {
+const getEntitlementScreenData = async ({ year, departmentId, mode = 'yearwise' }) => {
+  const normalizedMode = String(mode || 'yearwise').toLowerCase() === 'default' ? 'default' : 'yearwise';
+
   const [leaveTypes, leaveTypesTaken, departments, staffRows] = await Promise.all([
     getLeaveTypes(true),
     getLeaveTypes(false),
@@ -226,13 +284,17 @@ const getEntitlementScreenData = async ({ year, departmentId }) => {
   ]);
 
   const staffIds = staffRows.map((row) => Number(row.id));
-  const entitlementRows = await getEntitlementsForStaff(year, staffIds);
+  const entitlementRows = await getEntitlementsForStaff(year, staffIds, {
+    useYearFilter: normalizedMode !== 'default',
+    activeOnly: normalizedMode === 'default'
+  });
   const rows = buildRows(staffRows, entitlementRows, year);
 
   return {
     departments,
     leave_types: leaveTypes,
     leave_types_taken: leaveTypesTaken,
+    mode: normalizedMode,
     year,
     data: rows
   };
@@ -254,6 +316,21 @@ const updateEntitlements = async ({ year, staffId, entitled, availed, thisYearEn
     await client.query('BEGIN');
 
     let leaveTypes = await getUpdateLeaveTypesForStaff(client, numericStaffId);
+
+    const submittedShortnames = Array.from(
+      new Set([
+        ...Object.keys(entitled || {}).map((key) => String(key || '').trim().toUpperCase()),
+        ...Object.keys(availed || {}).map((key) => String(key || '').trim().toUpperCase())
+      ].filter(Boolean))
+    );
+
+    // Resolve submitted shortnames as a safety-net so editable columns are never skipped.
+    const submittedLeaveTypes = await getLeaveTypesByShortnames(client, submittedShortnames);
+
+    if (submittedLeaveTypes.length) {
+      leaveTypes = [...leaveTypes, ...submittedLeaveTypes];
+    }
+
     if (!leaveTypes.length) {
       leaveTypes = await getLeaveTypes(true);
     }
@@ -267,6 +344,8 @@ const updateEntitlements = async ({ year, staffId, entitled, availed, thisYearEn
       seenLeaveIds.add(leaveId);
       uniqueLeaveTypes.push(leaveType);
     }
+
+    let affectedRows = 0;
 
     for (const leaveType of uniqueLeaveTypes) {
       const shortname = leaveType.shortname;
@@ -289,7 +368,7 @@ const updateEntitlements = async ({ year, staffId, entitled, availed, thisYearEn
       );
 
       if (existing.rows.length > 0) {
-        await client.query(
+        const updated = await client.query(
           `
             UPDATE leave_staff_entitlements
             SET entitled_curr_year = $1,
@@ -303,8 +382,9 @@ const updateEntitlements = async ({ year, staffId, entitled, availed, thisYearEn
           `,
           [entitledValue, availedValue, encashedCurrYear, accumulatedValue, `${numericYear}-01-01`, existing.rows[0].id]
         );
+        affectedRows += updated.rowCount || 0;
       } else {
-        await client.query(
+        const inserted = await client.query(
           `
             INSERT INTO leave_staff_entitlements
               (year, staff_id, leave_id, entitled_curr_year, accumulated, consumed_curr_year, encashed_curr_year, total_encashed, wef, status, created_at, updated_at)
@@ -313,11 +393,18 @@ const updateEntitlements = async ({ year, staffId, entitled, availed, thisYearEn
           `,
           [numericYear, numericStaffId, leaveId, entitledValue, accumulatedValue, availedValue, encashedCurrYear, `${numericYear}-01-01`]
         );
+        affectedRows += inserted.rowCount || 0;
       }
     }
 
+    if (affectedRows === 0) {
+      const err = new Error('No leave entitlement rows were updated. Check staff leave-type mapping.');
+      err.statusCode = 400;
+      throw err;
+    }
+
     await client.query('COMMIT');
-    return { success: true };
+    return { success: true, affected_rows: affectedRows };
   } catch (error) {
     await client.query('ROLLBACK');
     throw error;

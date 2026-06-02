@@ -1,5 +1,15 @@
 const { pool } = require('../config/db');
 
+async function syncIdSequence() {
+  await pool.query(`
+    SELECT setval(
+      pg_get_serial_sequence('associations', 'id'),
+      COALESCE((SELECT MAX(id) FROM associations), 1),
+      true
+    )
+  `);
+}
+
 async function findAll() {
   const { rows } = await pool.query('SELECT id, asso_name, category, status, created_at, updated_at FROM associations ORDER BY created_at DESC, id DESC');
   return rows;
@@ -11,6 +21,8 @@ async function findById(id) {
 }
 
 async function create({ asso_name, category = 'Associated', status = 'active' }) {
+  await syncIdSequence();
+
   const { rows } = await pool.query(
     'INSERT INTO associations (asso_name, category, status, created_at, updated_at) VALUES ($1, $2, $3, NOW(), NOW()) RETURNING id, asso_name, category, status, created_at, updated_at',
     [asso_name, category, status]

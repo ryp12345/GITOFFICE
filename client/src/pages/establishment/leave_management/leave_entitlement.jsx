@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Header from '../../../components/layout/Header';
 import Sidebar from '../../../components/layout/Sidebar';
 import Notification from '../../../components/common/Notification';
@@ -41,6 +41,7 @@ const makeInitialForm = () => ({
 
 export default function LeaveEntitlementPage() {
   const { token } = useAuth?.() || {};
+  const hasLoadedDefaultViewRef = useRef(false);
 
   const [year, setYear] = useState(new Date().getFullYear());
   const [departmentId, setDepartmentId] = useState('');
@@ -114,10 +115,13 @@ export default function LeaveEntitlementPage() {
     }
   };
 
-  const loadRows = async (targetYear = year, targetDepartmentId = departmentId) => {
+  const loadRows = async (targetYear, targetDepartmentId, mode = 'yearwise') => {
     setLoading(true);
     try {
-      const res = await getLeaveEntitlements({ year: targetYear, departmentId: targetDepartmentId }, token);
+      const res = await getLeaveEntitlements(
+        { year: targetYear, departmentId: targetDepartmentId, mode },
+        token
+      );
       const payload = res.data?.data || {};
 
       setRows(payload.data || []);
@@ -141,11 +145,30 @@ export default function LeaveEntitlementPage() {
   };
 
   useEffect(() => {
-    loadMeta();
+    let cancelled = false;
+
+    const initialize = async () => {
+      if (!token) return;
+      await loadMeta();
+      if (cancelled) return;
+
+      await loadRows(undefined, '', 'default');
+      if (!cancelled) {
+        hasLoadedDefaultViewRef.current = true;
+      }
+    };
+
+    initialize();
+
+    return () => {
+      cancelled = true;
+      hasLoadedDefaultViewRef.current = false;
+    };
   }, [token]);
 
   useEffect(() => {
-    loadRows(year, departmentId);
+    if (!token || !hasLoadedDefaultViewRef.current) return;
+    loadRows(year, departmentId, 'yearwise');
   }, [token, year, departmentId]);
 
   useEffect(() => {
@@ -220,7 +243,7 @@ export default function LeaveEntitlementPage() {
 
       showNotification('Leave staff entitlements updated successfully.', 'success');
       closeModal();
-      loadRows(year, departmentId);
+      loadRows(year, departmentId, 'yearwise');
     } catch (error) {
       const message = error.response?.data?.message || error.message || 'Failed to update leave entitlement';
       setFormError(message);

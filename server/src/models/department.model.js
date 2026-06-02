@@ -1,5 +1,15 @@
 const { pool } = require('../config/db');
 
+async function syncIdSequence() {
+  await pool.query(`
+    SELECT setval(
+      pg_get_serial_sequence('departments', 'id'),
+      COALESCE((SELECT MAX(id) FROM departments), 1),
+      true
+    )
+  `);
+}
+
 async function findAll() {
   const { rows } = await pool.query('SELECT id, dept_name, dept_shortname, yoe, status, created_at, updated_at FROM departments ORDER BY created_at DESC, id DESC');
   return rows;
@@ -18,6 +28,8 @@ async function findByName(name) {
 }
 
 async function create({ dept_name, dept_shortname, yoe, status = 'active' }) {
+  await syncIdSequence();
+
   const { rows } = await pool.query(
     'INSERT INTO departments (dept_name, dept_shortname, yoe, status, created_at, updated_at) VALUES ($1, $2, $3, $4, NOW(), NOW()) RETURNING id, dept_name, dept_shortname, yoe, status, created_at, updated_at',
     [dept_name, dept_shortname, yoe, status]
