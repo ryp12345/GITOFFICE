@@ -2,6 +2,17 @@ const LeaveEntitlement = require('../../models/leave_entitlement.model');
 const { sendSuccess, sendError } = require('../../utils/response');
 const { findDepartmentByHodUserId } = require('../../models/hodDepartmentOverview.model');
 
+const toMapFromPrefixedFields = (body, prefix) => {
+  const mapped = {};
+  Object.entries(body || {}).forEach(([key, value]) => {
+    if (!key.startsWith(prefix)) return;
+    const shortname = key.slice(prefix.length).trim().toUpperCase();
+    if (!shortname) return;
+    mapped[shortname] = value;
+  });
+  return mapped;
+};
+
 exports.getMeta = async (_req, res) => {
   try {
     const year = new Date().getFullYear();
@@ -19,7 +30,8 @@ exports.getMeta = async (_req, res) => {
 
 exports.getAll = async (req, res) => {
   try {
-    const year = Number(req.query.year || new Date().getFullYear());
+    const parsedYear = Number(req.query.year || new Date().getFullYear());
+    const year = Number.isFinite(parsedYear) && parsedYear > 0 ? parsedYear : new Date().getFullYear();
     const departmentId = req.query.department_id ? Number(req.query.department_id) : null;
 
     const data = await LeaveEntitlement.getEntitlementScreenData({ year, departmentId });
@@ -31,11 +43,21 @@ exports.getAll = async (req, res) => {
 
 exports.update = async (req, res) => {
   try {
+    const entitledMap =
+      req.body && typeof req.body.entitled === 'object' && !Array.isArray(req.body.entitled)
+        ? req.body.entitled
+        : toMapFromPrefixedFields(req.body, 'entitled_');
+
+    const availedMap =
+      req.body && typeof req.body.availed === 'object' && !Array.isArray(req.body.availed)
+        ? req.body.availed
+        : toMapFromPrefixedFields(req.body, 'availed_');
+
     const payload = {
       year: req.body.year,
       staffId: req.body.staff_id,
-      entitled: req.body.entitled,
-      availed: req.body.availed,
+      entitled: entitledMap,
+      availed: availedMap,
       thisYearEncashedEl: req.body.this_year_encashed_el,
       accumulatedEl: req.body.accumulated_el
     };

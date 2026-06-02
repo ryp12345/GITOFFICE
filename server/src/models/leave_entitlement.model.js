@@ -128,13 +128,35 @@ const getUpdateLeaveTypesForStaff = async (client, staffId) => {
     [staffId]
   );
 
+  const additionalNonVacationalDesignationQuery = await client.query(
+    `
+      SELECT 1
+      FROM designation_staff ds
+      JOIN designations d ON d.id = ds.designation_id
+      WHERE ds.staff_id = $1
+        AND ds.status = 'active'
+        AND COALESCE(d.isadditional, 0) = 1
+        AND LOWER(TRIM(COALESCE(d.isvacational, ''))) IN ('non-vacational', 'non vacational')
+      ORDER BY ds.id DESC
+      LIMIT 1
+    `,
+    [staffId]
+  );
+
   const employeeType = (employeeTypeQuery.rows[0]?.employee_type || '').toLowerCase();
   const associationName = activeAssociationQuery.rows[0]?.asso_name || '';
+  const hasAdditionalNonVacationalDesignation = additionalNonVacationalDesignationQuery.rows.length > 0;
 
   let vacationType = 'Vacational';
   if (employeeType === 'non-teaching') {
     vacationType = 'Non-vacational';
-  } else if (associationName === 'contractual' || associationName === 'temporary (non teaching)') {
+  } else if (hasAdditionalNonVacationalDesignation) {
+    vacationType = 'Non-vacational';
+  } else if (
+    associationName === 'contractual' ||
+    associationName === 'temporary (non teaching)' ||
+    associationName === 'temporary non teaching'
+  ) {
     vacationType = 'Non-vacational';
   }
 
@@ -274,11 +296,12 @@ const updateEntitlements = async ({ year, staffId, entitled, availed, thisYearEn
                 consumed_curr_year = $2,
                 encashed_curr_year = $3,
                 accumulated = $4,
+                wef = $5,
                 status = 'active',
                 updated_at = NOW()
-            WHERE id = $5
+            WHERE id = $6
           `,
-          [entitledValue, availedValue, encashedCurrYear, accumulatedValue, existing.rows[0].id]
+          [entitledValue, availedValue, encashedCurrYear, accumulatedValue, `${numericYear}-01-01`, existing.rows[0].id]
         );
       } else {
         await client.query(

@@ -5,7 +5,6 @@ import { ROLE_TEACHING, ROLE_NON_TEACHING, isRoleMatch } from '../../utils/role'
 
 const COMMON_LINKS = [
   { name: 'My Dashboard', teachingPath: '/teaching', nonTeachingPath: '/nonteaching', icon: '📊' },
-  { name: 'Tickets', teachingPath: '/teaching/tickets', nonTeachingPath: '/nonteaching/tickets', icon: '🎫' },
   { name: 'Department History', teachingPath: '/teaching/department-history', nonTeachingPath: '/nonteaching/department-history', icon: '🏢' },
   { name: 'My Designation and Payscale', teachingPath: '/teaching/designation-payscale', nonTeachingPath: '/nonteaching/designation-payscale', icon: '💼' },
   { name: 'My Association', teachingPath: '/teaching/association', nonTeachingPath: '/nonteaching/association', icon: '🤝' },
@@ -89,12 +88,12 @@ export default function StaffSidebar() {
         ...item,
         submenu: item.submenu?.map((subitem) => ({ ...subitem, path: subitem.teachingPath })) || []
       }));
-      return [...shared.slice(0, 8), ...teachingOnly, ...shared.slice(8)];
+      return [...shared, ...teachingOnly];
     }
 
     if (isNonTeaching) {
       const nonTeachingOnly = NON_TEACHING_ONLY_LINKS.map((item) => ({ ...item, path: getPath(item, false) }));
-      return [...shared.slice(0, 8), ...nonTeachingOnly, ...shared.slice(8)];
+      return [...shared, ...nonTeachingOnly];
     }
 
     return [];

@@ -39,7 +39,7 @@ import HolidayRHListPage from '../pages/establishment/leave_management/HolidayRH
 import ProtectedRoute from './ProtectedRoute';
 import RoleRoute from './RoleRoute';
 import { useAuth } from '../context/AuthContext';
-import { getDashboardPathByRole } from '../utils/role';
+import { getDashboardPathByRole, isRoleMatch, ROLE_SUPER_ADMIN } from '../utils/role';
 import DepartmentsPage from '../pages/establishment/Departments';
 import DepartmentHistory from '../pages/staff/DepartmentHistory';
 import DesignationPayscale from '../pages/staff/DesignationPayscale';
@@ -82,6 +82,26 @@ function HomeRedirect() {
   return <Navigate to={getDashboardPathByRole(user?.role)} replace />;
 }
 
+function SharedTicketsRoute() {
+  const { user } = useAuth();
+
+  if (isRoleMatch(user?.role, ROLE_SUPER_ADMIN)) {
+    return <Navigate to="/super-admin" replace />;
+  }
+
+  return <StaffTicketsPage detailBasePath="/tickets" />;
+}
+
+function SharedTicketDetailsRoute() {
+  const { user } = useAuth();
+
+  if (isRoleMatch(user?.role, ROLE_SUPER_ADMIN)) {
+    return <Navigate to="/super-admin" replace />;
+  }
+
+  return <StaffTicketDetailsPage listPath="/tickets" />;
+}
+
 export default function AppRoutes() {
   return (
     <BrowserRouter>
@@ -93,6 +113,8 @@ export default function AppRoutes() {
         <Route path="/" element={<HomeRedirect />} />
         <Route element={<ProtectedRoute />}>
           <Route path="/change-password" element={<ChangePassword />} />
+          <Route path="/tickets" element={<SharedTicketsRoute />} />
+          <Route path="/tickets/:id" element={<SharedTicketDetailsRoute />} />
           <Route element={<RoleRoute role="Super Admin" />}>
             <Route path="/super-admin" element={<SuperAdminDashboard />} />
             <Route path="/super-admin/users" element={<SuperAdminUsersPage />} />
@@ -195,8 +217,8 @@ export default function AppRoutes() {
         </Route>
         <Route element={<RoleRoute role="Teaching" />}>
           <Route path="/teaching" element={<StaffDashboard />} />
-          <Route path="/teaching/tickets" element={<StaffTicketsPage detailBasePath="/teaching/tickets" />} />
-          <Route path="/teaching/tickets/:id" element={<StaffTicketDetailsPage listPath="/teaching/tickets" />} />
+          <Route path="/teaching/tickets" element={<Navigate to="/tickets" replace />} />
+          <Route path="/teaching/tickets/:id" element={<Navigate to="/tickets" replace />} />
           <Route path="/teaching/department-history" element={<DepartmentHistory />} />
           <Route path="/teaching/designation-payscale" element={<DesignationPayscale />} />
           <Route path="/teaching/association" element={<AssociationPage />} />
@@ -207,8 +229,8 @@ export default function AppRoutes() {
         </Route>
         <Route element={<RoleRoute role="Non-Teaching" />}>
           <Route path="/nonteaching" element={<StaffDashboard />} />
-          <Route path="/nonteaching/tickets" element={<StaffTicketsPage detailBasePath="/nonteaching/tickets" />} />
-          <Route path="/nonteaching/tickets/:id" element={<StaffTicketDetailsPage listPath="/nonteaching/tickets" />} />
+          <Route path="/nonteaching/tickets" element={<Navigate to="/tickets" replace />} />
+          <Route path="/nonteaching/tickets/:id" element={<Navigate to="/tickets" replace />} />
           <Route path="/nonteaching/department-history" element={<DepartmentHistory />} />
           <Route path="/nonteaching/designation-payscale" element={<DesignationPayscale />} />
           <Route path="/nonteaching/association" element={<AssociationPage />} />

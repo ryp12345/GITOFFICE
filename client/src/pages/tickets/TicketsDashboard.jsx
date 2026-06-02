@@ -3,6 +3,8 @@ import { Link } from 'react-router-dom';
 import Header from '../../components/layout/Header';
 import Sidebar from '../../components/layout/Sidebar';
 import Notification from '../../components/common/Notification';
+import { useAuth } from '../../context/AuthContext';
+import { isRoleMatch, ROLE_SUPER_ADMIN } from '../../utils/role';
 import {
   createTicket,
   deleteTicket,
@@ -26,7 +28,17 @@ function pluralize(count, singular, plural) {
   return `${count} ${count === 1 ? singular : plural}`;
 }
 
+function formatRaisedDate(value) {
+  if (!value) return '--NA--';
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '--NA--';
+
+  return date.toLocaleDateString();
+}
+
 export default function TicketsDashboard({ detailBasePath, canManageTickets }) {
+  const { user } = useAuth();
   const [tickets, setTickets] = useState([]);
   const [counts, setCounts] = useState({ new_count: 0, pending_count: 0, resolved_count: 0 });
   const [loading, setLoading] = useState(true);
@@ -39,6 +51,7 @@ export default function TicketsDashboard({ detailBasePath, canManageTickets }) {
 
   const totalCount =
     Number(counts?.new_count || 0) + Number(counts?.pending_count || 0) + Number(counts?.resolved_count || 0);
+  const showStaffNameColumn = isRoleMatch(user?.role, ROLE_SUPER_ADMIN);
 
   const sortedTickets = useMemo(
     () => [...tickets].sort((a, b) => Number(b?.id || 0) - Number(a?.id || 0)),
@@ -147,7 +160,6 @@ export default function TicketsDashboard({ detailBasePath, canManageTickets }) {
               type={notification.type}
               onClose={closeNotification}
             />
-
             <div className="mb-6 flex items-center justify-between">
               <div>
                 <h1 className="text-2xl font-semibold text-slate-900">Ticket Dashboard</h1>
@@ -163,7 +175,6 @@ export default function TicketsDashboard({ detailBasePath, canManageTickets }) {
                 </button>
               )}
             </div>
-
             <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 xl:grid-cols-4">
               <div className="rounded-xl border border-red-200 bg-red-50 p-5 shadow">
                 <div className="text-sm font-semibold text-red-800">Ticket New</div>
@@ -182,17 +193,19 @@ export default function TicketsDashboard({ detailBasePath, canManageTickets }) {
                 <div className="mt-1 text-3xl font-bold text-blue-900">{totalCount}</div>
               </div>
             </div>
-
             <div className="mt-6 rounded-xl border border-slate-200 bg-white shadow overflow-hidden">
               <div className="border-b border-slate-200 px-4 py-3">
-
               </div>
               <div className="overflow-x-auto">
                 <table className="min-w-full divide-y divide-slate-200">
                   <thead className="bg-blue-600">
                     <tr>
                       <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-white">SL.No</th>
+                      {showStaffNameColumn && (
+                        <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-white">Staff Name</th>
+                      )}
                       <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-white">Issue Title</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-white">Raised Date</th>
                       <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-white">Attachment</th>
                       <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-white">Ticket Status</th>
                       <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-white">Action</th>
@@ -202,7 +215,7 @@ export default function TicketsDashboard({ detailBasePath, canManageTickets }) {
                   <tbody className="divide-y divide-slate-100 bg-white">
                     {loading && (
                       <tr>
-                        <td colSpan={5} className="px-4 py-6 text-center text-slate-500">
+                        <td colSpan={7} className="px-4 py-6 text-center text-slate-500">
                           Loading tickets...
                         </td>
                       </tr>
@@ -210,7 +223,7 @@ export default function TicketsDashboard({ detailBasePath, canManageTickets }) {
 
                     {!loading && sortedTickets.length === 0 && (
                       <tr>
-                        <td colSpan={5} className="px-4 py-6 text-center text-slate-500">
+                        <td colSpan={7} className="px-4 py-6 text-center text-slate-500">
                           No tickets added.
                         </td>
                       </tr>
@@ -224,8 +237,16 @@ export default function TicketsDashboard({ detailBasePath, canManageTickets }) {
                         return (
                           <tr key={ticket.id} className="hover:bg-slate-50">
                             <td className="px-4 py-3 align-top text-sm text-slate-700">{index + 1}</td>
+                            {showStaffNameColumn && (
+                              <td className="px-4 py-3 align-top text-sm text-slate-700">
+                                <div className="font-medium text-slate-900">{ticket.staff_name || ticket.email || '--NA--'}</div>
+                              </td>
+                            )}
                             <td className="px-4 py-3 align-top text-sm text-slate-700">
                               <div>{ticket.title}</div>
+                            </td>
+                            <td className="px-4 py-3 align-top text-sm text-slate-700">
+                              {formatRaisedDate(ticket.created_at)}
                             </td>
                             <td className="px-4 py-3 align-top text-sm text-slate-700">
                               {ticket.attachments?.length ? pluralize(ticket.attachments.length, 'file', 'files') : '--NA--'}

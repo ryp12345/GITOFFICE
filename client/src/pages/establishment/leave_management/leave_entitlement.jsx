@@ -122,15 +122,15 @@ export default function LeaveEntitlementPage() {
 
       setRows(payload.data || []);
 
-      if (!leaveTypes.length && Array.isArray(payload.leave_types)) {
+      if (Array.isArray(payload.leave_types)) {
         setLeaveTypes(dedupeLeaveTypes(payload.leave_types));
       }
 
-      if (!leaveTypesTaken.length && Array.isArray(payload.leave_types_taken)) {
+      if (Array.isArray(payload.leave_types_taken)) {
         setLeaveTypesTaken(dedupeLeaveTypes(payload.leave_types_taken));
       }
 
-      if (!departments.length && Array.isArray(payload.departments)) {
+      if (Array.isArray(payload.departments)) {
         setDepartments(payload.departments);
       }
     } catch (error) {
@@ -172,6 +172,10 @@ export default function LeaveEntitlementPage() {
     leaveTypes.forEach((leaveType) => {
       const shortname = leaveType.shortname;
       entitled[shortname] = row.leaves?.[shortname]?.entitled_curr_year ?? 0;
+    });
+
+    leaveTypesTaken.forEach((leaveType) => {
+      const shortname = leaveType.shortname;
       availed[shortname] = row.leaves?.[shortname]?.availed ?? 0;
     });
 

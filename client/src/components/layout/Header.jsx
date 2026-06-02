@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { stopImpersonation } from '../../api/userApi';
 import { useAuth } from '../../context/AuthContext';
-import { getDashboardPathByRole } from '../../utils/role';
+import { getDashboardPathByRole, isRoleMatch, ROLE_SUPER_ADMIN } from '../../utils/role';
 import api from '../../api/axios';
 
 export default function Header() {
@@ -89,6 +89,7 @@ export default function Header() {
   const displayName = user?.email || 'User';
   const initials = (displayName?.[0] || 'U').toUpperCase();
   const unreadCount = notifications.filter((item) => !item.is_read).length;
+  const showTicketsLink = Boolean(user) && !isRoleMatch(user?.role, ROLE_SUPER_ADMIN);
 
   const handleLogout = () => {
     logout();
@@ -128,6 +129,16 @@ export default function Header() {
         </div>
 
         <div className="flex items-center justify-end space-x-3 relative">
+          {showTicketsLink && (
+            <button
+              type="button"
+              onClick={() => navigate('/tickets')}
+              className="hidden sm:inline-flex items-center rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-50"
+            >
+              Tickets
+            </button>
+          )}
+
           {Boolean(user?.impersonating) && (
             <button
               type="button"
@@ -242,6 +253,14 @@ export default function Header() {
           <div className="inline-flex px-3 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-700">
             {user?.role || 'User'}
           </div>
+          {showTicketsLink && (
+            <button
+              onClick={() => { setIsMenuOpen(false); navigate('/tickets'); }}
+              className="w-full border border-slate-300 text-slate-700 px-4 py-2 rounded-lg transition text-sm font-semibold hover:bg-slate-50"
+            >
+              Tickets
+            </button>
+          )}
           {Boolean(user?.impersonating) && (
             <button
               type="button"
