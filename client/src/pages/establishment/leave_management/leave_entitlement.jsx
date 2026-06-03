@@ -172,8 +172,9 @@ export default function LeaveEntitlementPage() {
   }, [token, year, departmentId]);
 
   useEffect(() => {
+    // Reset to first page only when filters change, not when rows update
     setPage(1);
-  }, [year, departmentId, searchTerm, rows]);
+  }, [year, departmentId, searchTerm]);
 
   useEffect(() => {
     if (page > totalPages) {
@@ -428,12 +429,10 @@ export default function LeaveEntitlementPage() {
                 </div>
               )}
             </div>
-
             {modalOpen && editingRow && (
               <div className="fixed inset-0 z-50 overflow-y-auto" role="dialog" aria-modal="true">
                 <div className="flex items-end justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
                   <div className="fixed inset-0 transition-opacity bg-gray-500 bg-opacity-75" onClick={closeModal} />
-
                   <div className="inline-block w-full max-w-4xl my-8 overflow-hidden text-left align-middle transition-all transform bg-white rounded-lg shadow-xl">
                     <div className="px-6 py-4 bg-blue-600">
                       <div className="flex items-center justify-between">
@@ -441,12 +440,10 @@ export default function LeaveEntitlementPage() {
                         <button className="text-white hover:text-gray-200" onClick={closeModal}>Close</button>
                       </div>
                     </div>
-
                     <div className="px-6 py-5 bg-white">
                       {formError && (
                         <div className="mb-4 p-3 rounded border border-red-200 text-red-700 bg-red-50 text-sm">{formError}</div>
                       )}
-
                       <form onSubmit={submitUpdate} className="space-y-6">
                         <div>
                           <h4 className="mb-3 text-md font-semibold text-gray-800">Entitled Leaves</h4>
@@ -474,7 +471,6 @@ export default function LeaveEntitlementPage() {
                             ))}
                           </div>
                         </div>
-
                         <div>
                           <h4 className="mb-3 text-md font-semibold text-gray-800">Taken Leaves</h4>
                           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -502,7 +498,6 @@ export default function LeaveEntitlementPage() {
                             ))}
                           </div>
                         </div>
-
                         <div>
                           <h4 className="mb-3 text-md font-semibold text-gray-800">Balance Leaves</h4>
                           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -519,7 +514,6 @@ export default function LeaveEntitlementPage() {
                             ))}
                           </div>
                         </div>
-
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           <div>
                             <h4 className="mb-3 text-md font-semibold text-gray-800">Leave Encashed</h4>
@@ -533,7 +527,6 @@ export default function LeaveEntitlementPage() {
                               className="w-full px-3 py-2 border border-gray-300 rounded-md"
                             />
                           </div>
-
                           <div>
                             <h4 className="mb-3 text-md font-semibold text-gray-800">Leave Carry Forwarded</h4>
                             <label className="block mb-2 text-sm font-medium text-gray-700">(EL)</label>
