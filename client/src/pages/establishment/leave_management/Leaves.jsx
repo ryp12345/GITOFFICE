@@ -220,7 +220,7 @@ export default function LeavesPage() {
 
             <div className="flex flex-col items-start justify-between gap-4 mb-6 sm:flex-row sm:items-center">
               <div className="relative w-full sm:w-72">
-                <input value={search} onChange={(e)=>setSearch(e.target.value)} placeholder="Search leaves..." className="w-full py-2 pl-10 pr-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500" />
+                <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search leaves..." className="w-full py-2 pl-10 pr-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500" />
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-400 absolute left-3 top-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
               </div>
               <button onClick={openCreate} className="flex items-center justify-center w-full px-6 py-3 font-medium text-white transition-all duration-300 transform rounded-lg shadow-lg bg-blue-600 hover:bg-blue-700 hover:-translate-y-1 hover:scale-105 sm:w-auto">
@@ -272,35 +272,37 @@ export default function LeavesPage() {
                             </span>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium">
-                            <div className="flex items-center justify-center space-x-2">
-
+                            <div className="flex items-center justify-center gap-2">
                               <button
                                 onClick={() => window.location.href = `/leave-management/leave-rules?leave_id=${row.id}`}
-                                className="p-2 text-blue-600 transition-colors duration-200 bg-white rounded-lg hover:bg-blue-100 border border-blue-300"
+                                className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-blue-300 bg-white text-blue-700 transition-colors duration-200 hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
                                 title="View Leave Rules"
+                                aria-label="View Leave Rules"
                               >
-                                <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.477 0 8.268 2.943 9.542 7-1.274 4.057-5.065 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.477 0 8.268 2.943 9.542 7-1.274 4.057-5.065 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                                 </svg>
                               </button>
-                               <button
+                              <button
                                 onClick={() => openEdit(row)}
-                                className="p-2 text-white transition-colors duration-200 bg-blue-600 rounded-lg hover:bg-blue-700"
+                                className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-blue-600 text-white transition-colors duration-200 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
                                 title="Edit Leave"
+                                aria-label="Edit Leave"
                               >
-                               <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                                 </svg>
                               </button>
                               {row.status === 'active' && (
                                 <button
                                   onClick={() => remove(row.id)}
-                                  className="p-2 text-white transition-colors duration-200 bg-red-600 rounded-lg hover:bg-red-700"
+                                  className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-red-600 text-white transition-colors duration-200 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
                                   title="Delete Leave"
+                                  aria-label="Delete Leave"
                                 >
-                                  <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                  <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                                   </svg>
                                 </button>
                               )}
@@ -358,7 +360,7 @@ export default function LeavesPage() {
                             <input
                               type="text"
                               value={form.longname}
-                              onChange={e=>setForm({ ...form, longname: e.target.value })}
+                              onChange={e => setForm({ ...form, longname: e.target.value })}
                               className="block w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                               placeholder="Long Name"
                               required
@@ -370,7 +372,7 @@ export default function LeavesPage() {
                             <input
                               type="text"
                               value={form.shortname}
-                              onChange={e=>setForm({ ...form, shortname: e.target.value })}
+                              onChange={e => setForm({ ...form, shortname: e.target.value })}
                               className="block w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                               placeholder="Short Name"
                               required
@@ -382,7 +384,7 @@ export default function LeavesPage() {
                             <input
                               type="number"
                               value={form.max_entitlement}
-                              onChange={e=>setForm({ ...form, max_entitlement: e.target.value })}
+                              onChange={e => setForm({ ...form, max_entitlement: e.target.value })}
                               className="block w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                               placeholder="Max Entitlement"
                             />
@@ -393,7 +395,7 @@ export default function LeavesPage() {
                             <input
                               type="number"
                               value={form.min_days}
-                              onChange={e=>setForm({ ...form, min_days: e.target.value })}
+                              onChange={e => setForm({ ...form, min_days: e.target.value })}
                               className="block w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                               placeholder="Min Days"
                               required
@@ -405,7 +407,7 @@ export default function LeavesPage() {
                             <input
                               type="number"
                               value={form.max_days}
-                              onChange={e=>setForm({ ...form, max_days: e.target.value })}
+                              onChange={e => setForm({ ...form, max_days: e.target.value })}
                               className="block w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                               placeholder="Max Days"
                             />
@@ -415,7 +417,7 @@ export default function LeavesPage() {
                             <label className="block mb-2 text-sm font-medium text-gray-700">Vacation Type *</label>
                             <select
                               value={form.vacation_type}
-                              onChange={e=>setForm({ ...form, vacation_type: e.target.value })}
+                              onChange={e => setForm({ ...form, vacation_type: e.target.value })}
                               className="block w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                               required
                             >
@@ -428,7 +430,7 @@ export default function LeavesPage() {
                             <label className="block mb-2 text-sm font-medium text-gray-700">Applicable To *</label>
                             <select
                               value={form.applicable_to}
-                              onChange={e=>setForm({ ...form, applicable_to: e.target.value })}
+                              onChange={e => setForm({ ...form, applicable_to: e.target.value })}
                               className="block w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                               required
                             >
@@ -442,7 +444,7 @@ export default function LeavesPage() {
                             <input
                               type="date"
                               value={form.leave_wef}
-                              onChange={e=>setForm({ ...form, leave_wef: e.target.value })}
+                              onChange={e => setForm({ ...form, leave_wef: e.target.value })}
                               className="block w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                               required
                             />
@@ -453,7 +455,7 @@ export default function LeavesPage() {
                             <input
                               type="date"
                               value={form.leave_end_date}
-                              onChange={e=>setForm({ ...form, leave_end_date: e.target.value })}
+                              onChange={e => setForm({ ...form, leave_end_date: e.target.value })}
                               className="block w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                             />
                           </div>
@@ -462,7 +464,7 @@ export default function LeavesPage() {
                             <label className="block mb-2 text-sm font-medium text-gray-700">Status</label>
                             <select
                               value={form.status}
-                              onChange={e=>setForm({ ...form, status: e.target.value })}
+                              onChange={e => setForm({ ...form, status: e.target.value })}
                               className="block w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                             >
                               <option value="active">Active</option>

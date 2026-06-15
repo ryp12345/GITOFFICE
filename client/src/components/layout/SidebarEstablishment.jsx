@@ -28,11 +28,76 @@ export default function SidebarEstablishment() {
         { name: 'Leave List', path: '/leave-management/establishment-leave-list' }
       ]
     },
-
     { name: 'Qualifications', path: '/qualifications', icon: '🎓' },
     { name: 'Religions & Castes', path: '/religions', icon: '🛐' },
-    // Remuneration Heads removed
     { name: 'Staff', path: '/staff', icon: '👥' },
+
+    // {
+    //   name: 'Salaries',
+    //   path: '/salaries',
+    //   icon: '💰',
+    //   submenu: [
+    //     {
+    //       name: 'Pay Scale Heads',
+    //       submenu: [
+    //         { name: 'Teaching', path: '/salaries/payscales/teaching' },
+    //         { name: 'Non-Teaching', path: '/salaries/payscales/non-teaching' },
+    //         { name: 'Allowances', path: '/salaries/payscales/allowances' }
+    //       ]
+    //     },
+
+    //     { name: 'LIC Management', path: '/salaries/lic-management' },
+
+    //     { name: 'Autonomous Grading', path: '/salaries/autonomous-grading' },
+
+    //     { name: 'Leaves Encashment', path: '/salaries/leaves-encashment' },
+
+    //     { name: 'Laptop Loan List', path: '/salaries/laptop-loan' },
+
+    //     {
+    //       name: 'Annual Increment List',
+    //       submenu: [
+    //         {
+    //           name: 'GC',
+    //           submenu: [
+    //             {
+    //               name: 'Teaching',
+    //               path: '/salaries/annual-increment/gc/teaching'
+    //             },
+    //             {
+    //               name: 'Non Teaching',
+    //               path: '/salaries/annual-increment/gc/non-teaching'
+    //             }
+    //           ]
+    //         },
+    //         {
+    //           name: 'Board',
+    //           submenu: [
+    //             {
+    //               name: 'Teaching',
+    //               path: '/salaries/annual-increment/board/teaching'
+    //             },
+    //             {
+    //               name: 'Non Teaching',
+    //               path: '/salaries/annual-increment/board/non-teaching'
+    //             }
+    //           ]
+    //         }
+    //       ]
+    //     },
+
+    //     { name: 'Festival Advance List', path: '/salaries/festival-advance' },
+
+    //     { name: 'Salary Credit', path: '/salaries/salary-credit' },
+
+    //     { name: 'Salary History', path: '/salaries/salary-history' },
+
+    //     {
+    //       name: 'Staff Remuneration Details',
+    //       path: '/salaries/staff-remuneration-details'
+    //     }
+    //   ]
+    // },
     {
       name: 'BIOMETRIC',
       path: '/establishment/biometric',
@@ -107,71 +172,68 @@ export default function SidebarEstablishment() {
             <span className="text-xl">✕</span>
           </button>
         </div>
-      <nav className="space-y-2 px-3 pb-4 overflow-y-auto md:overflow-visible">
-        {links.map((link) => (
-          <div key={link.submenu ? link.name : link.path}>
-            {link.submenu ? (
-              <div>
-                <button
-                  onClick={() => {
-                    setExpandedMenu(expandedMenu === link.name ? null : link.name);
-                  }}
-                  title={!isOpen && !expandedMenu ? link.name : ''}
-                  className={`w-full flex items-center ${isOpen ? 'space-x-3' : 'justify-center'} px-4 py-3 md:py-3 rounded-lg transition duration-200 touch-manipulation
-                    ${
-                    expandedMenu === link.name
+        <nav className="space-y-2 px-3 pb-4 overflow-y-auto md:overflow-visible">
+          {links.map((link) => (
+            <div key={link.submenu ? link.name : link.path}>
+              {link.submenu ? (
+                <div>
+                  <button
+                    onClick={() => {
+                      setExpandedMenu(expandedMenu === link.name ? null : link.name);
+                    }}
+                    title={!isOpen && !expandedMenu ? link.name : ''}
+                    className={`w-full flex items-center ${isOpen ? 'space-x-3' : 'justify-center'} px-4 py-3 md:py-3 rounded-lg transition duration-200 touch-manipulation
+                    ${expandedMenu === link.name
+                        ? 'bg-blue-500 text-white'
+                        : 'text-slate-200 hover:bg-slate-700'
+                      }`}
+                  >
+                    <span className="text-lg md:text-xl flex-shrink-0">{link.icon}</span>
+                    {isOpen && <span className="font-medium flex-1 text-left text-sm md:text-sm whitespace-nowrap truncate">{link.name}</span>}
+                    {isOpen && <svg className="w-4 h-4 text-slate-300 transition-transform duration-200" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d={expandedMenu === link.name ? 'M5 15l7-7 7 7' : 'M19 9l-7 7-7-7'} /></svg>}
+                  </button>
+                  {expandedMenu === link.name && isOpen && (
+                    <div className="space-y-1 mt-1">
+                      {link.submenu.map((subitem) => (
+                        <Link
+                          key={subitem.path}
+                          to={subitem.path}
+                          onClick={() => {
+                            setIsMobileOpen(false);
+                            setExpandedMenu(null);
+                          }}
+                          title={!isOpen && expandedMenu ? subitem.name : ''}
+                          className={`flex items-center space-x-3 px-8 py-2 md:py-2 rounded-lg transition duration-200 text-sm touch-manipulation
+                          ${location.pathname === subitem.path
+                              ? 'bg-blue-500 text-white font-semibold'
+                              : 'text-slate-300 hover:text-white hover:bg-slate-700'
+                            }`}
+                        >
+                          <span className="font-medium">{subitem.name}</span>
+                        </Link>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <Link
+                  to={link.path}
+                  onClick={() => setIsMobileOpen(false)}
+                  title={!isOpen ? link.name : ''}
+                  className={`flex items-center space-x-3 px-4 py-3 md:py-3 rounded-lg transition duration-200 touch-manipulation
+                  ${location.pathname === link.path
                       ? 'bg-blue-500 text-white'
                       : 'text-slate-200 hover:bg-slate-700'
-                  }`}
+                    }`}
                 >
                   <span className="text-lg md:text-xl flex-shrink-0">{link.icon}</span>
-                  {isOpen && <span className="font-medium flex-1 text-left text-sm md:text-sm whitespace-nowrap truncate">{link.name}</span>}
-                  {isOpen && <span className="text-sm flex-shrink-0">{expandedMenu === link.name ? '▼' : '▶'}</span>}
-                </button>
-                {expandedMenu === link.name && isOpen && (
-                  <div className="space-y-1 mt-1">
-                    {link.submenu.map((subitem) => (
-                      <Link
-                        key={subitem.path}
-                        to={subitem.path}
-                        onClick={() => {
-                          setIsMobileOpen(false);
-                          setExpandedMenu(null);
-                        }}
-                        title={!isOpen && expandedMenu ? subitem.name : ''}
-                        className={`flex items-center space-x-3 px-8 py-2 md:py-2 rounded-lg transition duration-200 text-sm touch-manipulation
-                          ${
-                          location.pathname === subitem.path
-                            ? 'bg-blue-500 text-white font-semibold'
-                            : 'text-slate-300 hover:text-white hover:bg-slate-700'
-                        }`}
-                      >
-                        <span className="font-medium">{subitem.name}</span>
-                      </Link>
-                    ))}
-                  </div>
-                )}
-              </div>
-            ) : (
-              <Link
-                to={link.path}
-                onClick={() => setIsMobileOpen(false)}
-                title={!isOpen ? link.name : ''}
-                className={`flex items-center space-x-3 px-4 py-3 md:py-3 rounded-lg transition duration-200 touch-manipulation
-                  ${
-                  location.pathname === link.path
-                    ? 'bg-blue-500 text-white'
-                    : 'text-slate-200 hover:bg-slate-700'
-                }`}
-              >
-                <span className="text-lg md:text-xl flex-shrink-0">{link.icon}</span>
-                {isOpen && <span className="font-medium text-sm md:text-sm">{link.name}</span>}
-              </Link>
-            )}
-          </div>
-        ))}
-      </nav>
-    </aside>
+                  {isOpen && <span className="font-medium text-sm md:text-sm">{link.name}</span>}
+                </Link>
+              )}
+            </div>
+          ))}
+        </nav>
+      </aside>
     </>
   );
 }
