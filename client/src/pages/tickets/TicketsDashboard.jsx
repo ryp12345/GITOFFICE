@@ -48,14 +48,45 @@ export default function TicketsDashboard({ detailBasePath, canManageTickets }) {
   const [editForm, setEditForm] = useState({ title: '', description: '', attachments: [] });
   const [notification, setNotification] = useState({ show: false, message: '', type: 'success' });
   const [busyAction, setBusyAction] = useState('');
+  const [search, setSearch] = useState('');
+  const [page, setPage] = useState(1);
+  const PAGE_SIZE = 10;
 
   const totalCount =
     Number(counts?.new_count || 0) + Number(counts?.pending_count || 0) + Number(counts?.resolved_count || 0);
   const showStaffNameColumn = isRoleMatch(user?.role, ROLE_SUPER_ADMIN);
+  const tableColSpan = 6 + (showStaffNameColumn ? 1 : 0);
 
   const sortedTickets = useMemo(
-    () => [...tickets].sort((a, b) => Number(b?.id || 0) - Number(a?.id || 0)),
+    () => [...tickets].sort((a, b) => {
+      const aTime = a.created_at ? new Date(a.created_at).getTime() : 0;
+      const bTime = b.created_at ? new Date(b.created_at).getTime() : 0;
+      if (bTime !== aTime) return bTime - aTime;
+      return Number(b?.id || 0) - Number(a?.id || 0);
+    }),
     [tickets]
+  );
+
+  const filteredTickets = useMemo(
+    () => {
+      const q = search.toLowerCase();
+      return sortedTickets.filter((ticket) => {
+        const title = String(ticket.title || '').toLowerCase();
+        const status = String(ticket.status || '').toLowerCase();
+        const staffName = String(ticket.staff_name || ticket.email || '').toLowerCase();
+        const raisedDate = formatRaisedDate(ticket.created_at).toLowerCase();
+        return title.includes(q) || status.includes(q) || staffName.includes(q) || raisedDate.includes(q);
+      });
+    },
+    [sortedTickets, search]
+  );
+
+  const paginatedTickets = useMemo(
+    () => {
+      const start = (page - 1) * PAGE_SIZE;
+      return filteredTickets.slice(start, start + PAGE_SIZE);
+    },
+    [filteredTickets, page]
   );
 
   function showNotification(message, type = 'success') {
@@ -79,6 +110,10 @@ export default function TicketsDashboard({ detailBasePath, canManageTickets }) {
       setLoading(false);
     }
   }
+
+  useEffect(() => {
+    setPage(1);
+  }, [search, tickets]);
 
   useEffect(() => {
     loadDashboard();
@@ -196,6 +231,19 @@ export default function TicketsDashboard({ detailBasePath, canManageTickets }) {
             <div className="mt-6 rounded-xl border border-slate-200 bg-white shadow overflow-hidden">
               <div className="border-b border-slate-200 px-4 py-3">
               </div>
+              <div className="flex flex-col items-start justify-between gap-4 mb-6 px-4 py-4 sm:flex-row sm:items-center">
+                <div className="relative w-full sm:w-72">
+                  <input
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    placeholder="Search tickets..."
+                    className="w-full py-2 pl-10 pr-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-400 absolute left-3 top-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                  </svg>
+                </div>
+              </div>
               <div className="overflow-x-auto">
                 <table className="min-w-full divide-y divide-slate-200">
                   <thead className="bg-blue-600">
@@ -215,28 +263,28 @@ export default function TicketsDashboard({ detailBasePath, canManageTickets }) {
                   <tbody className="divide-y divide-slate-100 bg-white">
                     {loading && (
                       <tr>
-                        <td colSpan={7} className="px-4 py-6 text-center text-slate-500">
+                        <td colSpan={tableColSpan} className="px-4 py-6 text-center text-slate-500">
                           Loading tickets...
                         </td>
                       </tr>
                     )}
 
-                    {!loading && sortedTickets.length === 0 && (
+                    {!loading && filteredTickets.length === 0 && (
                       <tr>
-                        <td colSpan={7} className="px-4 py-6 text-center text-slate-500">
-                          No tickets added.
+                        <td colSpan={tableColSpan} className="px-4 py-6 text-center text-slate-500">
+                          No tickets found.
                         </td>
                       </tr>
                     )}
 
                     {!loading &&
-                      sortedTickets.map((ticket, index) => {
+                      paginatedTickets.map((ticket, index) => {
                         const isEditing = editingTicketId === ticket.id;
                         const canEditDelete = canManageTickets && ticket.status !== 'Resolved';
 
                         return (
                           <tr key={ticket.id} className="hover:bg-slate-50">
-                            <td className="px-4 py-3 align-top text-sm text-slate-700">{index + 1}</td>
+                            <td className="px-4 py-3 align-top text-sm text-slate-700">{(page - 1) * PAGE_SIZE + index + 1}</td>
                             {showStaffNameColumn && (
                               <td className="px-4 py-3 align-top text-sm text-slate-700">
                                 <div className="font-medium text-slate-900">{ticket.staff_name || ticket.email || '--NA--'}</div>
@@ -312,6 +360,28 @@ export default function TicketsDashboard({ detailBasePath, canManageTickets }) {
                   </tbody>
                 </table>
               </div>
+
+              {filteredTickets.length > PAGE_SIZE && (
+                <div className="flex justify-end items-center gap-2 px-6 pb-6">
+                  <button
+                    className="px-3 py-1 rounded border border-gray-300 bg-white text-gray-700 disabled:opacity-50"
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                    disabled={page === 1}
+                  >
+                    Prev
+                  </button>
+                  <span className="text-sm text-gray-700">
+                    Page {page} of {Math.ceil(filteredTickets.length / PAGE_SIZE)}
+                  </span>
+                  <button
+                    className="px-3 py-1 rounded border border-gray-300 bg-white text-gray-700 disabled:opacity-50"
+                    onClick={() => setPage((p) => Math.min(Math.ceil(filteredTickets.length / PAGE_SIZE), p + 1))}
+                    disabled={page === Math.ceil(filteredTickets.length / PAGE_SIZE)}
+                  >
+                    Next
+                  </button>
+                </div>
+              )}
             </div>
 
             {showCreate && (
