@@ -32,7 +32,7 @@ cron.schedule('0 0 * * *', safeRun('daily_Non_Vacational_EL', Jobs.daily_Non_Vac
 cron.schedule('0 0 27 6 *', safeRun('halfyearlyEL', Jobs.halfyearlyEL), { timezone: TZ });
 
 // Daily @ 10:54 (matches Laravel `sendMissingPunchesEmail` dailyAt('10:54'))
-// cron.schedule('54 10 * * *', safeRun('sendMissingPunchesEmail', Jobs.sendMissingPunchesEmail), { timezone: TZ });
+cron.schedule('54 10 * * *', safeRun('sendMissingPunchesEmail', Jobs.sendMissingPunchesEmail), { timezone: TZ });
 
 //console.log('[scheduler] job scheduler initialized (mirrors Laravel Kernel)');
 

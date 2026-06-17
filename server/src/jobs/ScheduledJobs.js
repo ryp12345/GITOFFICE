@@ -1,10 +1,57 @@
 // Job implementations for scheduled tasks. Import services as needed.
 const leaveService = require('../services/leaveService');
 const jobRunService = require('../services/jobRunService');
-const staffModel = require('../models/staff.model');
-const leaveModel = require('../models/leave.model');
 const { pool } = require('../config/db');
 const mysql = require('mysql2/promise');
+
+const IST = 'Asia/Kolkata';
+const MS_PER_DAY = 1000 * 60 * 60 * 24;
+
+function padMonthDay(value) {
+  return String(value).padStart(2, '0');
+}
+
+function getDatePartsInTimeZone(dateValue, timeZone = IST) {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(dateValue instanceof Date ? dateValue : new Date(dateValue));
+
+  return {
+    year: Number(parts.find((p) => p.type === 'year')?.value || 0),
+    month: Number(parts.find((p) => p.type === 'month')?.value || 1),
+    day: Number(parts.find((p) => p.type === 'day')?.value || 1),
+  };
+}
+
+function getIstNowParts() {
+  const parts = getDatePartsInTimeZone(new Date(), IST);
+  return {
+    ...parts,
+    date: `${parts.year}-${padMonthDay(parts.month)}-${padMonthDay(parts.day)}`,
+  };
+}
+
+function parseDateOnly(value) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(value || '').trim());
+  if (match) {
+    return new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])));
+  }
+
+  const parts = getDatePartsInTimeZone(value, 'UTC');
+  return new Date(Date.UTC(parts.year, parts.month - 1, parts.day));
+}
+
+function daysBetweenDateOnly(a, b) {
+  return Math.abs(Math.floor((parseDateOnly(a) - parseDateOnly(b)) / MS_PER_DAY));
+}
+
+function safeNumber(value, fallback = 0) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
+}
 
 // Helper: ensure an entitlement row for (year, staff, leave) exists before inserting.
 async function ensureEntitlement(year, staffId, leaveId, insertSql, insertParams) {
@@ -38,7 +85,7 @@ async function yearly_leave_entitlements(context = {}) {
 
   // Laravel runs this in Dec for the next year; compute next year exactly as Laravel
   // Allow overriding via context.year for one-off runs (useful for backfilling)
-  const year = Number(context.year) || (new Date().getFullYear()) + 1;
+  const year = Number(context.year) || getIstNowParts().year + 1;
 
   // helper: get first active leave_rules row for a leave
   async function getLeaveRule(leaveId) {
@@ -81,12 +128,10 @@ async function yearly_leave_entitlements(context = {}) {
       for (const l of vacLeaves) {
         // EL handling
         if ((l.shortname || '').toUpperCase() === 'EL') {
-          const dorYear = st.date_of_superanuation ? new Date(st.date_of_superanuation).getFullYear() : null;
+          const dorYear = st.date_of_superanuation ? parseDateOnly(st.date_of_superanuation).getFullYear() : null;
           let max_entitlement = 0;
           if (dorYear === year) {
-            const retirementDate = new Date(st.date_of_superanuation);
-            const firstOfJan = new Date(`${year}-01-01`);
-            const diffDays = Math.max(0, Math.floor((retirementDate - firstOfJan) / (1000 * 60 * 60 * 24)));
+            const diffDays = daysBetweenDateOnly(st.date_of_superanuation, `${year}-01-01`);
             const max_entitlement_full = Math.ceil(diffDays * (Number(l.max_entitlement || 0)) / 365);
             if (max_entitlement_full > Math.ceil(Number(l.max_entitlement || 0) / 2)) {
               max_entitlement = Math.floor(Number(l.max_entitlement || 0) / 2);
@@ -100,13 +145,12 @@ async function yearly_leave_entitlements(context = {}) {
           // previous year entitlement
           const { rows: preRows } = await pool.query('SELECT * FROM leave_staff_entitlements WHERE staff_id=$1 AND leave_id=$2 AND year=$3 LIMIT 1', [st.id, l.id, year - 1]);
           const pre = preRows && preRows[0];
-          const monthlyGrantLog = JSON.stringify({ jan:0,feb:0,mar:0,apr:0,may:0,jun:0,jul:0,aug:0,sep:0,oct:0,nov:0,dec:0 });
 
           if (!pre) {
             console.log('inserting EL for staff', st.id, 'leave', l.id, 'entitlement', max_entitlement);
             await ensureEntitlement(year, st.id, l.id,
-              `INSERT INTO leave_staff_entitlements (year, staff_id, leave_id, entitled_curr_year, monthly_grant_log, wef, status, created_at, updated_at) VALUES ($1,$2,$3,$4,$5,$6,'active', NOW(), NOW())`,
-              [year, st.id, l.id, max_entitlement, monthlyGrantLog, `${year}-01-01`] );
+              `INSERT INTO leave_staff_entitlements (year, staff_id, leave_id, entitled_curr_year, wef, status, created_at, updated_at) VALUES ($1,$2,$3,$4,$5,'active', NOW(), NOW())`,
+              [year, st.id, l.id, max_entitlement, `${year}-01-01`] );
           } else {
             console.log('previous year entry exists for staff', st.id, 'leave', l.id, 'using accumulated logic');
             // compute accumulated / encashed depending on leave_rules
@@ -134,11 +178,10 @@ async function yearly_leave_entitlements(context = {}) {
           const max_entitlement = await check_dorCL(st.id, l);
           const { rows: preRows } = await pool.query('SELECT * FROM leave_staff_entitlements WHERE staff_id=$1 AND leave_id=$2 AND year=$3 LIMIT 1', [st.id, l.id, year - 1]);
           const pre = preRows && preRows[0];
-          const monthlyGrantLog = JSON.stringify({ jan:0,feb:0,mar:0,apr:0,may:0,jun:0,jul:0,aug:0,sep:0,oct:0,nov:0,dec:0 });
           if (!pre) {
             await ensureEntitlement(year, st.id, l.id,
-              `INSERT INTO leave_staff_entitlements (year, staff_id, leave_id, entitled_curr_year, monthly_grant_log, wef, status, created_at, updated_at) VALUES ($1,$2,$3,$4,$5,$6,'active', NOW(), NOW())`,
-              [year, st.id, l.id, max_entitlement, monthlyGrantLog, `${year}-01-01`] );
+              `INSERT INTO leave_staff_entitlements (year, staff_id, leave_id, entitled_curr_year, wef, status, created_at, updated_at) VALUES ($1,$2,$3,$4,$5,'active', NOW(), NOW())`,
+              [year, st.id, l.id, max_entitlement, `${year}-01-01`] );
           } else {
             const rule = await getLeaveRule(l.id);
             let accumulated = pre.accumulated || 0;
@@ -162,10 +205,9 @@ async function yearly_leave_entitlements(context = {}) {
         }
         else {
           // other leave types: give full entitlement
-          const monthlyGrantLog = JSON.stringify({ jan:0,feb:0,mar:0,apr:0,may:0,jun:0,jul:0,aug:0,sep:0,oct:0,nov:0,dec:0 });
           await ensureEntitlement(year, st.id, l.id,
-            `INSERT INTO leave_staff_entitlements (year, staff_id, leave_id, entitled_curr_year, monthly_grant_log, wef, status, created_at, updated_at) VALUES ($1,$2,$3,$4,$5,$6,'active', NOW(), NOW())`,
-            [year, st.id, l.id, Number(l.max_entitlement) || 0, monthlyGrantLog, `${year}-01-01`] );
+            `INSERT INTO leave_staff_entitlements (year, staff_id, leave_id, entitled_curr_year, wef, status, created_at, updated_at) VALUES ($1,$2,$3,$4,$5,'active', NOW(), NOW())`,
+            [year, st.id, l.id, Number(l.max_entitlement) || 0, `${year}-01-01`] );
         }
       }
     }
@@ -186,11 +228,9 @@ async function yearly_leave_entitlements(context = {}) {
         if (!pre) {
           let entitlement = 0;
           if ((l.shortname || '').toUpperCase() === 'EL') {
-            const dorYear = st.date_of_superanuation ? new Date(st.date_of_superanuation).getFullYear() : null;
-            if (dorYear === year && st.start_date && new Date(st.start_date) > new Date(st.date_of_superanuation)) {
-              const retirementDate = new Date(st.date_of_superanuation);
-              const firstOfJan = new Date(`${year}-01-01`);
-              const diffDays = Math.max(0, Math.floor((retirementDate - firstOfJan) / (1000*60*60*24)));
+            const dorYear = st.date_of_superanuation ? parseDateOnly(st.date_of_superanuation).getFullYear() : null;
+            if (dorYear === year && st.start_date && parseDateOnly(st.start_date) > parseDateOnly(st.date_of_superanuation)) {
+              const diffDays = daysBetweenDateOnly(st.date_of_superanuation, `${year}-01-01`);
               entitlement = Math.round(Number(l.max_entitlement || 0) * diffDays / 365);
             } else {
               entitlement = 0;
@@ -200,10 +240,9 @@ async function yearly_leave_entitlements(context = {}) {
           } else {
             entitlement = Number(l.max_entitlement) || 0;
           }
-          const monthlyGrantLog = JSON.stringify({ jan:0,feb:0,mar:0,apr:0,may:0,jun:0,jul:0,aug:0,sep:0,oct:0,nov:0,dec:0 });
           await ensureEntitlement(year, st.id, l.id,
-            `INSERT INTO leave_staff_entitlements (year, staff_id, leave_id, entitled_curr_year, monthly_grant_log, wef, status, created_at, updated_at) VALUES ($1,$2,$3,$4,$5,$6,'active', NOW(), NOW())`,
-            [year, st.id, l.id, entitlement, monthlyGrantLog, `${year}-01-01`] );
+            `INSERT INTO leave_staff_entitlements (year, staff_id, leave_id, entitled_curr_year, wef, status, created_at, updated_at) VALUES ($1,$2,$3,$4,$5,'active', NOW(), NOW())`,
+            [year, st.id, l.id, entitlement, `${year}-01-01`] );
         } else {
           // has previous entitlement: compute accumulated/encash as per rules
           const rule = await getLeaveRule(l.id);
@@ -226,7 +265,7 @@ async function yearly_leave_entitlements(context = {}) {
           }
           // entitlement for EL special-case
           if ((l.shortname || '').toUpperCase() === 'EL') {
-            if ((pre.accumulated || 0) === (rule && rule.max_cf ? rule.max_cf : pre.accumulated || 0)) {
+            if (rule && (pre.accumulated || 0) === (rule.max_cf || 0)) {
               await ensureEntitlement(year, st.id, l.id,
                 'INSERT INTO leave_staff_entitlements (year, staff_id, leave_id, entitled_curr_year, accumulated, total_encashed, wef, status, created_at, updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,\'active\', NOW(), NOW())',
                 [year, st.id, l.id, (rule && rule.entitlement_post_max_cf) || 0, accumulated, total_encashable, `${year}-01-01`] );
@@ -264,35 +303,34 @@ async function yearly_leave_entitlements(context = {}) {
         let max_entitlement = Number(l.max_entitlement) || 0;
         if ((l.shortname || '').toUpperCase() === 'EL') {
           // if confirmed in previous year
-          if (st.asso_name === 'Confirmed' && st.start_date && new Date(st.start_date).getFullYear() === year - 1) {
-            const startDate = new Date(st.start_date);
-            const endDate = new Date(startDate.getFullYear(), 11, 31);
-            const daysWorked = Math.max(0, Math.floor((endDate - startDate) / (1000 * 60 * 60 * 24)));
+          if (st.asso_name === 'Confirmed' && st.start_date && parseDateOnly(st.start_date).getFullYear() === year - 1) {
+            const startDate = parseDateOnly(st.start_date);
+            const endDate = parseDateOnly(`${startDate.getFullYear()}-12-31`);
+            const daysWorked = daysBetweenDateOnly(startDate, endDate);
             max_entitlement = Math.ceil(Number(l.max_entitlement || 0) * daysWorked / 365);
           } else {
-            if (st.date_of_superanuation && new Date(st.date_of_superanuation).getFullYear() === year) {
-              const dor = new Date(st.date_of_superanuation);
-              const startOfYear = new Date(`${year}-01-01`);
-              const daysWorked = Math.max(0, Math.floor((dor - startOfYear) / (1000 * 60 * 60 * 24)));
+            if (st.date_of_superanuation && parseDateOnly(st.date_of_superanuation).getFullYear() === year) {
+              const dor = parseDateOnly(st.date_of_superanuation);
+              const startOfYear = parseDateOnly(`${year}-01-01`);
+              const daysWorked = daysBetweenDateOnly(startOfYear, dor);
               max_entitlement = Math.ceil(Number(l.max_entitlement || 0) * daysWorked / 365);
             } else {
               max_entitlement = Number(l.max_entitlement) || 0;
             }
           }
-        } else if ((l.shortname || '').toUpperCase() === 'CL' && st.date_of_superanuation && new Date(st.date_of_superanuation).getFullYear() === year) {
-          const dor = new Date(st.date_of_superanuation);
-          const startOfYear = new Date(`${year}-01-01`);
-          const daysWorked = Math.max(0, Math.floor((dor - startOfYear) / (1000 * 60 * 60 * 24)));
+        } else if ((l.shortname || '').toUpperCase() === 'CL' && st.date_of_superanuation && parseDateOnly(st.date_of_superanuation).getFullYear() === year) {
+          const dor = parseDateOnly(st.date_of_superanuation);
+          const startOfYear = parseDateOnly(`${year}-01-01`);
+          const daysWorked = daysBetweenDateOnly(startOfYear, dor);
           max_entitlement = Math.ceil(Number(l.max_entitlement || 0) * daysWorked / 365);
         }
 
         const { rows: preRows } = await pool.query('SELECT * FROM leave_staff_entitlements WHERE year=$1 AND staff_id=$2 AND leave_id=$3 LIMIT 1', [year - 1, st.id, l.id]);
         const pre = preRows && preRows[0];
           if (!pre) {
-          const monthlyGrantLog = JSON.stringify({ jan:0,feb:0,mar:0,apr:0,may:0,jun:0,jul:0,aug:0,sep:0,oct:0,nov:0,dec:0 });
           await ensureEntitlement(year, st.id, l.id,
-            `INSERT INTO leave_staff_entitlements (year, staff_id, leave_id, entitled_curr_year, monthly_grant_log, wef, status, created_at, updated_at) VALUES ($1,$2,$3,$4,$5,$6,'active', NOW(), NOW())`,
-            [year, st.id, l.id, max_entitlement, monthlyGrantLog, `${year}-01-01`]);
+            `INSERT INTO leave_staff_entitlements (year, staff_id, leave_id, entitled_curr_year, wef, status, created_at, updated_at) VALUES ($1,$2,$3,$4,$5,'active', NOW(), NOW())`,
+            [year, st.id, l.id, max_entitlement, `${year}-01-01`]);
         } else {
           const rule = await getLeaveRule(l.id);
           let accumulated = pre.accumulated || 0;
@@ -360,9 +398,10 @@ async function monthly_leave_entitlements() {
   let run = null;
   try { run = await jobRunService.startRun('monthly_leave_entitlements', { initiatedBy }); } catch (e) { console.warn('Could not record job run start:', e && e.message); }
 
-  const now = new Date();
-  const month = Number(context.month) || (now.getMonth() + 1);
-  const year = Number(context.year) || now.getFullYear();
+  const nowParts = getIstNowParts();
+  const month = Number(context.month) || nowParts.month;
+  const year = Number(context.year) || nowParts.year;
+  const currentDate = parseDateOnly(nowParts.date);
 
   try {
     const staffSql = `
@@ -397,14 +436,13 @@ async function monthly_leave_entitlements() {
     ]);
 
     let applied = 0;
-    const currentMs = Date.now();
     for (const st of staffRows) {
-      const doa = st.as_start_date ? new Date(st.as_start_date) : null;
+      const doa = st.as_start_date ? parseDateOnly(st.as_start_date) : null;
       if (!doa || Number.isNaN(doa.getTime())) {
         continue;
       }
 
-      const diffDays = Math.floor(Math.abs(currentMs - doa.getTime()) / (1000 * 60 * 60 * 24));
+      const diffDays = daysBetweenDateOnly(doa, currentDate);
       const noOfDays = diffDays % 365;
 
       let clEntitled = 0;
@@ -480,48 +518,19 @@ async function monthly_leave_entitlements() {
   }
 }
 
-// Helpers ported from Laravel controller
-function getMonthKey(month) {
-  const map = {
-    1: 'jan', 2: 'feb', 3: 'mar', 4: 'apr', 5: 'may', 6: 'jun',
-    7: 'jul', 8: 'aug', 9: 'sep', 10: 'oct', 11: 'nov', 12: 'dec',
-  };
-  return map[month] || 'jan';
-}
-
-function normalizeMonthlyGrantLog(monthlyGrantLog) {
-  const defaultLog = { jan: 0, feb: 0, mar: 0, apr: 0, may: 0, jun: 0, jul: 0, aug: 0, sep: 0, oct: 0, nov: 0, dec: 0 };
-  if (!monthlyGrantLog) return defaultLog;
-  let log = monthlyGrantLog;
-  if (typeof log === 'string' && log !== '') {
-    try { log = JSON.parse(log); } catch (e) { log = {}; }
-  }
-  if (typeof log !== 'object' || Array.isArray(log)) return defaultLog;
-  Object.keys(defaultLog).forEach(k => { defaultLog[k] = Number(log[k] || 0); });
-  return defaultLog;
-}
-
 async function upsertMonthlyClEntitlement(staffId, leaveObjOrId, leaveIdFromArgs, yearArg, monthArg, grantArg) {
-  // Supported signatures:
-  // 1) (staffId, leaveObj, year, month, grant)
-  // 2) (staffId, leaveId, year, month, grant)
-  // 3) (staffId, leaveObjOrId, ignored, year, month, grant)
   let leaveObj = leaveObjOrId;
   let year = yearArg;
-  let month = monthArg;
   let grant = grantArg;
 
   if (arguments.length === 5) {
     year = leaveIdFromArgs;
-    month = yearArg;
     grant = monthArg;
   } else if (arguments.length >= 6) {
     year = yearArg;
-    month = monthArg;
     grant = grantArg;
   }
 
-  // If leaveObj is not an object, try to fetch leave record
   if (!leaveObj || typeof leaveObj !== 'object') {
     try {
       const { rows } = await pool.query('SELECT * FROM leaves WHERE id = $1 LIMIT 1', [leaveObj]);
@@ -531,41 +540,30 @@ async function upsertMonthlyClEntitlement(staffId, leaveObjOrId, leaveIdFromArgs
     }
   }
 
-  year = Number(year) || new Date().getFullYear();
-  month = Number(month) || (new Date().getMonth() + 1);
+  year = Number(year) || getIstNowParts().year;
   grant = Number(grant) || 0;
 
-  // fetch existing entitlement
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
     const { rows: entRows } = await client.query('SELECT * FROM leave_staff_entitlements WHERE year=$1 AND staff_id=$2 AND leave_id=$3 LIMIT 1', [year, staffId, leaveObj.id]);
     let entitlement = entRows && entRows[0];
+    const leaveMax = safeNumber(leaveObj.max_entitlement, 0);
+    const grantToApply = Math.min(Math.max(grant, 0), leaveMax);
+
     if (!entitlement) {
-      const monthlyGrantLog = JSON.stringify({ jan:0,feb:0,mar:0,apr:0,may:0,jun:0,jul:0,aug:0,sep:0,oct:0,nov:0,dec:0 });
-      // Insert a fresh entitlement row: (year, staff_id, leave_id, entitled_curr_year, monthly_grant_log, wef)
-      await client.query(`INSERT INTO leave_staff_entitlements (year, staff_id, leave_id, entitled_curr_year, monthly_grant_log, wef, status, created_at, updated_at)
-        VALUES ($1,$2,$3,$4,$5,$6,'active', NOW(), NOW())`, [year, staffId, leaveObj.id, 0, monthlyGrantLog, `${year}-01-01`]);
-      const { rows: newRows } = await client.query('SELECT * FROM leave_staff_entitlements WHERE year=$1 AND staff_id=$2 AND leave_id=$3 LIMIT 1', [year, staffId, leaveObj.id]);
-      entitlement = newRows && newRows[0];
-    }
-
-    const monthlyLog = normalizeMonthlyGrantLog(entitlement.monthly_grant_log);
-    const monthKey = getMonthKey(month);
-    if ((monthlyLog[monthKey] || 0) > 0) {
+      await client.query(`INSERT INTO leave_staff_entitlements (year, staff_id, leave_id, entitled_curr_year, wef, status, created_at, updated_at)
+        VALUES ($1,$2,$3,$4,$5,'active', NOW(), NOW())`, [year, staffId, leaveObj.id, grantToApply, `${year}-01-01`]);
       await client.query('COMMIT');
-      return; // already granted
+      return;
     }
 
-    const remainingEntitlement = Math.max(Number(leaveObj.max_entitlement || 0) - Number(entitlement.entitled_curr_year || 0), 0);
-    const grantToApply = Math.min(Math.max(grant, 0), remainingEntitlement);
-    if (grantToApply > 0) {
-      const newEntitled = (Number(entitlement.entitled_curr_year || 0) + grantToApply);
-      monthlyLog[monthKey] = grantToApply;
-      await client.query('UPDATE leave_staff_entitlements SET entitled_curr_year=$1, monthly_grant_log=$2, updated_at=NOW() WHERE id=$3', [newEntitled, JSON.stringify(monthlyLog), entitlement.id]);
-    } else {
-      monthlyLog[monthKey] = 0;
-      await client.query('UPDATE leave_staff_entitlements SET monthly_grant_log=$1, updated_at=NOW() WHERE id=$2', [JSON.stringify(monthlyLog), entitlement.id]);
+    const currentEntitled = safeNumber(entitlement.entitled_curr_year, 0);
+    const remainingEntitlement = Math.max(leaveMax - currentEntitled, 0);
+    const actualGrant = Math.min(grantToApply, remainingEntitlement);
+
+    if (actualGrant > 0) {
+      await client.query('UPDATE leave_staff_entitlements SET entitled_curr_year=$1, updated_at=NOW() WHERE id=$2', [currentEntitled + actualGrant, entitlement.id]);
     }
 
     await client.query('COMMIT');
@@ -578,15 +576,13 @@ async function upsertMonthlyClEntitlement(staffId, leaveObjOrId, leaveIdFromArgs
 }
 
 async function check_dorCL(staffId, leaveObj) {
-  const year = new Date().getFullYear() + 1;
+  const year = getIstNowParts().year + 1;
   const { rows } = await pool.query('SELECT date_of_superanuation FROM staff WHERE id = $1 LIMIT 1', [staffId]);
   const staff = rows && rows[0];
   if (!staff || !staff.date_of_superanuation) return Number(leaveObj.max_entitlement || 0);
-  const dor = new Date(staff.date_of_superanuation).getFullYear();
+  const dor = parseDateOnly(staff.date_of_superanuation).getUTCFullYear();
   if (dor === year) {
-    const retirementDate = new Date(staff.date_of_superanuation);
-    const firstOfJan = new Date(`${year}-01-01`);
-    const diffDays = Math.max(0, Math.floor((retirementDate - firstOfJan) / (1000*60*60*24)));
+    const diffDays = daysBetweenDateOnly(staff.date_of_superanuation, `${year}-01-01`);
     return Math.ceil(diffDays * (Number(leaveObj.max_entitlement||0)) / 365);
   }
   return Number(leaveObj.max_entitlement || 0);
@@ -600,10 +596,10 @@ async function daily_Non_Vacational_EL() {
   try { run = await jobRunService.startRun('daily_Non_Vacational_EL', { initiatedBy }); } catch (e) { console.warn('Could not record job run start:', e && e.message); }
 
   try {
-    const now = new Date();
-    const year = Number(context.year) || now.getFullYear();
-    const month = now.getMonth() + 1;
-    const day = now.getDate();
+    const nowParts = getIstNowParts();
+    const year = Number(context.year) || nowParts.year;
+    const month = nowParts.month;
+    const day = nowParts.day;
 
     const client = await pool.connect();
     try {
@@ -641,21 +637,20 @@ async function daily_Non_Vacational_EL() {
 
         if (!desRows || desRows.length === 0) continue;
         const startDate = desRows[0].start_date;
-        const sDate = new Date(startDate);
-        const sMonth = sDate.getMonth() + 1;
-        const sDay = sDate.getDate();
+        const sDate = parseDateOnly(startDate);
+        const sMonth = sDate.getUTCMonth() + 1;
+        const sDay = sDate.getUTCDate();
 
         if (sMonth === month && sDay === day) {
           const { rows: staffRows } = await client.query('SELECT date_of_superanuation FROM staff WHERE id = $1 LIMIT 1', [eRow.staff_id]);
           const staff = staffRows && staffRows[0];
           if (!staff || !staff.date_of_superanuation) continue;
 
-          const retirementDate = new Date(staff.date_of_superanuation);
-          const retirementYear = retirementDate.getFullYear();
+          const retirementDate = parseDateOnly(staff.date_of_superanuation);
+          const retirementYear = retirementDate.getUTCFullYear();
 
           if (retirementYear === year && retirementDate > sDate) {
-            const diffMs = retirementDate - sDate;
-            const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+            const diffDays = daysBetweenDateOnly(sDate, retirementDate);
             const extra = Math.round((Number(leave.max_entitlement) || 0) * diffDays / 365);
             const newEntitled = (Number(leave.max_entitlement) || 0) + extra;
             await client.query('UPDATE leave_staff_entitlements SET entitled_curr_year = $1, updated_at = NOW() WHERE id = $2', [newEntitled, eRow.id]);
@@ -692,8 +687,8 @@ async function halfyearlyEL() {
   try { run = await jobRunService.startRun('halfyearlyEL', { initiatedBy }); } catch (e) { console.warn('Could not record job run start:', e && e.message); }
 
   try {
-    const now = new Date();
-    const year = Number(context.year) || now.getFullYear();
+    const nowParts = getIstNowParts();
+    const year = Number(context.year) || nowParts.year;
 
     const client = await pool.connect();
     try {
@@ -729,21 +724,6 @@ async function halfyearlyEL() {
 
       let applied = 0;
 
-      const getDatePartsInTz = (dateValue, timeZone) => {
-        const parts = new Intl.DateTimeFormat('en-US', {
-          timeZone,
-          year: 'numeric',
-          month: '2-digit',
-          day: '2-digit',
-        }).formatToParts(new Date(dateValue));
-
-        const yearPart = Number(parts.find((p) => p.type === 'year')?.value || 0);
-        const monthPart = Number(parts.find((p) => p.type === 'month')?.value || 1);
-        const dayPart = Number(parts.find((p) => p.type === 'day')?.value || 1);
-
-        return { year: yearPart, month: monthPart, day: dayPart };
-      };
-
       for (const st of staffRows) {
         const { rows: entRows } = await client.query(
           'SELECT * FROM leave_staff_entitlements WHERE staff_id = $1 AND leave_id = $2 AND year = $3 AND status = $4 ORDER BY id LIMIT 1',
@@ -752,26 +732,15 @@ async function halfyearlyEL() {
         if (!entRows || entRows.length === 0) continue;
         const ent = entRows[0];
 
-        const dor = st.date_of_superanuation ? new Date(st.date_of_superanuation).getUTCFullYear() : null;
-        const safeNumber = (v, fallback = 0) => {
-          const n = Number(v);
-          return Number.isFinite(n) ? n : fallback;
-        };
+        const dor = st.date_of_superanuation ? parseDateOnly(st.date_of_superanuation).getUTCFullYear() : null;
 
         const current = safeNumber(ent.entitled_curr_year, 0);
         let max_entitlement_full;
         if (dor === year && st.date_of_superanuation) {
-          // Retiring: prorated from July 1 to retirement date
-          const tz = 'Asia/Kolkata';
-          const r = getDatePartsInTz(st.date_of_superanuation, tz);
-          const retirementUTC = Date.UTC(r.year, r.month - 1, r.day);
-          const firstOfJulUTC = Date.UTC(year, 6, 1);
-          const noOfDaysRemaining = Math.abs(Math.floor((retirementUTC - firstOfJulUTC) / (1000 * 60 * 60 * 24)));
+          const noOfDaysRemaining = daysBetweenDateOnly(st.date_of_superanuation, `${year}-07-01`);
           const base = safeNumber(leave.max_entitlement, 0);
-          const calc = Math.ceil(noOfDaysRemaining * base / 365);
-          max_entitlement_full = Number.isFinite(calc) ? calc : 0;
+          max_entitlement_full = Math.ceil(noOfDaysRemaining * base / 365);
         } else {
-          // July grant should be only the remaining entitlement to reach annual max.
           const base = safeNumber(leave.max_entitlement, 0);
           max_entitlement_full = Math.max(base - current, 0);
         }
@@ -801,10 +770,10 @@ async function halfyearlyEL() {
 async function sendMissingPunchesEmail() {
   console.log('Running job: sendMissingPunchesEmail');
   const nodemailer = require('nodemailer');
-  const date = (new Date()).toISOString().slice(0,10);
-  const now = new Date();
-  const month = now.getMonth() + 1;
-  const year = now.getFullYear();
+  const nowParts = getIstNowParts();
+  const date = nowParts.date;
+  const month = nowParts.month;
+  const year = nowParts.year;
 
   try {
     // Fetch device logs from secondary biometric DB (Laravel uses mysql2 connection).
@@ -827,7 +796,7 @@ async function sendMissingPunchesEmail() {
       // Backward-compatible fallback in case secondary DB is not configured.
       console.warn('Could not query secondary biometric logs DB, falling back to primary DB:', e && e.message);
       try {
-        const { rows: logRows } = await pool.query(`SELECT EmployeeCode FROM ${deviceTable} WHERE LogDate_Date = $1`, [date]);
+        const { rows: logRows } = await pool.query(`SELECT EmployeeCode FROM \`${deviceTable}\` WHERE LogDate_Date = $1`, [date]);
         loggedEmployeeCodes = (logRows || []).map((r) => String(r.employeecode || r.EmployeeCode || r.employeeCode));
       } catch (inner) {
         console.warn('Could not query device logs table from primary DB fallback:', inner && inner.message);
@@ -839,7 +808,8 @@ async function sendMissingPunchesEmail() {
       JOIN department_staff ON department_staff.staff_id = staff.id
       JOIN departments ON departments.id = department_staff.department_id
       JOIN users ON users.id = staff.user_id
-      WHERE department_staff.status = 'active'`;
+      WHERE department_staff.status = 'active'
+      ORDER BY department_staff.department_id, staff.fname`;
 
     const { rows: allStaff } = await pool.query(missingSql);
     const missing = [];
@@ -853,7 +823,6 @@ async function sendMissingPunchesEmail() {
 
     if (missing.length === 0) {
       console.log('No missing punches found');
-      return { sent: 0 };
     }
 
     const transporter = nodemailer.createTransport({
@@ -866,7 +835,10 @@ async function sendMissingPunchesEmail() {
     const deanEmail = process.env.DEAN_EMAIL || 'vcpatil@git.edu';
 
     for (const st of missing) {
-      if (!st.email) continue;
+      if (!st.email) {
+        console.warn('Missing email for staff member:', st.full_name);
+        continue;
+      }
       const mailOptions = {
         from: process.env.MAIL_FROM || 'no-reply@git.edu',
         to: deanEmail,

@@ -1,11 +1,26 @@
 const db = require('../models');
 
+function getIstNowParts() {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Kolkata',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(new Date());
+
+  return {
+    year: Number(parts.find((p) => p.type === 'year')?.value || 0),
+    month: Number(parts.find((p) => p.type === 'month')?.value || 1),
+    day: Number(parts.find((p) => p.type === 'day')?.value || 1),
+  };
+}
+
 /**
  * Inactivate previous year's leave_staff_entitlements rows.
  * If `tx` is provided, it will be used; otherwise a transaction is started.
  */
 async function inactivatePreviousYear(tx = null) {
-  const year = new Date().getFullYear() - 1;
+  const year = getIstNowParts().year - 1;
   const sequelize = db.sequelize;
   let localTx = tx;
   let createdTx = false;
@@ -33,7 +48,7 @@ async function inactivatePreviousYear(tx = null) {
 /**
  * Upsert monthly CL entitlement.
  * - Ensures a leave_staff_entitlements row exists for the given staff/leave/year.
- * - Applies `grant` to the month's slot in `monthly_grant_log` (JSON) and increments `entitled_curr_year` up to `max_entitlement` if available.
+ * - Applies `grant` to `entitled_curr_year` up to `max_entitlement` if available.
  * This is a lightweight implementation intended as a skeleton to be expanded.
  */
 async function upsertMonthlyClEntitlement(tx = null, staffId, leaveId, year, month, grant = 0) {
