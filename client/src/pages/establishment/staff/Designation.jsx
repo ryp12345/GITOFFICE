@@ -55,10 +55,12 @@ function durationText(startDate, endDate) {
   const start = new Date(startDate);
   const end = endDate ? new Date(endDate) : new Date();
   if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return '-';
-  const totalMonths = (end.getFullYear() - start.getFullYear()) * 12 + (end.getMonth() - start.getMonth());
-  const years = Math.floor(Math.max(totalMonths, 0) / 12);
-  const months = Math.max(totalMonths, 0) % 12;
-  return `${years} Year ${months} Month`;
+  const diffMs = Math.max(0, end - start);
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+  const years = Math.floor(diffDays / 365);
+  const months = Math.floor((diffDays % 365) / 30);
+  const days = diffDays % 30;
+  return `${years}years ${months}months ${days}days`;
 }
 
 function getRangeStart(value) {
@@ -395,6 +397,10 @@ export default function Designation({ staff, setNotification, onDesignationUpdat
 
   const removePayscale = async (row) => {
     if (!staff?.id || !row?.id || !row?.pay_record_type) return;
+    if (row.end_date) {
+      setError('Delete allowed only for payscale with no end date.');
+      return;
+    }
     if (!window.confirm('Delete this payscale row?')) return;
     try {
       await deleteStaffPayscaleRow(staff.id, row.pay_record_type, row.id);
@@ -514,7 +520,7 @@ export default function Designation({ staff, setNotification, onDesignationUpdat
                   const payscaleInactive = payscale && String(payscale.status || '').toLowerCase() === 'inactive';
 
                   return (
-                    <tr key={rowKey} className={inactive ? 'bg-gray-100' : 'even:bg-gray-50'}>
+                    <tr key={rowKey} className={inactive ? 'bg-gray-200' : 'even:bg-gray-50'}>
                       {payIndex === 0 && (
                         <>
                           <td rowSpan={payscales.length} className="border-b border-r px-3 py-2 align-top text-sm">{groupIndex + 1}</td>
@@ -821,7 +827,7 @@ export default function Designation({ staff, setNotification, onDesignationUpdat
               ) : (
                 <>
                   <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-1">Designation</label>
+                    <label className="block text-sm font-semibold text-gray-700 mb-1">Designations</label>
                     <select className="w-full rounded-lg border border-gray-300 px-3 py-2" value={designationEditForm.designations_id || ''} onChange={(e) => setDesignationEditForm((p) => ({ ...p, designations_id: e.target.value }))} required>
                       <option value="">Select designation</option>
                       {designationOptions.map((d) => (
@@ -831,28 +837,17 @@ export default function Designation({ staff, setNotification, onDesignationUpdat
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-1">Start Date</label>
-                      <input type="date" className="w-full rounded-lg border border-gray-300 px-3 py-2" value={designationEditForm.start_date || ''} onChange={(e) => setDesignationEditForm((p) => ({ ...p, start_date: e.target.value }))} />
+                      <label className="block text-sm font-semibold text-gray-700 mb-1">Effect from Date</label>
+                      <input type="date" className="w-full rounded-lg border border-gray-300 px-3 py-2" value={designationEditForm.start_date || ''} onChange={(e) => setDesignationEditForm((p) => ({ ...p, start_date: e.target.value }))} required />
                     </div>
                     <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-1">End Date</label>
-                      <input type="date" className="w-full rounded-lg border border-gray-300 px-3 py-2" value={designationEditForm.end_date || ''} onChange={(e) => setDesignationEditForm((p) => ({ ...p, end_date: e.target.value }))} />
+                      <label className="block text-sm font-semibold text-gray-700 mb-1">Reason</label>
+                      <input type="text" className="w-full rounded-lg border border-gray-300 px-3 py-2" value={designationEditForm.reason || ''} onChange={(e) => setDesignationEditForm((p) => ({ ...p, reason: e.target.value }))} />
                     </div>
                   </div>
                   <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-1">Reason</label>
-                    <textarea className="w-full rounded-lg border border-gray-300 px-3 py-2" value={designationEditForm.reason || ''} onChange={(e) => setDesignationEditForm((p) => ({ ...p, reason: e.target.value }))} rows={2} />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-1">GCR</label>
+                    <label className="block text-sm font-semibold text-gray-700 mb-1">GC Resolution</label>
                     <input type="text" className="w-full rounded-lg border border-gray-300 px-3 py-2" value={designationEditForm.gcr || ''} onChange={(e) => setDesignationEditForm((p) => ({ ...p, gcr: e.target.value }))} />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-1">Status</label>
-                    <select className="w-full rounded-lg border border-gray-300 px-3 py-2" value={designationEditForm.status || 'active'} onChange={(e) => setDesignationEditForm((p) => ({ ...p, status: e.target.value }))}>
-                      <option value="active">active</option>
-                      <option value="inactive">inactive</option>
-                    </select>
                   </div>
                 </>
               )}

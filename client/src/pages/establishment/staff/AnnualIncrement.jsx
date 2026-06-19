@@ -37,11 +37,6 @@ function formatDateDMY(value) {
   return `${day}-${month}-${year}`;
 }
 
-const REASON_OPTIONS = [
-  'Regular Annual Increment',
-  'Three non-compounded Annual Increment',
-];
-
 const ADDITIONAL_DAYS_TYPE_OPTIONS = [
   { value: 'Current Year', label: 'Current Year' },
   { value: 'Permanent', label: 'Permanent' },
@@ -207,7 +202,6 @@ export default function AnnualIncrement({ staff, setNotification, onAnnualIncrem
               <th className="px-3 py-2 border-b text-left text-sm font-semibold text-gray-700">Basic</th>
               <th className="px-3 py-2 border-b text-left text-sm font-semibold text-gray-700">With Effect From</th>
               <th className="px-3 py-2 border-b text-left text-sm font-semibold text-gray-700">Increment Postponed By</th>
-              <th className="px-3 py-2 border-b text-left text-sm font-semibold text-gray-700">Type</th>
               <th className="px-3 py-2 border-b text-left text-sm font-semibold text-gray-700">GC</th>
               <th className="px-3 py-2 border-b text-left text-sm font-semibold text-gray-700">Reason</th>
               <th className="px-3 py-2 border-b text-left text-sm font-semibold text-gray-700">Actions</th>
@@ -216,11 +210,11 @@ export default function AnnualIncrement({ staff, setNotification, onAnnualIncrem
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={8} className="px-3 py-6 text-center text-sm text-gray-400">Loading...</td>
+                <td colSpan={7} className="px-3 py-6 text-center text-sm text-gray-400">Loading...</td>
               </tr>
             ) : rows.length === 0 ? (
               <tr>
-                <td colSpan={8} className="px-3 py-6 text-center text-sm text-gray-400">No annual increment records found.</td>
+                <td colSpan={7} className="px-3 py-6 text-center text-sm text-gray-400">No annual increment records found.</td>
               </tr>
             ) : (
               rows.map((row, idx) => (
@@ -229,7 +223,6 @@ export default function AnnualIncrement({ staff, setNotification, onAnnualIncrem
                   <td className="px-3 py-2 border-b text-sm">{row.basic || '-'}</td>
                   <td className="px-3 py-2 border-b text-sm">{formatDateDMY(row.wef)}</td>
                   <td className="px-3 py-2 border-b text-sm">{row.additional_days ?? '-'}</td>
-                  <td className="px-3 py-2 border-b text-sm">{row.additional_days_type || '-'}</td>
                   <td className="px-3 py-2 border-b text-sm">{row.gc || '-'}</td>
                   <td className="px-3 py-2 border-b text-sm">{row.reason || '-'}</td>
                   <td className="px-3 py-2 border-b text-sm">
@@ -346,17 +339,14 @@ export default function AnnualIncrement({ staff, setNotification, onAnnualIncrem
                   <label className="block text-sm font-semibold text-gray-700 mb-1">
                     Reason <span className="text-red-500">*</span>
                   </label>
-                  <select
+                  <input
+                    type="text"
                     className="w-full rounded-lg border border-gray-300 px-3 py-2"
                     value={form.reason}
                     onChange={(e) => setForm((prev) => ({ ...prev, reason: e.target.value }))}
+                    placeholder="Reason"
                     required
-                  >
-                    <option value="">Select Reason</option>
-                    {REASON_OPTIONS.map((r) => (
-                      <option key={r} value={r}>{r}</option>
-                    ))}
-                  </select>
+                  />
                 </div>
 
                 <div>
