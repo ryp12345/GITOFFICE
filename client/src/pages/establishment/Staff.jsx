@@ -41,7 +41,15 @@ const initialForm = {
   emergency_no: '',
   emergency_name: '',
   gcr: '',
-  duration: ''
+  duration: '',
+  vtu_id: '',
+  aicte_id: '',
+  esi_no: '',
+  un_no: '',
+  pf: '',
+  EmployeeCode: '',
+  date_of_increment: '',
+  date_of_confirmation: ''
 };
 
 const LOCAL_STAFF_KEY = 'gitoffice_staff_rows';
@@ -436,7 +444,15 @@ export default function StaffPage({
       emergency_no: form.emergency_no,
       emergency_name: form.emergency_name,
       gcr: form.gcr,
-      duration: form.duration
+      duration: form.duration,
+      vtu_id: form.vtu_id,
+      aicte_id: form.aicte_id,
+      esi_no: form.esi_no,
+      un_no: form.un_no,
+      pf: form.pf,
+      EmployeeCode: form.EmployeeCode,
+      date_of_increment: form.date_of_increment,
+      date_of_confirmation: form.date_of_confirmation
     };
 
     if (token) {
@@ -1029,6 +1045,29 @@ export default function StaffPage({
                   <InputField label="Contact No" value={form.contactno} onChange={(value) => setForm({ ...form, contactno: value.replace(/\D/g, '') })} />
                   <InputField label="Emergency No" value={form.emergency_no} onChange={(value) => setForm({ ...form, emergency_no: value.replace(/\D/g, '') })} />
                   <InputField label="Emergency Name" value={form.emergency_name} onChange={(value) => setForm({ ...form, emergency_name: value })} />
+                </div>
+
+                {form.employee_type === 'Teaching' && (
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                    <InputField label="AICTE ID" value={form.aicte_id} onChange={(value) => setForm({ ...form, aicte_id: value })} />
+                    <InputField label="VTU ID" value={form.vtu_id} onChange={(value) => setForm({ ...form, vtu_id: value })} />
+                  </div>
+                )}
+
+                {form.employee_type === 'Non-Teaching' && (
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                    <InputField label="ESI No" value={form.esi_no} onChange={(value) => setForm({ ...form, esi_no: value })} />
+                    <InputField label="UAN No" value={form.un_no} onChange={(value) => setForm({ ...form, un_no: value })} />
+                  </div>
+                )}
+
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                  <InputField label="PF Number" value={form.pf} onChange={(value) => setForm({ ...form, pf: value })} />
+                </div>
+
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                  <InputField type="date" label="Date of Increment" value={form.date_of_increment} onChange={(value) => setForm({ ...form, date_of_increment: value })} />
+                  <InputField type="date" label="Date of Confirmation" value={form.date_of_confirmation} onChange={(value) => setForm({ ...form, date_of_confirmation: value })} />
                 </div>
 
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2">

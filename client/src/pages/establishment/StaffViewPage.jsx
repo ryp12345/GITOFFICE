@@ -35,7 +35,7 @@ const TABS = [
     <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3" /></svg>
   ) },
   { key: 'form_16', label: 'Form 16', icon: (
-    <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M8 17l4 4 4-4m0-5V3a2 2 0 00-2-2H6a2 2 0 00-2 2v14a2 2 0 002 2h8a2 2 0 002-2z" /></svg>
+    <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M8 17l4 4 4-4m0-5V3a2 2 0 00-2-2H6a2 2 0 002 2v14a2 2 0 002-2z" /></svg>
   ) },
   { key: 'laptop_loan', label: 'Laptop Loan', icon: (
     <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><rect width="20" height="12" x="2" y="7" rx="2" /><path d="M2 17h20" /></svg>
@@ -57,6 +57,15 @@ const TABS = [
   ) },
   { key: 'lic_management', label: 'LIC Management', icon: (
     <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>
+  ) },
+  { key: 'leaves', label: 'Leaves', icon: (
+    <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+  ) },
+  { key: 'remuneration', label: 'Remuneration', icon: (
+    <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+  ) },
+  { key: 'tds', label: 'TDS', icon: (
+    <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
   ) },
 ];
 
@@ -91,10 +100,21 @@ export default function StaffViewPage({
       setStaff({
         ...apiStaff,
         emailUser: apiStaff.email || apiStaff.emailUser || apiStaff.email_user || '',
-        biometric_code: apiStaff.biometric_code || apiStaff.employeecode || '',
+        biometric_code: apiStaff.biometric_code || apiStaff.employeecode || apiStaff.EmployeeCode || '',
         date_of_superannuation: formatDate(apiStaff.date_of_superannuation || apiStaff.date_of_superanuation),
         dob: formatDate(apiStaff.dob),
         doj: formatDate(apiStaff.doj),
+        employee_type: apiStaff.emp_type_name || apiStaff.employee_type || '',
+        religions: apiStaff.religions || [],
+        castecategories: apiStaff.castecategories || [],
+        associations: apiStaff.associations || [],
+        departments_ref: apiStaff.departments_ref || [],
+        qualifications: apiStaff.qualifications || [],
+        designations: apiStaff.designations || [],
+        add_designations: apiStaff.add_designations || [],
+        payscales: apiStaff.payscales || [],
+        association_staff: apiStaff.association_staff || [],
+        date_of_confirmation: apiStaff.confirmation_date || apiStaff.date_of_confirmation || '',
       });
     } catch (_err) {
       setError('Failed to load staff data.');
@@ -315,6 +335,24 @@ export default function StaffViewPage({
                         setNotification={setNotification}
                         onLicUpdated={refreshStaff}
                       />
+                    )}
+                    {activeTab === 'leaves' && (
+                      <div className="space-y-4">
+                        <h2 className="text-xl font-bold text-blue-700">Staff Leaves</h2>
+                        <p className="text-gray-600">Leave management functionality is available in the dedicated Leave section.</p>
+                      </div>
+                    )}
+                    {activeTab === 'remuneration' && (
+                      <div className="space-y-4">
+                        <h2 className="text-xl font-bold text-blue-700">Staff Remuneration</h2>
+                        <p className="text-gray-600">Remuneration details will be displayed here.</p>
+                      </div>
+                    )}
+                    {activeTab === 'tds' && (
+                      <div className="space-y-4">
+                        <h2 className="text-xl font-bold text-blue-700">TDS</h2>
+                        <p className="text-gray-600">TDS details will be displayed here.</p>
+                      </div>
                     )}
                   </>
                 ) : (

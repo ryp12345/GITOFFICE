@@ -212,8 +212,16 @@ async function create(payload) {
       'adhar_card',
       'contactno',
       'emergency_no',
-      'emergency_name'
-      , 'employeecode'
+      'emergency_name',
+      'employeecode',
+      'vtu_id',
+      'aicte_id',
+      'esi_no',
+      'un_no',
+      'pf',
+      'EmployeeCode',
+      'date_of_increment',
+      'date_of_confirmation'
     ];
 
     const staffValues = [
@@ -234,8 +242,16 @@ async function create(payload) {
       payload.adhar_card || null,
       payload.contactno || null,
       payload.emergency_no || null,
-      payload.emergency_name || null
-      , payload.employeecode || payload.biometric_code || null
+      payload.emergency_name || null,
+      payload.employeecode || payload.biometric_code || null,
+      payload.vtu_id || null,
+      payload.aicte_id || null,
+      payload.esi_no || null,
+      payload.un_no || null,
+      payload.pf || null,
+      payload.EmployeeCode || payload.employeecode || payload.biometric_code || null,
+      payload.date_of_increment || null,
+      payload.date_of_confirmation || null
     ];
 
     const placeholders = staffFields.map((_, i) => `$${i + 1}`);
@@ -273,11 +289,10 @@ async function create(payload) {
     // create institution_staff pivot if institution_id present
     if (payload.institution_id) {
       const startDate = payload.doj || payload.start_date || new Date().toISOString().slice(0, 10);
-      const endDate = payload.end_date || null;
-      const reason = payload.institution_reason || 'assigned';
+      const reason = 'appointment';
       await client.query(
-        'INSERT INTO institution_staff (institution_id, staff_id, start_date, end_date, reason, gcr, status, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW())',
-        [payload.institution_id, staff.id, startDate, endDate, reason, payload.gcr || null, 'active']
+        'INSERT INTO institution_staff (institution_id, staff_id, start_date, reason, gcr, status, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())',
+        [payload.institution_id, staff.id, startDate, reason, payload.gcr || null, 'active']
       );
     }
 
@@ -398,6 +413,74 @@ async function getById(id) {
   const { rows: institutions } = await pool.query(instSql, [id]);
   staff.institutions = institutions;
 
+  // Fetch reference data for edit forms (mirrors Laravel show method)
+  const empTypeSql = `SELECT employee_type FROM employee_types WHERE staff_id = $1 AND status = 'active' ORDER BY id DESC LIMIT 1`;
+  const { rows: empTypeRows } = await pool.query(empTypeSql, [id]);
+  const currentEmpType = empTypeRows.length > 0 ? empTypeRows[0].employee_type : '';
+
+  const religions = await pool.query("SELECT * FROM religions WHERE status = 'active' ORDER BY id");
+  staff.religions = religions.rows;
+
+  const casteSql = currentEmpType
+    ? "SELECT * FROM castecategories WHERE status = 'active' ORDER BY id"
+    : "SELECT * FROM castecategories WHERE status = 'active' ORDER BY id";
+  const { rows: castecategories } = await pool.query(casteSql);
+  staff.castecategories = castecategories;
+
+  const associations = await pool.query("SELECT * FROM associations WHERE status = 'active' ORDER BY id");
+  staff.associations = associations.rows;
+
+  const departments = await pool.query("SELECT * FROM departments WHERE status = 'active' ORDER BY id");
+  staff.departments_ref = departments.rows;
+
+  const qualifications = await pool.query("SELECT * FROM qualifications WHERE status = 'active' ORDER BY id");
+  staff.qualifications = qualifications.rows;
+
+  // Designations filtered by employee type
+  if (currentEmpType) {
+    const designations = await pool.query(
+      "SELECT * FROM designations WHERE status = 'active' AND emp_type = $1 AND isadditional = 0 ORDER BY design_name",
+      [currentEmpType]
+    );
+    staff.designations = designations.rows;
+    const addDesignations = await pool.query(
+      "SELECT * FROM designations WHERE status = 'active' AND emp_type = $1 AND isadditional = 1 ORDER BY design_name",
+      [currentEmpType]
+    );
+    staff.add_designations = addDesignations.rows;
+  } else {
+    staff.designations = [];
+    staff.add_designations = [];
+  }
+
+  // Payscales
+  if (currentEmpType === 'Teaching') {
+    const payscales = await pool.query("SELECT * FROM teaching_payscales WHERE status = 'active' ORDER BY id");
+    staff.payscales = payscales.rows;
+  } else if (currentEmpType === 'Non-Teaching') {
+    const { rows: desigRows } = await pool.query(
+      "SELECT id FROM designations WHERE status = 'active' AND isadditional = 0 AND emp_type = 'Non-Teaching' ORDER BY id LIMIT 1"
+    );
+    const desigId = desigRows.length > 0 ? desigRows[0].id : null;
+    if (desigId) {
+      const ntpayscales = await pool.query(
+        'SELECT id, title, payband, wef FROM ntpayscales WHERE status = $1 ORDER BY id',
+        ['active']
+      );
+      staff.payscales = ntpayscales.rows;
+    } else {
+      staff.payscales = [];
+    }
+  } else {
+    staff.payscales = [];
+  }
+
+  // Confirmation date
+  const confirmAssoc = association_staff.find(
+    a => a.association_id === 6 || a.asso_name === 'Confirmed' || a.association_name === 'Confirmed'
+  );
+  staff.confirmation_date = confirmAssoc ? confirmAssoc.start_date : null;
+
   return staff;
 }
 
@@ -407,7 +490,8 @@ async function updateById(id, payload) {
     await client.query('BEGIN');
     // Only update allowed fields
     const allowed = [
-      'fname','mname','lname','local_address','permanent_address','dob','doj','religion_id','castecategory_id','gender','date_of_superanuation','bloodgroup','pan_card','adhar_card','contactno','emergency_no','emergency_name','employeecode','biometric_code','pay_type','fixed_pay','payscale','gcr','duration'
+      'fname','mname','lname','local_address','permanent_address','dob','doj','religion_id','castecategory_id','gender','date_of_superanuation','bloodgroup','pan_card','adhar_card','contactno','emergency_no','emergency_name','employeecode','biometric_code','pay_type','fixed_pay','payscale','gcr','duration',
+      'vtu_id','aicte_id','esi_no','un_no','pf','EmployeeCode','date_of_increment','date_of_confirmation'
     ];
     const updates = [];
     const values = [];
@@ -423,6 +507,34 @@ async function updateById(id, payload) {
     values.push(id);
     const sql = `UPDATE staff SET ${updates.join(', ')}, updated_at = NOW() WHERE id = $${idx} RETURNING *`;
     const { rows } = await client.query(sql, values);
+    
+    // Update user email if provided (mirrors Laravel logic)
+    if (payload.email) {
+      const emailValue = payload.email.includes('@') ? payload.email : `${payload.email}@git.edu`;
+      await client.query(
+        "UPDATE users SET email = $1, updated_at = NOW() WHERE id = (SELECT user_id FROM staff WHERE id = $2)",
+        [emailValue, id]
+      );
+    }
+    
+    // Handle employee type switching (mirrors Laravel logic)
+    if (payload.employee_type) {
+      const { rows: empTypeRows } = await client.query(
+        'SELECT id, employee_type FROM employee_types WHERE staff_id = $1 AND status = $2 ORDER BY id DESC LIMIT 1',
+        [id, 'active']
+      );
+      if (empTypeRows.length > 0 && empTypeRows[0].employee_type !== payload.employee_type) {
+        await client.query(
+          'UPDATE employee_types SET status = $1, updated_at = NOW() WHERE id = $2',
+          ['inactive', empTypeRows[0].id]
+        );
+        await client.query(
+          'INSERT INTO employee_types (staff_id, employee_type, status, created_at, updated_at) VALUES ($1, $2, $3, NOW(), NOW())',
+          [id, payload.employee_type, 'active']
+        );
+      }
+    }
+    
     await client.query('COMMIT');
     return rows[0] || null;
   } catch (err) {
