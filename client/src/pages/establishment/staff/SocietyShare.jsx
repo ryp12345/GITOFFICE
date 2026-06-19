@@ -37,6 +37,7 @@ const defaultForm = {
   amount: '',
   start_date: '',
   end_date: '',
+  status: 'active',
 };
 
 export default function SocietyShare({ staff, setNotification, onSocietyShareUpdated }) {
@@ -101,6 +102,10 @@ export default function SocietyShare({ staff, setNotification, onSocietyShareUpd
       setError('Member ID, Amount, and Start Date are required');
       return;
     }
+    if (form.end_date && form.end_date < form.start_date) {
+      setError('End date cannot be earlier than start date');
+      return;
+    }
 
     setSaving(true);
     try {
@@ -109,6 +114,7 @@ export default function SocietyShare({ staff, setNotification, onSocietyShareUpd
         amount: parseFloat(form.amount),
         start_date: form.start_date,
         end_date: form.end_date || null,
+        status: editingRow?.status === 'inactive' ? 'active' : (editingRow?.status || 'active'),
       };
 
       if (editingRow?.id) {
@@ -237,9 +243,24 @@ export default function SocietyShare({ staff, setNotification, onSocietyShareUpd
               <button onClick={closeModal} className="text-gray-500 hover:text-gray-700 text-xl font-bold">&times;</button>
             </div>
 
-            <form onSubmit={handleSubmit} className="p-6 space-y-4">
+             <form onSubmit={handleSubmit} className="p-6 space-y-4">
               {error && (
                 <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
+              )}
+
+              {editingRow?.status === 'inactive' && (
+                <div className="flex items-center gap-2">
+                  <input
+                    type="radio"
+                    name="status"
+                    value="active"
+                    checked={form.status === 'active'}
+                    onChange={(e) => setForm((prev) => ({ ...prev, status: e.target.value }))}
+                    className="ti-form-radio"
+                    required
+                  />
+                  <label className="text-sm text-gray-700">Make it Active</label>
+                </div>
               )}
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

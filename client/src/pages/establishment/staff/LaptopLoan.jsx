@@ -62,6 +62,16 @@ export default function LaptopLoan({ staff, setNotification, onLaptopLoanUpdated
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [form, setForm] = useState(defaultForm);
+  const [emiAuto, setEmiAuto] = useState('');
+
+  useEffect(() => {
+    if (form.amount && !isNaN(form.amount)) {
+      const emi = Math.ceil(parseFloat(form.amount) / 18 / 100) * 100;
+      setEmiAuto(String(emi));
+    } else {
+      setEmiAuto('');
+    }
+  }, [form.amount]);
 
   const fetchData = async () => {
     if (!staff?.id) return;
@@ -98,6 +108,7 @@ export default function LaptopLoan({ staff, setNotification, onLaptopLoanUpdated
       emi: row.emi !== null && row.emi !== undefined ? String(row.emi) : '',
       start_date: toInputDate(row.start_date),
     });
+    setEmiAuto('');
     setShowModal(true);
   };
 
@@ -106,6 +117,7 @@ export default function LaptopLoan({ staff, setNotification, onLaptopLoanUpdated
     setShowModal(false);
     setEditingRow(null);
     setError('');
+    setEmiAuto('');
   };
 
   const handleSubmit = async (e) => {
@@ -113,7 +125,7 @@ export default function LaptopLoan({ staff, setNotification, onLaptopLoanUpdated
     setError('');
 
     if (!staff?.id) { setError('Staff id not found'); return; }
-    if (!form.date_of_application || !form.configuration || !form.amount || !form.emi || !form.start_date) {
+    if (!form.date_of_application || !form.configuration || !form.amount || !form.start_date) {
       setError('All fields are required');
       return;
     }
@@ -124,7 +136,7 @@ export default function LaptopLoan({ staff, setNotification, onLaptopLoanUpdated
         date_of_application: form.date_of_application,
         configuration: form.configuration,
         amount: parseInt(form.amount, 10),
-        emi: parseInt(form.emi, 10),
+        emi: editingRow && !isWithinOneMonth(editingRow.date_of_application) ? editingRow.emi : (emiAuto ? parseInt(emiAuto, 10) : parseInt(form.emi, 10)),
         start_date: form.start_date,
       };
 
@@ -261,6 +273,12 @@ export default function LaptopLoan({ staff, setNotification, onLaptopLoanUpdated
                 </div>
               )}
 
+              {editingRow && !isWithinOneMonth(editingRow.date_of_application) && (
+                <div className="rounded-md border border-yellow-200 bg-yellow-50 px-4 py-3 text-sm text-yellow-800 col-span-1 md:col-span-2">
+                  Update not allowed. You can only update the Amount and EMI within one month of the application date.
+                </div>
+              )}
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-1">
@@ -296,7 +314,7 @@ export default function LaptopLoan({ staff, setNotification, onLaptopLoanUpdated
                   <input
                     type="number"
                     min="0"
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2 disabled:bg-gray-100 disabled:text-gray-500"
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2"
                     value={form.amount}
                     onChange={(e) => setForm((prev) => ({ ...prev, amount: e.target.value }))}
                     placeholder="₹ Amount"
@@ -312,11 +330,11 @@ export default function LaptopLoan({ staff, setNotification, onLaptopLoanUpdated
                   <input
                     type="number"
                     min="0"
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2 disabled:bg-gray-100 disabled:text-gray-500"
-                    value={form.emi}
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2"
+                    value={editingRow && !isWithinOneMonth(editingRow.date_of_application) ? form.emi : (emiAuto || form.emi)}
                     onChange={(e) => setForm((prev) => ({ ...prev, emi: e.target.value }))}
                     placeholder="EMI"
-                    disabled={editingRow && !isWithinOneMonth(editingRow.date_of_application)}
+                    readOnly={!!editingRow && !isWithinOneMonth(editingRow.date_of_application)}
                     required
                   />
                 </div>
@@ -344,13 +362,15 @@ export default function LaptopLoan({ staff, setNotification, onLaptopLoanUpdated
                 >
                   Cancel
                 </button>
-                <button
-                  type="submit"
-                  disabled={saving}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm font-semibold disabled:opacity-60"
-                >
-                  {saving ? 'Saving...' : editingRow ? 'Update' : 'Add'}
-                </button>
+                {(editingRow && !isWithinOneMonth(editingRow.date_of_application)) ? null : (
+                  <button
+                    type="submit"
+                    disabled={saving}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm font-semibold disabled:opacity-60"
+                  >
+                    {saving ? 'Saving...' : editingRow ? 'Update' : 'Add'}
+                  </button>
+                )}
               </div>
             </form>
           </div>

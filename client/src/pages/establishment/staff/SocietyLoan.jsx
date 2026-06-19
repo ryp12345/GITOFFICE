@@ -32,7 +32,7 @@ function formatDateDMY(value) {
   return `${day}-${month}-${year}`;
 }
 
-const LOAN_TYPES = ['Housing Loan', 'Personal Loan', 'Emergency Loan', 'Education Loan', 'Vehicle Loan', 'Other'];
+const LOAN_TYPES = ['Short Term', 'Long Term', 'Emergency'];
 
 const defaultForm = {
   member_id: '',
@@ -107,6 +107,10 @@ export default function SocietyLoan({ staff, setNotification, onSocietyLoanUpdat
     if (!staff?.id) { setError('Staff id not found'); return; }
     if (!form.member_id || !form.loan_type || !form.loan_id || !form.loan_amount || !form.monthly_emi || !form.start_date) {
       setError('Member ID, Loan Type, Loan ID, Loan Amount, Monthly EMI, and Start Date are required');
+      return;
+    }
+    if (form.end_date && form.start_date && form.end_date < form.start_date) {
+      setError('End date cannot be earlier than start date');
       return;
     }
 

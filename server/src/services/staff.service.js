@@ -1785,16 +1785,16 @@ async function listLicTransactions(staffId, licId) {
     `SELECT t.* FROM stafflic_transactions t
      JOIN stafflics l ON l.id = t.stafflic_id
      WHERE t.stafflic_id = $1 AND l.staff_id = $2
-     ORDER BY t.years DESC, t.id DESC`,
+     ORDER BY t.year DESC, t.id DESC`,
     [licId, staffId]
   );
   return rows;
 }
 
 async function createLicTransaction(staffId, licId, payload) {
-  const { month, years, dop, gst } = payload;
-  if (!month || !years || !dop) {
-    const err = new Error('month, years, and dop are required');
+  const { month, year, dop, gst } = payload;
+  if (!month || !year || !dop) {
+    const err = new Error('month, year, and dop are required');
     err.statusCode = 400;
     throw err;
   }
@@ -1808,9 +1808,9 @@ async function createLicTransaction(staffId, licId, payload) {
     throw err;
   }
   const { rows } = await pool.query(
-    `INSERT INTO stafflic_transactions (stafflic_id, month, years, dop, gst, created_at, updated_at)
+    `INSERT INTO stafflic_transactions (stafflic_id, month, year, dop, gst, created_at, updated_at)
      VALUES ($1, $2, $3, $4, $5, NOW(), NOW()) RETURNING *`,
-    [licId, month, years, dop, gst || 0]
+     [licId, month, year, dop, gst || 0]
   );
   return rows[0];
 }

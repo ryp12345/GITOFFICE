@@ -18,7 +18,7 @@ const LIC_STATUSES = ['active', 'transfered', 'stopped'];
 
 const defaultLicForm = { policy_no: '', premium: '', start_date: '' };
 const defaultEditLicForm = { policy_no: '', premium: '', end_date: '', status: 'active' };
-const defaultTransForm = { month: 'January', years: new Date().getFullYear(), dop: '', gst: '' };
+const defaultTransForm = { month: 'January', year: new Date().getFullYear(), dop: '', gst: '' };
 
 function formatDate(val) {
   if (!val) return '-';
@@ -110,7 +110,17 @@ export default function LicManagement({ staff, setNotification, onLicUpdated }) 
   const handleLicSubmit = async (e) => {
     e.preventDefault();
     setModalError('');
+
     if (!staff?.id) { setModalError('Staff id not found'); return; }
+
+    if (editingRow) {
+      const start = editLicForm.start_date || licForm.start_date;
+      const end = editLicForm.end_date;
+      if (start && end && start > end) {
+        setModalError('End date cannot be earlier than start date');
+        return;
+      }
+    }
 
     setSaving(true);
     try {
@@ -214,7 +224,7 @@ export default function LicManagement({ staff, setNotification, onLicUpdated }) 
     try {
       const payload = {
         month: transForm.month,
-        years: transForm.years,
+        year: transForm.year,
         dop: transForm.dop,
         gst: transForm.gst || 0,
       };
