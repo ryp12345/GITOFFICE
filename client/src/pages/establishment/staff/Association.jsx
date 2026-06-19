@@ -57,7 +57,18 @@ function calcDuration(start, end) {
   if (isNaN(startDate) || isNaN(endDate)) return '-';
   const diff = Math.max(0, endDate - startDate);
   const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-  return days + ' days';
+  const years = Math.floor(days / 365);
+  const months = Math.floor((days % 365) / 30);
+  const remainingDays = days % 30;
+  return `${years} years ${months} months ${remainingDays} days`;
+}
+
+function calcDurationDays(start, end) {
+  if (!start) return 0;
+  const startDate = new Date(start);
+  const endDate = end ? new Date(end) : new Date();
+  if (isNaN(startDate) || isNaN(endDate)) return 0;
+  return Math.max(0, Math.floor((endDate - startDate) / (1000 * 60 * 60 * 24)));
 }
 
 export default function Association({ staff, setNotification, onAssociationUpdated }) {
@@ -83,6 +94,7 @@ export default function Association({ staff, setNotification, onAssociationUpdat
     reason: '',
     gcr: '',
   });
+  const [closeForever, setCloseForever] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -123,17 +135,18 @@ export default function Association({ staff, setNotification, onAssociationUpdat
   }, []);
 
   const associationRows = Array.isArray(staff?.association_staff) && staff.association_staff.length > 0
-    ? staff.association_staff.map(a => ({
+    ? staff.association_staff.map((a) => ({
         id: a.id,
         association_id: a.association_id,
         association_name: a.association_name || a.asso_name || a.name || '-',
         start_date: a.start_date,
         tenure_end_date: a.closing_date,
         end_date: a.end_date,
-        duration: a.duration || calcDuration(a.start_date, a.end_date),
+        duration: a.duration || calcDuration(a.start_date, a.end_date || a.closing_date),
         status: a.status,
         reason: a.reason,
         gcr: a.gcr,
+        category: a.category || '',
       }))
     : [
         {
@@ -147,36 +160,50 @@ export default function Association({ staff, setNotification, onAssociationUpdat
           status: staff?.association_status,
           reason: '',
           gcr: '',
+          category: '',
         }
       ];
 
-  // Institution table data
   const institutionRows = Array.isArray(staff?.institutions) && staff.institutions.length > 0
-    ? staff.institutions.map(inst => ({
+    ? staff.institutions.map((inst) => ({
         ...inst,
         id: inst.id,
         institution_id: inst.institution_id,
-        duration: inst.duration || calcDuration(inst.start_date, inst.end_date)
+        institution_name: inst.institution_name || inst.name || inst.acronym || '-',
+        acronym: inst.acronym || inst.institution_name || inst.name || '-',
+        start_date: inst.start_date,
+        end_date: inst.end_date,
+        duration: inst.duration || calcDuration(inst.start_date, inst.end_date),
+        status: inst.status,
       }))
     : [
         {
+          id: null,
+          institution_id: null,
           institution_name: staff?.institution_name,
+          acronym: staff?.institution_acronym || staff?.institution_name || '-',
           start_date: staff?.institution_start_date,
           end_date: staff?.institution_end_date,
           duration: staff?.institution_duration || calcDuration(staff?.institution_start_date, staff?.institution_end_date),
-          status: staff?.institution_status
+          status: staff?.institution_status,
         }
       ];
 
   const selectedAssociationCategory = useMemo(() => {
     const id = Number(form.associations_id || 0);
     const selected = associationOptions.find(a => Number(a.id) === id);
-    return selected?.category || '';
+    return selected?.category || selected?.asso_name || '';
   }, [associationOptions, form.associations_id]);
+
+  const isContractualSelected = useMemo(() => {
+    const cat = selectedAssociationCategory || '';
+    return cat.toLowerCase().includes('contractual') || cat.toLowerCase().includes('temporary');
+  }, [selectedAssociationCategory]);
 
   const openCreateModal = () => {
     setEditingRow(null);
     setError('');
+    setCloseForever(false);
     setForm({
       associations_id: '',
       start_date: toInputDate(new Date()),
@@ -190,6 +217,8 @@ export default function Association({ staff, setNotification, onAssociationUpdat
   const openEditModal = (row) => {
     setEditingRow(row);
     setError('');
+    const isContractual = row.association_id === 4 || row.association_name === 'Contractual' || row.asso_name === 'Contractual';
+    setCloseForever(isContractual ? false : false);
     setForm({
       associations_id: row.association_id ? String(row.association_id) : '',
       start_date: toInputDate(row.start_date),
@@ -265,6 +294,7 @@ export default function Association({ staff, setNotification, onAssociationUpdat
         closing_date: form.closing_date || null,
         reason: form.reason || null,
         gcr: form.gcr || null,
+        close_forever: closeForever ? 'close_forever' : null,
       };
 
       if (editingRow?.id) {
@@ -292,7 +322,18 @@ export default function Association({ staff, setNotification, onAssociationUpdat
 
   const handleDelete = async (row) => {
     if (!row?.id || !staff?.id) return;
-    if (!window.confirm('Delete this association record?')) return;
+
+    const durationDays = calcDurationDays(row.start_date, row.end_date);
+    const maxDays = 30;
+    const durationObj = calcDuration(row.start_date, row.end_date);
+    const isWithinOneMonth = durationObj.includes('0 years') && parseInt(durationObj) <= 1;
+
+    if (row.status !== 'active' || !isWithinOneMonth) {
+      setError('Delete allowed only for active association within 1 month of creation.');
+      return;
+    }
+
+    if (!window.confirm('Are you sure you want to delete this association record?')) return;
 
     try {
       await deleteStaffAssociation(staff.id, row.id);
@@ -403,44 +444,66 @@ export default function Association({ staff, setNotification, onAssociationUpdat
           </tr>
         </thead>
         <tbody>
-          {associationRows.map((a, idx) => (
-            <tr key={idx} className="even:bg-gray-50">
-              <td className="px-3 py-2 border-b text-sm">{idx + 1}</td>
-              <td className="px-3 py-2 border-b text-sm">{a.association_name || '-'}</td>
-              <td className="px-3 py-2 border-b text-sm">{formatDateDMY(a.start_date)}</td>
-              <td className="px-3 py-2 border-b text-sm">{formatDateDMY(a.tenure_end_date)}</td>
-              <td className="px-3 py-2 border-b text-sm">{formatDateDMY(a.end_date)}</td>
-              <td className="px-3 py-2 border-b text-sm">{a.duration || '-'}</td>
-              <td className="px-3 py-2 border-b text-sm">{a.status || '-'}</td>
-              <td className="px-3 py-2 border-b text-sm">
-                <div className="flex items-center justify-center space-x-2">
-                  <button
-                    onClick={() => openEditModal(a)}
-                    className="p-2 text-white transition-colors duration-200 bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                    title="Edit Association"
-                    disabled={!a.id}
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                    </svg>
-                  </button>
-                  <button
-                    onClick={() => handleDelete(a)}
-                    className="p-2 text-white transition-colors duration-200 bg-red-600 rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                    title="Delete Association"
-                    disabled={!a.id}
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                    </svg>
-                  </button>
-                </div>
-              </td>
-            </tr>
-          ))}
+          {associationRows.map((a, idx) => {
+            const isClosed = String(a.status || '').toLowerCase() === 'inactive';
+            const duration = calcDuration(a.start_date, a.end_date);
+            const isWithinOneMonth = duration.includes('0 years') && parseInt(duration) <= 1;
+
+            return (
+              <tr key={idx} className={isClosed ? 'bg-gray-300' : 'even:bg-gray-50'}>
+                <td className="px-3 py-2 border-b text-sm">{idx + 1}</td>
+                <td className="px-3 py-2 border-b text-sm">{a.association_name || '-'}</td>
+                <td className="px-3 py-2 border-b text-sm">{formatDateDMY(a.start_date)}</td>
+                <td className="px-3 py-2 border-b text-sm">
+                  <span className={a.tenure_end_date ? 'text-red-500' : ''}>
+                    {a.tenure_end_date ? formatDateDMY(a.tenure_end_date) : '--NA--'}
+                  </span>
+                </td>
+                <td className="px-3 py-2 border-b text-sm">{a.end_date ? formatDateDMY(a.end_date) : '--NA--'}</td>
+                <td className="px-3 py-2 border-b text-sm">{a.duration || '-'}</td>
+                <td className="px-3 py-2 border-b text-sm">{a.status || '-'}</td>
+                <td className="px-3 py-2 border-b text-sm">
+                  <div className="flex items-center justify-center space-x-2">
+                    {isClosed ? (
+                      <button
+                        onClick={() => openEditModal(a)}
+                        className="p-2 text-white transition-colors duration-200 bg-green-600 rounded-lg hover:bg-green-700"
+                        title="Activate Association"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        </svg>
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => openEditModal(a)}
+                        className="p-2 text-white transition-colors duration-200 bg-blue-600 rounded-lg hover:bg-blue-700"
+                        title="Edit Association"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                        </svg>
+                      </button>
+                    )}
+                    {!isClosed && isWithinOneMonth && (
+                      <button
+                        onClick={() => handleDelete(a)}
+                        className="p-2 text-white transition-colors duration-200 bg-red-600 rounded-lg hover:bg-red-700"
+                        title="Delete Association"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                      </button>
+                    )}
+                  </div>
+                </td>
+              </tr>
+            );
+          })}
         </tbody>
-        </table>
-      </div>
+      </table>
+    </div>
 
       <div className="flex items-center justify-between gap-4">
         <h2 className="text-xl font-bold text-blue-700 mb-4">Staff Institution</h2>
@@ -465,40 +528,45 @@ export default function Association({ staff, setNotification, onAssociationUpdat
           </tr>
         </thead>
         <tbody>
-          {institutionRows.map((inst, idx) => (
-            <tr key={idx} className="even:bg-gray-50">
-              <td className="px-3 py-2 border-b text-sm">{idx + 1}</td>
-              <td className="px-3 py-2 border-b text-sm">{inst.institution_name || '-'}</td>
-              <td className="px-3 py-2 border-b text-sm">{formatDateDMY(inst.start_date)}</td>
-              <td className="px-3 py-2 border-b text-sm">{formatDateDMY(inst.end_date)}</td>
-              <td className="px-3 py-2 border-b text-sm">{inst.duration || '-'}</td>
-              <td className="px-3 py-2 border-b text-sm">{inst.status || '-'}</td>
-              <td className="px-3 py-2 border-b text-sm">
-                <div className="flex items-center justify-center space-x-2">
-                  <button
-                    onClick={() => openEditInstitutionModal(inst)}
-                    className="p-2 text-white transition-colors duration-200 bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                    title="Edit Institution"
-                    disabled={!inst.id}
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                    </svg>
-                  </button>
-                  <button
-                    onClick={() => handleInstitutionDelete(inst)}
-                    className="p-2 text-white transition-colors duration-200 bg-red-600 rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                    title="Delete Institution"
-                    disabled={!inst.id}
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                    </svg>
-                  </button>
-                </div>
-              </td>
-            </tr>
-          ))}
+          {institutionRows.map((inst, idx) => {
+            const isClosed = String(inst.status || '').toLowerCase() === 'inactive';
+            return (
+              <tr key={idx} className={isClosed ? 'bg-gray-300' : 'even:bg-gray-50'}>
+                <td className="px-3 py-2 border-b text-sm">{idx + 1}</td>
+                <td className="px-3 py-2 border-b text-sm">{inst.acronym || inst.institution_name || '-'}</td>
+                <td className="px-3 py-2 border-b text-sm">{formatDateDMY(inst.start_date)}</td>
+                <td className="px-3 py-2 border-b text-sm">{formatDateDMY(inst.end_date)}</td>
+                <td className="px-3 py-2 border-b text-sm">{inst.duration || '-'}</td>
+                <td className="px-3 py-2 border-b text-sm">{inst.status || '-'}</td>
+                <td className="px-3 py-2 border-b text-sm">
+                  <div className="flex items-center justify-center space-x-2">
+                    {isClosed ? (
+                      <button
+                        onClick={() => openEditInstitutionModal(inst)}
+                        className="p-2 text-white transition-colors duration-200 bg-green-600 rounded-lg hover:bg-green-700"
+                        title="Activate Institution"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        </svg>
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => openEditInstitutionModal(inst)}
+                        className="p-2 text-white transition-colors duration-200 bg-blue-600 rounded-lg hover:bg-blue-700"
+                        title="Edit Institution"
+                        disabled={!inst.id}
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                        </svg>
+                      </button>
+                    )}
+                  </div>
+                </td>
+              </tr>
+            );
+          })}
         </tbody>
         </table>
       </div>
@@ -510,77 +578,124 @@ export default function Association({ staff, setNotification, onAssociationUpdat
               <h3 className="text-lg font-bold text-gray-800">
                 {editingRow ? 'Edit Association' : 'Change Association'}
               </h3>
-              <button onClick={closeModal} className="text-gray-500 hover:text-gray-700">X</button>
+              <button onClick={closeModal} className="text-gray-500 hover:text-gray-700 text-xl font-bold">&times;</button>
             </div>
 
             <form onSubmit={handleSubmit} className="p-6 space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="md:col-span-2">
-                  <label className="block text-sm font-semibold text-gray-700 mb-1">Association</label>
-                  <select
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2"
-                    value={form.associations_id}
-                    onChange={(e) => setForm((prev) => ({ ...prev, associations_id: e.target.value }))}
-                    required
-                  >
-                    <option value="">Select association</option>
-                    {associationOptions.map((opt) => (
-                      <option key={opt.id} value={opt.id}>{opt.asso_name}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-1">Effect from Date</label>
+              {editingRow?.status === 'inactive' && (
+                <div className="flex items-center gap-2">
                   <input
-                    type="date"
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2"
-                    value={form.start_date}
-                    onChange={(e) => setForm((prev) => ({ ...prev, start_date: e.target.value }))}
-                    required
+                    type="radio"
+                    name="status"
+                    value="active"
+                    checked={form.status === 'active'}
+                    onChange={(e) => setForm((p) => ({ ...p, status: e.target.value }))}
+                    className="ti-form-radio"
                   />
+                  <label className="text-sm text-gray-700">Make it Active</label>
                 </div>
+              )}
 
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-1">Closing Date</label>
-                  <input
-                    type="date"
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2"
-                    value={form.closing_date}
-                    onChange={(e) => setForm((prev) => ({ ...prev, closing_date: e.target.value }))}
-                    disabled={selectedAssociationCategory !== 'Temporary associated'}
-                  />
-                </div>
+              {editingRow?.status !== 'inactive' && (
+                <>
+                  <div className="grid grid-cols-1 gap-4">
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-1">Association</label>
+                      <select
+                        className="w-full rounded-lg border border-gray-300 px-3 py-2"
+                        value={form.associations_id}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setForm((prev) => ({ ...prev, associations_id: val }));
+                          if (val !== '4') {
+                            setCloseForever(false);
+                          }
+                        }}
+                        required
+                      >
+                        <option value="">Select association</option>
+                        {associationOptions.map((opt) => (
+                          <option key={opt.id} value={opt.id}>{opt.asso_name}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
 
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-1">Reason</label>
-                  <input
-                    type="text"
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2"
-                    value={form.reason}
-                    onChange={(e) => setForm((prev) => ({ ...prev, reason: e.target.value }))}
-                    placeholder="Reason"
-                  />
-                </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-1">Effect from Date</label>
+                      <input
+                        type="date"
+                        className="w-full rounded-lg border border-gray-300 px-3 py-2"
+                        value={form.start_date}
+                        onChange={(e) => setForm((prev) => ({ ...prev, start_date: e.target.value }))}
+                        required
+                      />
+                    </div>
 
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-1">GC Resolution</label>
-                  <input
-                    type="text"
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2"
-                    value={form.gcr}
-                    onChange={(e) => setForm((prev) => ({ ...prev, gcr: e.target.value }))}
-                    placeholder="GCR"
-                  />
-                </div>
-              </div>
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-1">Tenure Closing Date</label>
+                      <input
+                        type="date"
+                        className="w-full rounded-lg border border-gray-300 px-3 py-2"
+                        value={form.closing_date}
+                        onChange={(e) => setForm((prev) => ({ ...prev, closing_date: e.target.value }))}
+                        disabled={!isContractualSelected}
+                      />
+                      {!isContractualSelected && (
+                        <p className="text-xs text-red-500 mt-1">Only visible for Temporary associated / Contractual</p>
+                      )}
+                    </div>
+                  </div>
+
+                  {isContractualSelected && (
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        id="close_forever_checkbox"
+                        checked={closeForever}
+                        onChange={(e) => setCloseForever(e.target.checked)}
+                        className="ti-form-checkbox"
+                      />
+                      <label htmlFor="close_forever_checkbox" className="text-sm text-gray-600">
+                        Close Contractual{' '}
+                        <span className="text-red-500">(Check only when closing the contractual period forever)</span>
+                      </label>
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-1">Reason</label>
+                      <input
+                        type="text"
+                        className="w-full rounded-lg border border-gray-300 px-3 py-2"
+                        value={form.reason}
+                        onChange={(e) => setForm((prev) => ({ ...prev, reason: e.target.value }))}
+                        placeholder="Reason"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-1">GC Resolution</label>
+                      <input
+                        type="text"
+                        className="w-full rounded-lg border border-gray-300 px-3 py-2"
+                        value={form.gcr}
+                        onChange={(e) => setForm((prev) => ({ ...prev, gcr: e.target.value }))}
+                        placeholder="GCR"
+                      />
+                    </div>
+                  </div>
+                </>
+              )}
 
               {error && <div className="text-sm text-red-600">{error}</div>}
 
               <div className="flex justify-end gap-3 pt-2">
                 <button type="button" onClick={closeModal} className="px-4 py-2 rounded-md bg-gray-200 text-gray-700" disabled={saving}>Cancel</button>
                 <button type="submit" className="px-4 py-2 rounded-md bg-blue-600 text-white hover:bg-blue-700" disabled={saving}>
-                  {saving ? 'Saving...' : editingRow ? 'Update' : 'Save'}
+                  {saving ? 'Saving...' : editingRow?.status === 'inactive' ? 'Activate' : editingRow ? 'Update' : 'Save'}
                 </button>
               </div>
             </form>

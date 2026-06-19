@@ -53,12 +53,13 @@ async function listDesignationRows(staffId) {
            COALESCE(ds.status, 'active') AS status,
            ds.created_at,
            ds.updated_at,
-           COALESCE(d.isadditional, 0) AS isadditional
-    FROM designation_staff ds
-    JOIN designations d ON d.id = ds.designation_id
-    WHERE ds.staff_id = $1
-    ORDER BY ds.id DESC
-  `;
+           COALESCE(d.isadditional, 0) AS isadditional,
+           COALESCE(d.isvacational, 'Non-Vacational') AS isvacational
+     FROM designation_staff ds
+     JOIN designations d ON d.id = ds.designation_id
+     WHERE ds.staff_id = $1
+     ORDER BY ds.id DESC
+   `;
 
   const fallbackSql = `
     SELECT ds.id,
@@ -73,12 +74,13 @@ async function listDesignationRows(staffId) {
            COALESCE(ds.status, 'active') AS status,
            ds.created_at,
            ds.updated_at,
-           COALESCE(d.isadditional, 0) AS isadditional
-    FROM designation_staff ds
-    JOIN designations d ON d.id = ds.designation_id
-    WHERE ds.staff_id = $1
-    ORDER BY ds.id DESC
-  `;
+           COALESCE(d.isadditional, 0) AS isadditional,
+           COALESCE(d.isvacational, 'Non-Vacational') AS isvacational
+     FROM designation_staff ds
+     JOIN designations d ON d.id = ds.designation_id
+     WHERE ds.staff_id = $1
+     ORDER BY ds.id DESC
+   `;
 
   try {
     const { rows } = await pool.query(primarySql, [staffId]);
