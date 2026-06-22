@@ -139,7 +139,9 @@ function normalizeHolidayType(type) {
 }
 
 function normalizeLeaveStatus(status) {
-  return String(status || '').trim().toLowerCase();
+  const raw = String(status || '').trim().toLowerCase();
+  if (raw === '1' || raw === 'true') return 'active';
+  return raw;
 }
 
 function normalizeVacationType(value) {
@@ -598,7 +600,25 @@ export default function StaffLeavesPage() {
     loadHolidays();
 
     axios.get('/leaves', { headers: token ? { Authorization: `Bearer ${token}` } : {} })
-      .then((r) => setLeaveTypes(r.data?.data || []))
+      .then(async (r) => {
+        const fetchedTypes = r.data?.data || [];
+        const typesWithRules = await Promise.all(
+          fetchedTypes.map(async (type) => {
+            if (!Array.isArray(type.leave_rules)) {
+              try {
+                const rulesRes = await axios.get(`/leave-rules?leave_id=${type.id}`, {
+                  headers: token ? { Authorization: `Bearer ${token}` } : {},
+                });
+                type.leave_rules = rulesRes.data?.data || [];
+              } catch {
+                type.leave_rules = [];
+              }
+            }
+            return type;
+          })
+        );
+        setLeaveTypes(typesWithRules);
+      })
       .catch(() => setLeaveTypes([]));
   }, [token]);
 
@@ -889,7 +909,12 @@ export default function StaffLeavesPage() {
       (leaveType) => {
         if (normalizeLeaveStatus(leaveType?.status) !== 'active') return false;
         if (!isSelectableLeaveType(leaveType)) return false;
-        if (leaveType?.max_time_allowed !== null && leaveType?.max_time_allowed !== undefined) return false;
+        
+        // Laravel filters by leave_rules.max_time_allowed IS NULL (general leaves only)
+        // Check if leave has leave_rules array with a rule that has no max_time_allowed
+        const hasGeneralRule = Array.isArray(leaveType?.leave_rules) && 
+          leaveType.leave_rules.some(rule => normalizeLeaveStatus(rule.status) === 'active' && (rule.max_time_allowed === null || rule.max_time_allowed === undefined || rule.max_time_allowed === ''));
+        if (!hasGeneralRule) return false;
 
         const leaveVacationType = normalizeVacationType(leaveType?.vacation_type);
         if (employeeVacationType && leaveVacationType && leaveVacationType !== employeeVacationType) {
@@ -1114,6 +1139,7 @@ export default function StaffLeavesPage() {
       safety += 1;
       const key = toDateStr(cursor);
 
+      // Check for Holiday (not RH) via holidayMap - matching Laravel's type='Holiday' filter
       if (holidayMap[key]) {
         result.holidayDates.push(key);
         cursor.setDate(cursor.getDate() + step);
@@ -1121,12 +1147,14 @@ export default function StaffLeavesPage() {
       }
 
       const dayName = cursor.toLocaleDateString('en-US', { weekday: 'long' });
+      // Check for Sunday or 1st/3rd Saturday - matching Laravel's weekend handling
       if (dayName === 'Sunday' || isFirstOrThirdSaturday(cursor)) {
         result.holidayDates.push(key);
         cursor.setDate(cursor.getDate() + step);
         continue;
       }
 
+      // Check for RH leave applications - matching Laravel's leave application-based RH detection
       const boundaryApplication = findBoundaryApplication(key, direction);
       if (boundaryApplication) {
         const shortName = getApplicationLeaveShortName(boundaryApplication);
@@ -1312,11 +1340,88 @@ export default function StaffLeavesPage() {
     if (!form.alternate)     return setFormError('Please select an alternate staff.');
     if (!form.reason.trim()) return setFormError('Please enter a reason.');
 
+    // --- Early validation bypass for DL and LWP types (matching Laravel behavior) ---
+    const dlLwpCheck = /DL|LWP/i;
+    if (selectedLeaveShortName && dlLwpCheck.test(selectedLeaveShortName)) {
+      setSubmitting(true);
+      try {
+        if (editingApplicationId) {
+          await axios.patch(
+            `/leave-calendar/applications/${editingApplicationId}`,
+            {
+              staff_id: user?.id,
+              leave_id: Number(form.leave_id),
+              start_date: form.start_date,
+              end_date: form.end_date,
+              cl_type: form.cl_type,
+              reason: form.reason.trim(),
+              no_of_days: noOfDays,
+              alternate: form.alternate || null,
+              additional_alternate: form.additional_alternate || null,
+            },
+            { headers: token ? { Authorization: `Bearer ${token}` } : {} },
+          );
+          notify('Leave application updated successfully.');
+        } else {
+          await axios.post(
+            '/leave-calendar/applications',
+            {
+              staff_id: user?.id,
+              leave_id: Number(form.leave_id),
+              start_date: form.start_date,
+              end_date: form.end_date,
+              cl_type: form.cl_type,
+              reason: form.reason.trim(),
+              no_of_days: noOfDays,
+              alternate: form.alternate || null,
+              additional_alternate: form.additional_alternate || null,
+            },
+            { headers: token ? { Authorization: `Bearer ${token}` } : {} },
+          );
+          notify('Leave application submitted successfully.');
+        }
+        setForm(emptyForm);
+        setIsApplyModalOpen(false);
+        setEditingApplicationId(null);
+        setIsViewModalOpen(false);
+        loadApplications();
+      } catch (err) {
+        const msg = err.response?.data?.message || 'Failed to submit application. Please try again.';
+        setFormError(msg);
+      }
+      setSubmitting(false);
+      return;
+    }
+
     // --- Fetch and check leave rules ---
     let leaveRules = null;
     try {
       leaveRules = await fetchLeaveRules(form.leave_id);
     } catch {}
+
+    // 1. Gap between leaves (Rule 4 - moved up to match Laravel validation order)
+    if (leaveRules?.gap === 'Yes' && leaveRules?.min_gap) {
+      const prev = applications
+        .filter(app => String(app.leave_id) === String(form.leave_id))
+        .map((app) => ({
+          app,
+          startDate: extractDateKey(app.start_date || app.start),
+        }))
+        .filter(({ startDate }) => Boolean(startDate) && new Date(startDate) <= new Date(form.start_date))
+        .sort((a, b) => {
+          const aDiff = Math.abs(new Date(a.startDate) - new Date(form.start_date));
+          const bDiff = Math.abs(new Date(b.startDate) - new Date(form.start_date));
+          return aDiff - bDiff;
+        });
+      if (prev.length > 0) {
+        const lastStart = new Date(prev[0].startDate);
+        const thisStart = new Date(form.start_date);
+        const diffDays = Math.abs(Math.floor((thisStart - lastStart) / 86400000));
+        if (diffDays < leaveRules.min_gap) {
+          return setFormError(`You have already taken a similar leave recently. You must wait for at least ${leaveRules.min_gap} days.`);
+        }
+      }
+    }
 
     const leaveMinimumDays = Number(selectedLeaveType?.min_days ?? 0);
     if (leaveMinimumDays > 0 && noOfDays < leaveMinimumDays) {
@@ -1336,157 +1441,140 @@ export default function StaffLeavesPage() {
       return setFormError('Leave dates cannot overlap with an existing leave application.');
     }
 
-    // 1. Leave master day limit and min days per application
-    if (leaveRules) {
-      if (leaveRules.min_days && noOfDays < leaveRules.min_days) {
-        return setFormError(`You must apply for at least ${leaveRules.min_days} days for this leave.`);
+    // 2. Leave rules min_days check
+    if (leaveRules?.min_days && noOfDays < leaveRules.min_days) {
+      return setFormError(`You must apply for at least ${leaveRules.min_days} days for this leave.`);
+    }
+
+    // 3. Prior intimation
+    if (leaveRules?.prior_intimation_days) {
+      const today = new Date();
+      const start = new Date(form.start_date);
+      const diff = Math.floor((start - today) / 86400000);
+      if (diff < leaveRules.prior_intimation_days) {
+        return setFormError(`You must apply at least ${leaveRules.prior_intimation_days} days in advance for this leave.`);
       }
-      // 2. Gap between leaves
-      if (leaveRules.gap === 'Yes' && leaveRules.min_gap) {
-        // Match backend behavior: compare against the nearest previous same-type start date.
-        const prev = applications
-          .filter(app => String(app.leave_id) === String(form.leave_id))
-          .map((app) => ({
-            app,
-            startDate: extractDateKey(app.start_date || app.start),
-          }))
-          .filter(({ startDate }) => Boolean(startDate) && new Date(startDate) <= new Date(form.start_date))
-          .sort((a, b) => {
-            const aDiff = Math.abs(new Date(a.startDate) - new Date(form.start_date));
-            const bDiff = Math.abs(new Date(b.startDate) - new Date(form.start_date));
-            return aDiff - bDiff;
-          });
-        if (prev.length > 0) {
-          const lastStart = new Date(prev[0].startDate);
-          const thisStart = new Date(form.start_date);
-          const diffDays = Math.abs(Math.floor((thisStart - lastStart) / 86400000));
-          if (diffDays < leaveRules.min_gap) {
-            return setFormError(`You must wait at least ${leaveRules.min_gap} days between two such leaves.`);
-          }
-        }
-      }
-      // 3. Prior intimation
-      if (leaveRules.prior_intimation_days) {
-        const today = new Date();
-        const start = new Date(form.start_date);
-        const diff = Math.floor((start - today) / 86400000);
-        if (diff < leaveRules.prior_intimation_days) {
-          return setFormError(`You must apply at least ${leaveRules.prior_intimation_days} days in advance for this leave.`);
-        }
-      }
-      // 4. Entitlement/balance (year-specific, same source as Blade)
-      const daysByYear = getRequestedDaysByYear();
-      for (const [yearKey, requestedDays] of Object.entries(daysByYear)) {
-        const year = Number(yearKey);
-        let row = leaveEntitlementRowsByYear[year] || null;
-        if (!row) {
-          row = await loadEntitlementYear(year);
-        }
+    }
 
-        if (!row) {
-          return setFormError(`You do not have any leave entitlement for the year ${year}.`);
-        }
-
-        const availableBalance = getAvailableBalance(selectedLeaveType, year);
-        if (availableBalance != null && requestedDays > availableBalance) {
-          return setFormError(`You do not have enough leave balance for the year ${year}.`);
-        }
-      }
-      // 5. Holiday/RH sandwich checks match the backend chain walk.
-      const selectedLeaveId = Number(form.leave_id);
-      const currentLeaveIsExempt = isExemptLeaveShortName(selectedLeaveShortName);
-      const requestedDays = Number(noOfDays || 0);
-
-      if (form.cl_type !== 'Afternoon') {
-        const beforeChain = analyzeHolidayRhChain(form.start_date, 'before');
-        const beforeLeave = beforeChain.adjacentLeave;
-        if (beforeLeave) {
-          const beforeLeaveShortName = getApplicationLeaveShortName(beforeLeave);
-          const beforeLeaveDays = Number(beforeLeave.no_of_days || 0);
-
-          if (beforeChain.holidayDates.length > 0) {
-            if ((beforeChain.rhDates.length + beforeChain.holidayDates.length + requestedDays > 5)
-              && !isExemptLeaveShortName(beforeLeaveShortName)) {
-              return setFormError('You have applied for leave combining with RH and holidays and the total number of days of leave including RH & holidays will be more than 5. You are not allowed to take more than 5 days off.');
-            }
-
-            if (beforeLeaveShortName !== 'EL' && beforeLeaveShortName !== 'LWP'
-              && beforeLeaveDays + requestedDays + beforeChain.holidayDates.length > 5) {
-              return setFormError('You have applied for a leave followed by holidays and the total number of days of leave including the holidays will be more than 5. You are not allowed to take more than 5 days off.');
-            }
-          } else if ((beforeChain.rhDates.length + beforeChain.holidayDates.length + requestedDays > 5)
-            && !currentLeaveIsExempt) {
-            return setFormError('You have applied leave with holidays/RH and the total number of days of leave including RH/holidays will be more than 5. You are not allowed to take more than 5 days off.');
-          }
-
-          if (String(beforeLeave.leave_id) !== String(selectedLeaveId)
-            && !isCombinationAllowed(beforeLeave.leave_id)) {
-            return setFormError('Application rejected as it is combined with a leave that is not allowed.');
-          }
-        }
+    // 4. Entitlement/balance (year-specific, same source as Blade)
+    const daysByYear = getRequestedDaysByYear();
+    for (const [yearKey, requestedDays] of Object.entries(daysByYear)) {
+      const year = Number(yearKey);
+      let row = leaveEntitlementRowsByYear[year] || null;
+      if (!row) {
+        row = await loadEntitlementYear(year);
       }
 
-      if (form.cl_type !== 'Morning') {
-        const afterChain = analyzeHolidayRhChain(form.end_date, 'after');
-        const afterLeave = afterChain.adjacentLeave;
-        if (afterLeave) {
-          const afterLeaveShortName = getApplicationLeaveShortName(afterLeave);
-          const afterLeaveDays = Number(afterLeave.no_of_days || 0);
+      if (!row) {
+        return setFormError(`You do not have any leave entitlement for the year ${year}.`);
+      }
 
-          if (form.cl_type === 'Afternoon' && afterChain.rhDates.length > 0) {
-            return setFormError('You cannot apply this afternoon leave as there is a regular leave after the RH and holidays that follow your leave date. The leave can only be granted if there is no leave after the RH and subsequent holidays/weekends.');
-          }
+      const availableBalance = getAvailableBalance(selectedLeaveType, year);
+      if (availableBalance != null && requestedDays > availableBalance) {
+        return setFormError(`You do not have enough leave balance for the year ${year}.`);
+      }
+    }
 
-          if (afterChain.holidayDates.length + requestedDays > 5
-            && !isExemptLeaveShortName(afterLeaveShortName)) {
+    // 5. Holiday/RH sandwich checks match the backend chain walk.
+    const selectedLeaveId = Number(form.leave_id);
+    const currentLeaveIsExempt = isExemptLeaveShortName(selectedLeaveShortName);
+    const requestedDays = Number(noOfDays || 0);
+
+    if (form.cl_type !== 'Afternoon') {
+      const beforeChain = analyzeHolidayRhChain(form.start_date, 'before');
+      const beforeLeave = beforeChain.adjacentLeave;
+      if (beforeLeave) {
+        const beforeLeaveShortName = getApplicationLeaveShortName(beforeLeave);
+        const beforeLeaveDays = Number(beforeLeave.no_of_days || 0);
+
+        if (beforeChain.holidayDates.length > 0) {
+          if ((beforeChain.rhDates.length + beforeChain.holidayDates.length + requestedDays > 5)
+            && !isExemptLeaveShortName(beforeLeaveShortName)) {
             return setFormError('You have applied for leave combining with RH and holidays and the total number of days of leave including RH & holidays will be more than 5. You are not allowed to take more than 5 days off.');
           }
 
-          if (afterLeaveShortName !== 'EL' && afterLeaveShortName !== 'LWP'
-            && afterLeaveDays + requestedDays + afterChain.holidayDates.length > 5) {
+          if (beforeLeaveShortName !== 'EL' && beforeLeaveShortName !== 'LWP'
+            && beforeLeaveDays + requestedDays + beforeChain.holidayDates.length > 5) {
             return setFormError('You have applied for a leave followed by holidays and the total number of days of leave including the holidays will be more than 5. You are not allowed to take more than 5 days off.');
           }
-
-          if (String(afterLeave.leave_id) !== String(selectedLeaveId)
-            && !isCombinationAllowed(afterLeave.leave_id)) {
-            return setFormError('Application rejected as it is combined with a leave that is not allowed.');
-          }
+        } else if ((beforeChain.rhDates.length + beforeChain.holidayDates.length + requestedDays > 5)
+          && !currentLeaveIsExempt) {
+          return setFormError('You have applied leave with holidays/RH and the total number of days of leave including RH/holidays will be more than 5. You are not allowed to take more than 5 days off.');
         }
 
-        if ((afterChain.holidayDates.length + requestedDays > 6)
-          && !currentLeaveIsExempt
-          && !(form.cl_type === 'Afternoon' && afterChain.rhDates.length > 0)) {
+        if (String(beforeLeave.leave_id) !== String(selectedLeaveId)
+          && !isCombinationAllowed(beforeLeave.leave_id)) {
+          return setFormError('Application rejected as it is combined with a leave that is not allowed.');
+        }
+      }
+    }
+
+    if (form.cl_type !== 'Morning') {
+      const afterChain = analyzeHolidayRhChain(form.end_date, 'after');
+      const afterLeave = afterChain.adjacentLeave;
+      const rhFoundPost = afterChain.rhDates.length > 0; // tracks whether an RH leave was found in the post-leave chain
+
+      if (afterLeave) {
+        const afterLeaveShortName = getApplicationLeaveShortName(afterLeave);
+        const afterLeaveDays = Number(afterLeave.no_of_days || 0);
+
+        // For afternoon half-day leaves: if an RH was already found in the post-leave chain,
+        // any regular leave after the RH+holidays chain is not allowed (regardless of total days).
+        if (form.cl_type === 'Afternoon' && rhFoundPost && afterLeaveShortName !== 'RH') {
+          return setFormError('You cannot apply this afternoon leave as there is a regular leave after the RH and holidays that follow your leave date. The leave can only be granted if there is no leave after the RH and subsequent holidays/weekends.');
+        }
+
+        if (afterChain.holidayDates.length + requestedDays > 5
+          && !isExemptLeaveShortName(afterLeaveShortName)) {
           return setFormError('You have applied for leave combining with RH and holidays and the total number of days of leave including RH & holidays will be more than 5. You are not allowed to take more than 5 days off.');
+        }
+
+        if (afterLeaveShortName !== 'EL' && afterLeaveShortName !== 'LWP'
+          && afterLeaveDays + requestedDays + afterChain.holidayDates.length > 5) {
+          return setFormError('You have applied for a leave followed by holidays and the total number of days of leave including the holidays will be more than 5. You are not allowed to take more than 5 days off.');
+        }
+
+        if (String(afterLeave.leave_id) !== String(selectedLeaveId)
+          && !isCombinationAllowed(afterLeave.leave_id)) {
+          return setFormError('Application rejected as it is combined with a leave that is not allowed.');
         }
       }
 
-      // 6. Maximum times allowed in a period (leave_rules.max_time_allowed)
-      if (leaveRules.period && leaveRules.max_time_allowed) {
-        const normalizedPeriod = String(leaveRules.period || '').toLowerCase();
-        const periodStart = new Date(form.start_date);
+      // Skip total-days check for afternoon half-day leaves when an RH is in the post-leave chain;
+      // those are exempt from the 5-day rule as long as no regular leave follows the RH+holiday chain.
+      if ((afterChain.holidayDates.length + requestedDays > 5)
+        && !currentLeaveIsExempt
+        && !(form.cl_type === 'Afternoon' && rhFoundPost)) {
+        return setFormError('You have applied for leave combining with RH and holidays and the total number of days of leave including RH & holidays will be more than 5. You are not allowed to take more than 5 days off.');
+      }
+    }
 
-        if (normalizedPeriod.includes('entire service')) {
-          periodStart.setTime(0);
-        } else if (normalizedPeriod.includes('five years')) {
-          periodStart.setFullYear(periodStart.getFullYear() - 5);
-        } else if (normalizedPeriod.includes('one year')) {
-          periodStart.setFullYear(periodStart.getFullYear() - 1);
-        } else if (normalizedPeriod.includes('six months')) {
-          periodStart.setMonth(periodStart.getMonth() - 6);
-        } else if (normalizedPeriod.includes('one month')) {
-          periodStart.setMonth(periodStart.getMonth() - 1);
-        } else {
-          periodStart.setFullYear(periodStart.getFullYear() - 1);
-        }
+    // 6. Maximum times allowed in a period (leave_rules.max_time_allowed)
+    if (leaveRules?.period && leaveRules.max_time_allowed) {
+      const normalizedPeriod = String(leaveRules.period || '').toLowerCase();
+      const periodStart = new Date(form.start_date);
 
-        const count = applications.filter(app =>
-          String(app.leave_id) === String(form.leave_id) &&
-          normalizeLeaveStatus(app.appl_status || app.status) !== 'cancelled' &&
-          new Date(app.start_date || app.start) >= periodStart
-        ).length;
-        if (count >= Number(leaveRules.max_time_allowed)) {
-          return setFormError(`You cannot take this leave more than ${leaveRules.max_time_allowed} times in the specified period.`);
-        }
+      if (normalizedPeriod.includes('entire service')) {
+        periodStart.setTime(0);
+      } else if (normalizedPeriod.includes('five years')) {
+        periodStart.setFullYear(periodStart.getFullYear() - 5);
+      } else if (normalizedPeriod.includes('one year')) {
+        periodStart.setFullYear(periodStart.getFullYear() - 1);
+      } else if (normalizedPeriod.includes('six months')) {
+        periodStart.setMonth(periodStart.getMonth() - 6);
+      } else if (normalizedPeriod.includes('one month')) {
+        periodStart.setMonth(periodStart.getMonth() - 1);
+      } else {
+        periodStart.setFullYear(periodStart.getFullYear() - 1);
+      }
+
+      const count = applications.filter(app =>
+        String(app.leave_id) === String(form.leave_id) &&
+        normalizeLeaveStatus(app.appl_status || app.status) !== 'cancelled' &&
+        new Date(app.start_date || app.start) >= periodStart
+      ).length;
+      if (count >= Number(leaveRules.max_time_allowed)) {
+        return setFormError(`You cannot take this leave more than ${leaveRules.max_time_allowed} times in the specified period.`);
       }
     }
 
@@ -2083,3 +2171,4 @@ export default function StaffLeavesPage() {
     </div>
   );
 }
+
