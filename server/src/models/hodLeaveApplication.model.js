@@ -65,6 +65,10 @@ async function getDepartmentLeaveApplications({ departmentId, month = null, year
   return rows;
 }
 
+async function getDepartmentLeaveApplicationsByMonthYear({ departmentId, month, year }) {
+  return getDepartmentLeaveApplications({ departmentId, month, year });
+}
+
 async function getApplicationByIdForDepartment(client, applicationId, departmentId) {
   const appId = Number(applicationId);
   const deptId = Number(departmentId);
@@ -210,5 +214,6 @@ async function updateApplicationStatusForDepartment({ applicationId, departmentI
 
 module.exports = {
   getDepartmentLeaveApplications,
+  getDepartmentLeaveApplicationsByMonthYear,
   updateApplicationStatusForDepartment,
 };
