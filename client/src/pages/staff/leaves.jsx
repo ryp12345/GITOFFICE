@@ -2172,4 +2172,3 @@ export default function StaffLeavesPage() {
     </div>
   );
 }
-
