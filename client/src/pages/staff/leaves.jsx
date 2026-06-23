@@ -1402,7 +1402,7 @@ export default function StaffLeavesPage() {
     // 1. Gap between leaves (Rule 4 - moved up to match Laravel validation order)
     if (leaveRules?.gap === 'Yes' && leaveRules?.min_gap) {
       const prev = applications
-        .filter(app => String(app.leave_id) === String(form.leave_id))
+        .filter(app => String(app.leave_id) === String(form.leave_id) && normalizeLeaveStatus(app.appl_status || app.status) !== 'cancelled' && normalizeLeaveStatus(app.appl_status || app.status) !== 'rejected')
         .map((app) => ({
           app,
           startDate: extractDateKey(app.start_date || app.start),
@@ -1571,6 +1571,7 @@ export default function StaffLeavesPage() {
       const count = applications.filter(app =>
         String(app.leave_id) === String(form.leave_id) &&
         normalizeLeaveStatus(app.appl_status || app.status) !== 'cancelled' &&
+        normalizeLeaveStatus(app.appl_status || app.status) !== 'rejected' &&
         new Date(app.start_date || app.start) >= periodStart
       ).length;
       if (count >= Number(leaveRules.max_time_allowed)) {

@@ -353,17 +353,53 @@ async function validateLeaveRules(client, staffId, leaveId, startDate, endDate, 
     if (minGap > 0) {
       const similarLeave = await client.query(
         `
-        SELECT ABS(DATEDIFF(start, $1)) AS days
+        SELECT id, start
         FROM leave_staff_applications
-        WHERE staff_id = $2 AND leave_id = $3 AND start <= $1
-        ORDER BY days ASC LIMIT 1
+        WHERE staff_id = $1 AND leave_id = $2 AND start::date <= $3::date
+        ORDER BY ABS(EXTRACT(DAY FROM (start::date - $3::date))) ASC
+        LIMIT 1
         `,
-        [startDate, staffId, leaveId]
+        [staffId, leaveId, startDate]
       );
-      const prevDays = Number(similarLeave.rows[0]?.days || 0);
-      if (prevDays > 0 && prevDays < minGap) {
-        return { valid: false, message: `You must wait at least ${minGap} days between similar leaves. Last leave was ${prevDays} days ago.` };
+      if (similarLeave.rows[0]?.start) {
+        const lastStart = new Date(String(similarLeave.rows[0].start));
+        const thisStart = new Date(startDate + 'T00:00:00');
+        const diffDays = Math.abs(Math.floor((thisStart - lastStart) / 86400000));
+        if (diffDays > 0 && diffDays < minGap) {
+          return { valid: false, message: `You must wait at least ${minGap} days between similar leaves. Last leave was ${diffDays} days ago.` };
+        }
       }
+    }
+  }
+
+  // Rule-5: Max time allowed in period (max times in specified period)
+  if (rules && rules.period && rules.max_time_allowed) {
+    const normalizedPeriod = String(rules.period || '').toLowerCase();
+    let periodStart = new Date(startDate + 'T00:00:00');
+    const periodStartCloned = new Date(periodStart);
+
+    if (normalizedPeriod.includes('entire service')) {
+      periodStart = new Date('2000-01-01');
+    } else if (normalizedPeriod.includes('five years')) {
+      periodStartCloned.setFullYear(periodStartCloned.getFullYear() - 5);
+    } else if (normalizedPeriod.includes('one year')) {
+      periodStartCloned.setFullYear(periodStartCloned.getFullYear() - 1);
+    } else if (normalizedPeriod.includes('six months')) {
+      periodStartCloned.setMonth(periodStartCloned.getMonth() - 6);
+    } else if (normalizedPeriod.includes('one month')) {
+      periodStartCloned.setMonth(periodStartCloned.getMonth() - 1);
+    } else {
+      periodStartCloned.setFullYear(periodStartCloned.getFullYear() - 1);
+    }
+
+    const countResult = await client.query(
+      `SELECT COUNT(*) AS cnt FROM leave_staff_applications WHERE staff_id = $1 AND leave_id = $2 AND LOWER(COALESCE(appl_status, 'pending')) NOT IN ('rejected', 'cancelled') AND start >= $3::date`,
+      [staffId, leaveId, periodStartCloned.toISOString().slice(0, 10)]
+    );
+
+    const count = Number(countResult.rows[0]?.cnt || 0);
+    if (count >= Number(rules.max_time_allowed)) {
+      return { valid: false, message: `You cannot take this leave more than ${rules.max_time_allowed} times in the specified period.` };
     }
   }
 
