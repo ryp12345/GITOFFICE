@@ -269,7 +269,7 @@ export default function LeaveEntitlementBase({
                           {leaveTypes.map((leaveType) => {
                             const leaveData = row.leaves?.[leaveType.shortname];
                             return (
-                              <td key={`balance-${row.id}-${leaveType.shortname}`} className="px-4 py-3 border text-sm text-center text-gray-700">{toDisplayNumber(leaveData?.balance)}</td>
+                              <td key={`balance-${row.id}-${leaveType.shortname}`} className="px-4 py-3 border text-sm text-center text-gray-700">{toDisplayNumber(Math.max(Number(leaveData?.balance) || 0, 0))}</td>
                             );
                           })}
                         </tr>

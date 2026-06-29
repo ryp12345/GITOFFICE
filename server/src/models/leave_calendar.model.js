@@ -331,6 +331,28 @@ async function validateLeaveRules(client, staffId, leaveId, startDate, endDate, 
     return { valid: false, message: 'Invalid date range' };
   }
 
+  const entitlementResult = await client.query(
+    `
+    SELECT lse.entitled_curr_year, lse.accumulated, lse.consumed_curr_year, lse.encashed_curr_year, lse.total_encashed
+    FROM leave_staff_entitlements lse
+    WHERE lse.staff_id = $1 AND lse.leave_id = $2 AND lse.year = $3
+    ORDER BY lse.id DESC LIMIT 1
+    `,
+    [staffId, leaveId, start.getFullYear()]
+  );
+  const entitlement = entitlementResult.rows[0] || null;
+  if (entitlement) {
+    const entitled = Number(entitlement.entitled_curr_year || 0);
+    const accumulated = Number(entitlement.accumulated || 0);
+    const consumed = Number(entitlement.consumed_curr_year || 0);
+    const encashed = Number(entitlement.encashed_curr_year || 0) + Number(entitlement.total_encashed || 0);
+    const availableBalance = Math.max(entitled + accumulated - consumed - encashed, 0);
+
+    if (noOfDays > availableBalance) {
+      return { valid: false, message: `You do not have enough leave balance. Available: ${availableBalance}, requested: ${noOfDays}` };
+    }
+  }
+
   const dayDiff = Math.floor((end.getTime() - start.getTime()) / 86400000) + 1;
   const clNormalized = String(clType || 'Full').trim().toLowerCase();
   const isFullDay = clNormalized === 'full' || clNormalized === 'full day';
@@ -771,7 +793,6 @@ async function createLeaveApplication(payload) {
     }
 
     await insertDaywiseLeaves(client, applicationId, payload.startDate, payload.endDate, payload.leaveId);
-    await syncConsumedEntitlement(client, staffId, payload.leaveId, year);
 
     const fromYear = new Date(payload.startDate + 'T00:00:00').getFullYear();
     const toYear = new Date(payload.endDate + 'T00:00:00').getFullYear();
@@ -817,6 +838,8 @@ async function createLeaveApplication(payload) {
           [toYear, staffId, payload.leaveId, noOfDays2, `${toYear}-01-01`]
         );
       }
+    } else {
+      await syncConsumedEntitlement(client, staffId, payload.leaveId, year);
     }
 
     await insertNotificationsForApplication(client, applicationId, staffId, payload.alternate, payload.additionalAlternate, payload.startDate, payload.endDate, routing);
@@ -841,7 +864,7 @@ async function updateLeaveApplication(applicationId, payload) {
 
     const beforeResult = await client.query(
       `
-      SELECT staff_id, leave_id, EXTRACT(YEAR FROM start::date)::int AS year, alternate, additional_alternate
+      SELECT staff_id, leave_id, EXTRACT(YEAR FROM start::date)::int AS start_year, EXTRACT(YEAR FROM "end"::date)::int AS end_year, alternate, additional_alternate
       FROM leave_staff_applications
       WHERE id = $1
       LIMIT 1
@@ -853,6 +876,9 @@ async function updateLeaveApplication(applicationId, payload) {
       await client.query('ROLLBACK');
       return null;
     }
+
+    const newStartYear = new Date(payload.startDate + 'T00:00:00').getFullYear();
+    const newEndYear = new Date(payload.endDate + 'T00:00:00').getFullYear();
 
     const validation = await validateLeaveRules(client, Number(before.staff_id), payload.leaveId, payload.startDate, payload.endDate, payload.noOfDays, payload.clType, id);
     if (!validation.valid) {
@@ -873,9 +899,10 @@ async function updateLeaveApplication(applicationId, payload) {
           cl_type = $6,
           alternate = $7,
           additional_alternate = $8,
+          year = $9,
           updated_at = NOW()
-      WHERE id = $9
-      RETURNING id, staff_id, leave_id, EXTRACT(YEAR FROM start::date)::int AS year
+      WHERE id = $10
+      RETURNING id, staff_id, leave_id, EXTRACT(YEAR FROM "end"::date)::int AS year
       `,
       [
         payload.leaveId,
@@ -886,6 +913,7 @@ async function updateLeaveApplication(applicationId, payload) {
         payload.clType || 'Full',
         payload.alternate || null,
         payload.additionalAlternate || null,
+        Number(String(payload.endDate || payload.startDate || '').slice(0, 4)),
         id,
       ]
     );
@@ -899,15 +927,16 @@ async function updateLeaveApplication(applicationId, payload) {
     await deleteDaywiseLeaves(client, id);
     await insertDaywiseLeaves(client, id, payload.startDate, payload.endDate, payload.leaveId);
 
-    await syncConsumedEntitlement(client, Number(before.staff_id), Number(before.leave_id), Number(before.year));
+    const yearsToSync = new Set([
+      Number(before.start_year),
+      Number(before.end_year),
+      Number(updated.year),
+      newStartYear,
+      newEndYear,
+    ].filter((y) => Number.isFinite(y) && y > 0));
 
-    const comboChanged =
-      Number(before.staff_id) !== Number(updated.staff_id)
-      || Number(before.leave_id) !== Number(updated.leave_id)
-      || Number(before.year) !== Number(updated.year);
-
-    if (comboChanged) {
-      await syncConsumedEntitlement(client, Number(updated.staff_id), Number(updated.leave_id), Number(updated.year));
+    for (const y of yearsToSync) {
+      await syncConsumedEntitlement(client, Number(before.staff_id), Number(before.leave_id), y);
     }
 
     const routing = await getRoutingInfoForLeave(Number(updated.staff_id));
@@ -933,10 +962,10 @@ async function cancelLeaveApplication(applicationId) {
 
     const beforeResult = await client.query(
       `
-        SELECT staff_id, leave_id, EXTRACT(YEAR FROM start::date)::int AS year, TO_CHAR(start::date, 'YYYY-MM-DD') AS start_date, TO_CHAR("end"::date, 'YYYY-MM-DD') AS end_date, alternate, additional_alternate
-        FROM leave_staff_applications
-        WHERE id = $1
-        LIMIT 1
+      SELECT staff_id, leave_id, EXTRACT(YEAR FROM start::date)::int AS start_year, EXTRACT(YEAR FROM "end"::date)::int AS end_year, TO_CHAR(start::date, 'YYYY-MM-DD') AS start_date, TO_CHAR("end"::date, 'YYYY-MM-DD') AS end_date, alternate, additional_alternate
+      FROM leave_staff_applications
+      WHERE id = $1
+      LIMIT 1
       `,
       [id]
     );
@@ -948,14 +977,22 @@ async function cancelLeaveApplication(applicationId) {
 
     const { rows } = await client.query(
       `
-        UPDATE leave_staff_applications
-        SET appl_status = 'cancelled', updated_at = NOW()
-        WHERE id = $1
-        RETURNING id
+      UPDATE leave_staff_applications
+      SET appl_status = 'cancelled', updated_at = NOW()
+      WHERE id = $1
+      RETURNING id
       `,
       [id]
     );
-    await syncConsumedEntitlement(client, Number(before.staff_id), Number(before.leave_id), Number(before.year));
+
+    const yearsToSync = new Set([
+      Number(before.start_year),
+      Number(before.end_year),
+    ].filter((y) => Number.isFinite(y) && y > 0));
+
+    for (const y of yearsToSync) {
+      await syncConsumedEntitlement(client, Number(before.staff_id), Number(before.leave_id), y);
+    }
 
     // send notifications about cancellation (requester + alternates)
     try {

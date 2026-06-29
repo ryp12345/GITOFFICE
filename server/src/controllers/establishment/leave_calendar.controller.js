@@ -268,7 +268,8 @@ exports.getYearwiseLeaveData = async (req, res) => {
         entitled_curr_year: Number(ent.entitled_curr_year) || 0,
         accumulated: Number(ent.accumulated) || 0,
         availed: Number(ent.consumed_curr_year) || 0,
-        balance: (Number(ent.entitled_curr_year) || 0) + (Number(ent.accumulated) || 0) - (Number(ent.consumed_curr_year) || 0),
+        encashed_curr_year: Number(ent.encashed_curr_year) || 0,
+        balance: Math.max((Number(ent.entitled_curr_year) || 0) + (Number(ent.accumulated) || 0) - (Number(ent.consumed_curr_year) || 0) - (Number(ent.encashed_curr_year) || 0), 0),
       };
     }
 
@@ -276,10 +277,10 @@ exports.getYearwiseLeaveData = async (req, res) => {
       if (!data[sd.staff_id]) continue;
       const shortname = String(sd.shortname || '').toUpperCase();
       if (!data[sd.staff_id][shortname]) {
-        data[sd.staff_id][shortname] = { entitled_curr_year: 0, accumulated: 0, availed: 0, balance: 0 };
+        data[sd.staff_id][shortname] = { entitled_curr_year: 0, accumulated: 0, availed: 0, encashed_curr_year: 0, balance: 0 };
       }
       data[sd.staff_id][shortname].availed = Number(sd.total_days);
-      data[sd.staff_id][shortname].balance = (data[sd.staff_id][shortname].entitled_curr_year || 0) + (data[sd.staff_id][shortname].accumulated || 0) - Number(sd.total_days);
+      data[sd.staff_id][shortname].balance = Math.max((data[sd.staff_id][shortname].entitled_curr_year || 0) + (data[sd.staff_id][shortname].accumulated || 0) - Number(sd.total_days) - (data[sd.staff_id][shortname].encashed_curr_year || 0), 0);
     }
 
     sendSuccess(res, {
@@ -335,14 +336,21 @@ exports.getLeavePDF = async (req, res) => {
     );
 
     const entitlementResult = await pool.query(
-      `SELECT entitled_curr_year, accumulated, consumed_curr_year, total_encashed
+      `SELECT entitled_curr_year, accumulated, consumed_curr_year, encashed_curr_year, total_encashed
        FROM leave_staff_entitlements
        WHERE staff_id = $1 AND leave_id = $2 AND year = $3
        ORDER BY id DESC LIMIT 1`,
       [app.staff_id, app.leave_id, new Date(app.start).getFullYear()]
     );
     const ent = entitlementResult.rows[0] || {};
-    const leavesCredit = (Number(ent.entitled_curr_year) || 0) + (Number(ent.accumulated) || 0) - (Number(ent.consumed_curr_year) || 0) - (Number(ent.total_encashed) || 0);
+    const leavesCredit = Math.max(
+      (Number(ent.entitled_curr_year) || 0)
+      + (Number(ent.accumulated) || 0)
+      - (Number(ent.consumed_curr_year) || 0)
+      - (Number(ent.encashed_curr_year) || 0)
+      - (Number(ent.total_encashed) || 0),
+      0
+    );
 
     const pdfData = {
       leave_id: app.id,

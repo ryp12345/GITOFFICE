@@ -380,14 +380,14 @@ export default function LeaveEntitlementPage() {
                             );
                           })}
 
-                          {leaveTypes.map((leaveType) => {
-                            const leaveData = row.leaves?.[leaveType.shortname];
-                            return (
-                              <td key={`balance-value-${row.id}-${leaveType.shortname}`} className="px-4 py-3 border text-sm text-center text-gray-700">
-                                {leaveData ? leaveData.balance : 0}
-                              </td>
-                            );
-                          })}
+                            {leaveTypes.map((leaveType) => {
+                              const leaveData = row.leaves?.[leaveType.shortname];
+                              return (
+                                <td key={`balance-value-${row.id}-${leaveType.shortname}`} className="px-4 py-3 border text-sm text-center text-gray-700">
+                                  {leaveData ? Math.max(Number(leaveData.balance) || 0, 0) : 0}
+                                </td>
+                              );
+                            })}
 
                           <td className="px-4 py-3 border text-center">
                             <button

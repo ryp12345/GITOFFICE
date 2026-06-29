@@ -83,11 +83,11 @@ function LeaveStatistics({ year, staffId, userId }) {
               ))}
             </tr>
             <tr>
-              <th className="px-3 py-2 font-medium">Balance</th>
-              {allKeys.map((k) => (
-                <td key={k} className="px-3 py-2">{typeof leaves[k] !== 'undefined' ? (typeof leaves[k].balance !== 'undefined' ? leaves[k].balance : (leaves[k].entitled_accumulated ?? '--')) : '--NA--'}</td>
-              ))}
-            </tr>
+               <th className="px-3 py-2 font-medium">Balance</th>
+               {allKeys.map((k) => (
+                 <td key={k} className="px-3 py-2">{typeof leaves[k] !== 'undefined' ? (typeof leaves[k].balance !== 'undefined' ? Math.max(Number(leaves[k].balance) || 0, 0) : (leaves[k].entitled_accumulated ?? '--')) : '--NA--'}</td>
+               ))}
+             </tr>
           </tbody>
         </table>
       </div>
@@ -1201,13 +1201,13 @@ export default function StaffLeavesPage() {
 
     if (stats.balance !== undefined && stats.balance !== null) {
       const balance = Number(stats.balance);
-      if (Number.isFinite(balance)) return balance;
+      if (Number.isFinite(balance)) return Math.max(balance, 0);
     }
 
     const entitled = Number(stats.entitled_accumulated ?? stats.entitled_curr_year ?? 0);
     const availed = Number(stats.availed ?? stats.consumed ?? stats.consumed_curr_year ?? 0);
     const encashed = Number(stats.encashed_curr_year ?? stats.encashed ?? 0);
-    const available = entitled - availed - encashed;
+    const available = Math.max(entitled - availed - encashed, 0);
     return Number.isFinite(available) ? available : null;
   }, [calYear, getLeaveStats]);
 

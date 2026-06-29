@@ -5,14 +5,14 @@ const ExcelJS = require('exceljs');
 const { findDepartmentByHodUserId } = require('../models/hodDepartmentOverview.model');
 
 const SECONDARY_DB = {
-  host: process.env.DB_SECONDARY_HOST || process.env.DB_SECONDARY_HOST || '127.0.0.1',
-  port: Number(process.env.DB_SECONDARY_PORT || 3306),
-  user: process.env.DB_SECONDARY_USERNAME || process.env.DB_SECONDARY_USERNAME || 'root',
-  password: process.env.DB_SECONDARY_PASSWORD || process.env.DB_SECONDARY_PASSWORD || '',
-  database: process.env.DB_SECONDARY_DATABASE || process.env.DB_SECONDARY_DATABASE || undefined,
-  waitForConnections: true,
-  connectionLimit: 10,
-  queueLimit: 0,
+    host: process.env.DB_SECONDARY_HOST || '127.0.0.1',
+    port: Number(process.env.DB_SECONDARY_PORT || 3306),
+    user: process.env.DB_SECONDARY_USERNAME || 'root',
+    password: process.env.DB_SECONDARY_PASSWORD || '',
+    database: process.env.DB_SECONDARY_DATABASE,
+    waitForConnections: true,
+    connectionLimit: 10,
+    queueLimit: 0,
 };
 
 function formatDurationFromSeconds(totalSeconds) {

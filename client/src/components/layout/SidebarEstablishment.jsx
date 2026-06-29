@@ -32,72 +32,72 @@ export default function SidebarEstablishment() {
     { name: 'Religions & Castes', path: '/religions', icon: '🛐' },
     { name: 'Staff', path: '/staff', icon: '👥' },
 
-    // {
-    //   name: 'Salaries',
-    //   path: '/salaries',
-    //   icon: '💰',
-    //   submenu: [
-    //     {
-    //       name: 'Pay Scale Heads',
-    //       submenu: [
-    //         { name: 'Teaching', path: '/salaries/payscales/teaching' },
-    //         { name: 'Non-Teaching', path: '/salaries/payscales/non-teaching' },
-    //         { name: 'Allowances', path: '/salaries/payscales/allowances' }
-    //       ]
-    //     },
+    {
+      name: 'Salaries',
+      path: '/salaries',
+      icon: '💰',
+      submenu: [
+        {
+          name: 'Pay Scale Heads',
+          submenu: [
+            { name: 'Teaching', path: '/salaries/payscales/teaching' },
+            { name: 'Non-Teaching', path: '/salaries/payscales/non-teaching' },
+            { name: 'Allowances', path: '/salaries/payscales/allowances' }
+          ]
+        },
 
-    //     { name: 'LIC Management', path: '/salaries/lic-management' },
+        { name: 'LIC Management', path: '/salaries/lic-management' },
 
-    //     { name: 'Autonomous Grading', path: '/salaries/autonomous-grading' },
+        { name: 'Autonomous Grading', path: '/salaries/autonomous-grading' },
 
-    //     { name: 'Leaves Encashment', path: '/salaries/leaves-encashment' },
+        { name: 'Leaves Encashment', path: '/salaries/leaves-encashment' },
 
-    //     { name: 'Laptop Loan List', path: '/salaries/laptop-loan' },
+        { name: 'Laptop Loan List', path: '/salaries/laptop-loan' },
 
-    //     {
-    //       name: 'Annual Increment List',
-    //       submenu: [
-    //         {
-    //           name: 'GC',
-    //           submenu: [
-    //             {
-    //               name: 'Teaching',
-    //               path: '/salaries/annual-increment/gc/teaching'
-    //             },
-    //             {
-    //               name: 'Non Teaching',
-    //               path: '/salaries/annual-increment/gc/non-teaching'
-    //             }
-    //           ]
-    //         },
-    //         {
-    //           name: 'Board',
-    //           submenu: [
-    //             {
-    //               name: 'Teaching',
-    //               path: '/salaries/annual-increment/board/teaching'
-    //             },
-    //             {
-    //               name: 'Non Teaching',
-    //               path: '/salaries/annual-increment/board/non-teaching'
-    //             }
-    //           ]
-    //         }
-    //       ]
-    //     },
+        {
+          name: 'Annual Increment List',
+          submenu: [
+            {
+              name: 'GC',
+              submenu: [
+                {
+                  name: 'Teaching',
+                  path: '/salaries/annual-increment/gc/teaching'
+                },
+                {
+                  name: 'Non Teaching',
+                  path: '/salaries/annual-increment/gc/non-teaching'
+                }
+              ]
+            },
+            {
+              name: 'Board',
+              submenu: [
+                {
+                  name: 'Teaching',
+                  path: '/salaries/annual-increment/board/teaching'
+                },
+                {
+                  name: 'Non Teaching',
+                  path: '/salaries/annual-increment/board/non-teaching'
+                }
+              ]
+            }
+          ]
+        },
 
-    //     { name: 'Festival Advance List', path: '/salaries/festival-advance' },
+        { name: 'Festival Advance List', path: '/salaries/festival-advance' },
 
-    //     { name: 'Salary Credit', path: '/salaries/salary-credit' },
+        { name: 'Salary Credit', path: '/salaries/salary-credit' },
 
-    //     { name: 'Salary History', path: '/salaries/salary-history' },
+        { name: 'Salary History', path: '/salaries/salary-history' },
 
-    //     {
-    //       name: 'Staff Remuneration Details',
-    //       path: '/salaries/staff-remuneration-details'
-    //     }
-    //   ]
-    // },
+        {
+          name: 'Staff Remuneration Details',
+          path: '/salaries/staff-remuneration-details'
+        }
+      ]
+    },
     {
       name: 'BIOMETRIC',
       path: '/establishment/biometric',

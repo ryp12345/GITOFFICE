@@ -108,12 +108,15 @@ export default function StaffDashboard() {
               const key = String(short || '').toUpperCase();
               const v = leaves[key];
               if (!v) return 0;
-              if (v.balance !== undefined && v.balance !== null) return Number(v.balance) || 0;
+              if (v.balance !== undefined && v.balance !== null) {
+                const n = Number(v.balance);
+                return Number.isFinite(n) ? Math.max(n, 0) : 0;
+              }
               const entitled = Number(v.entitled_accumulated ?? v.entitled_curr_year ?? 0) || 0;
               const availed = Number(v.availed ?? v.consumed ?? v.consumed_curr_year ?? 0) || 0;
               const encashed = Number(v.encashed_curr_year ?? v.encashed ?? 0) || 0;
               const val = entitled - availed - encashed;
-              return Number.isFinite(val) ? val : 0;
+              return Number.isFinite(val) ? Math.max(val, 0) : 0;
             };
 
             const CL = compute('CL');

@@ -266,7 +266,7 @@ const buildRows = (staffRows, entitlementRows, year) => {
       encashed_curr_year: encashedCurrYear,
       encashed: encashedCurrYear + totalEncashed,
       entitled_accumulated: entitled + accumulated - encashedCurrYear,
-      balance: entitled + accumulated - availed - encashedCurrYear
+      balance: Math.max(entitled + accumulated - availed - encashedCurrYear, 0)
     };
   });
 
