@@ -760,6 +760,23 @@ async function createLeaveApplication(payload) {
       throw err;
     }
 
+    const fromYear = new Date(payload.startDate + 'T00:00:00').getFullYear();
+    const toYear = new Date(payload.endDate + 'T00:00:00').getFullYear();
+    if (fromYear !== toYear) {
+      const endOfYear = new Date(fromYear, 11, 31);
+      const noOfDays1 = Math.floor((endOfYear - new Date(payload.startDate + 'T00:00:00')) / 86400000) + 1;
+      const startOfYear = new Date(toYear, 0, 1);
+      const noOfDays2 = Math.floor((new Date(payload.endDate + 'T00:00:00') - startOfYear) / 86400000) + 1;
+
+      const toYearValidation = await validateLeaveRules(client, staffId, payload.leaveId, payload.endDate, payload.endDate, noOfDays2, payload.clType, null);
+      if (!toYearValidation.valid) {
+        await client.query('ROLLBACK');
+        const err = new Error(toYearValidation.message);
+        err.statusCode = 409;
+        throw err;
+      }
+    }
+
     const { rows } = await client.query(
       `
       INSERT INTO leave_staff_applications
@@ -794,8 +811,6 @@ async function createLeaveApplication(payload) {
 
     await insertDaywiseLeaves(client, applicationId, payload.startDate, payload.endDate, payload.leaveId);
 
-    const fromYear = new Date(payload.startDate + 'T00:00:00').getFullYear();
-    const toYear = new Date(payload.endDate + 'T00:00:00').getFullYear();
     if (fromYear !== toYear) {
       const endOfYear = new Date(fromYear, 11, 31);
       const noOfDays1 = Math.floor((endOfYear - new Date(payload.startDate + 'T00:00:00')) / 86400000) + 1;
