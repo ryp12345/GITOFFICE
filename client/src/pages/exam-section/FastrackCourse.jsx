@@ -50,7 +50,7 @@ export default function FastrackCoursePage() {
     setLoading(true);
     try {
       const [coursesRes, lookupRes] = await Promise.all([
-        useFilter
+        useFilter && selectedInstance
           ? getFastrackCoursesByAcademicYear({ fastrack_instance_id: selectedInstance, academic_year: academicYear })
           : getFastrackCourses(),
         getFastrackLookup()
@@ -173,7 +173,7 @@ export default function FastrackCoursePage() {
 
       const deptRows = Array.isArray(departments) ? departments : [];
       const blankCells = Array(6).fill('<td style="padding:8px;"></td>').join('');
-      const noteText = 'Note I: The first blank row in the template should be left empty. Note II: For the column department_id, enter the department id from the right-side reference list.';
+      const noteText = 'Note I: The first blank row in the list will be considered as end of records and will stop reading any rows after that. Note II: For the column department_id, enter the department id from the right-side reference list.';
 
       let tableContent = '<table border="1" cellspacing="0" cellpadding="0">';
       tableContent += '<tr>' + templateHeaders.map((header) => `<th style="background:#1976d2;color:#ffffff;padding:8px;text-align:left;">${header}</th>`).join('') + '</tr>';
@@ -348,22 +348,6 @@ export default function FastrackCoursePage() {
                   <div className="box-body">
                     <div className="flex flex-col md:flex-row gap-x-4 w-full">
                       <div className="md:w-1/2 w-full mb-4 md:mb-0">
-                        <label className="block mb-2 text-sm font-medium text-gray-700">Fastrack Instance</label>
-                        <select
-                          value={selectedInstance}
-                          onChange={(e) => {
-                            setSelectedInstance(e.target.value);
-                            setUseFilter(true);
-                          }}
-                          className="block w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                        >
-                          <option value="">Select Fastrack Instance</option>
-                          {instances.map(inst => (
-                            <option key={inst.id} value={inst.id}>{inst.ft_instance_name}</option>
-                          ))}
-                        </select>
-                      </div>
-                      <div className="md:w-1/2 w-full">
                         <label className="block mb-2 text-sm font-medium text-gray-700">Academic Year</label>
                         <div className="flex items-center gap-2">
                           <button
@@ -372,24 +356,44 @@ export default function FastrackCoursePage() {
                               const parts = academicYear.split('-');
                               const newYear = `${parseInt(parts[0]) - 1}-${parseInt(parts[1]) - 1}`;
                               setAcademicYear(newYear);
+                              setSelectedInstance('');
+                              setUseFilter(false);
                             }}
                             className="p-2 border border-gray-300 rounded hover:bg-gray-50"
                           >
                             &lt;
                           </button>
-                          <span className="px-4 py-2 bg-primary text-white rounded font-bold">{academicYear}</span>
+                          <span className="px-4 py-2 bg-primary text-black rounded font-bold">{academicYear}</span>
                           <button
                             type="button"
                             onClick={() => {
                               const parts = academicYear.split('-');
                               const newYear = `${parseInt(parts[0]) + 1}-${parseInt(parts[1]) + 1}`;
                               setAcademicYear(newYear);
+                              setSelectedInstance('');
+                              setUseFilter(false);
                             }}
                             className="p-2 border border-gray-300 rounded hover:bg-gray-50"
                           >
                             &gt;
                           </button>
                         </div>
+                      </div>
+                      <div className="md:w-1/2 w-full">
+                        <label className="block mb-2 text-sm font-medium text-gray-700">Fastrack Instance</label>
+                        <select
+                          value={selectedInstance}
+                          onChange={(e) => {
+                            setSelectedInstance(e.target.value);
+                            setUseFilter(Boolean(e.target.value));
+                          }}
+                          className="block w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        >
+                          <option value="">Select Fastrack Instance</option>
+                          {instances.filter(inst => String(inst.academic_year) === String(academicYear)).map(inst => (
+                            <option key={inst.id} value={inst.id}>{inst.ft_instance_name}</option>
+                          ))}
+                        </select>
                       </div>
                     </div>
                   </div>

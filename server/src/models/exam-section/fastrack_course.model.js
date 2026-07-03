@@ -166,7 +166,7 @@ async function findDepartments() {
 
 async function findInstances() {
   const { rows } = await pool.query(
-    `SELECT id, ft_instance_name FROM fastrack_instances ORDER BY ft_instance_name ASC`
+    `SELECT id, ft_instance_name, academic_year FROM fastrack_instances ORDER BY ft_instance_name ASC`
   );
   return rows;
 }
