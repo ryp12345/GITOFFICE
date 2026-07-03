@@ -147,8 +147,28 @@ export const getInsights = async () => {
   return res.data;
 };
 
-export const getExpensesMaster = async () => {
-  const res = await api.get('/exam-section/fastrack_expenses_master');
+export const getExpenseMasters = async () => {
+  const res = await api.get('/exam-section/expense-masters');
+  return res.data;
+};
+
+export const getExpenseMasterById = async (id) => {
+  const res = await api.get(`/exam-section/expense-masters/${id}`);
+  return res.data;
+};
+
+export const createExpenseMaster = async (payload) => {
+  const res = await api.post('/exam-section/expense-masters', payload);
+  return res.data;
+};
+
+export const updateExpenseMaster = async (id, payload) => {
+  const res = await api.patch(`/exam-section/expense-masters/${id}`, payload);
+  return res.data;
+};
+
+export const deleteExpenseMaster = async (id) => {
+  const res = await api.delete(`/exam-section/expense-masters/${id}`);
   return res.data;
 };
 

@@ -68,6 +68,7 @@ import SchemeConfigPage from '../pages/exam-section/SchemeConfig';
 import CourseTypeConfigPage from '../pages/exam-section/CourseTypeConfig';
 import FastrackInstancePage from '../pages/exam-section/FastrackInstance';
 import FastrackCoursePage from '../pages/exam-section/FastrackCourse';
+import ExpensesMasterPage from '../pages/exam-section/ExpensesMaster';
 
 // StaffViewPage now fetches its own data from API using id
 function StaffViewPageWrapper() {
@@ -251,6 +252,7 @@ export default function AppRoutes() {
           <Route path="/exam-section/fastcourse-setup" element={<CourseTypeConfigPage />} />
           <Route path="/exam-section/fastrack-instance" element={<FastrackInstancePage />} />
           <Route path="/exam-section/fastrack" element={<FastrackCoursePage />} />
+          <Route path="/exam-section/fastrack-expenses-master" element={<ExpensesMasterPage />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

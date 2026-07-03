@@ -6,6 +6,7 @@ const schemeController = require('../controllers/exam-section/scheme.controller'
 const ftcourseController = require('../controllers/exam-section/ftcourse.controller');
 const fastrackInstanceController = require('../controllers/exam-section/fastrack_instance.controller');
 const fastrackCourseController = require('../controllers/exam-section/fastrack_course.controller');
+const expenseMasterController = require('../controllers/exam-section/fastrack_expenses_master.controller');
 const multer = require('multer');
 const upload = multer({ storage: multer.memoryStorage() });
 
@@ -199,6 +200,41 @@ router.post(
   authMiddleware,
   roleMiddleware('Exam_section', 'exam_section'),
   fastrackCourseController.exportCourses
+);
+
+router.get(
+  '/expense-masters',
+  authMiddleware,
+  roleMiddleware('Exam_section', 'exam_section'),
+  expenseMasterController.listExpenseMasters
+);
+
+router.get(
+  '/expense-masters/:id',
+  authMiddleware,
+  roleMiddleware('Exam_section', 'exam_section'),
+  expenseMasterController.getExpenseMaster
+);
+
+router.post(
+  '/expense-masters',
+  authMiddleware,
+  roleMiddleware('Exam_section', 'exam_section'),
+  expenseMasterController.createExpenseMaster
+);
+
+router.patch(
+  '/expense-masters/:id',
+  authMiddleware,
+  roleMiddleware('Exam_section', 'exam_section'),
+  expenseMasterController.updateExpenseMaster
+);
+
+router.delete(
+  '/expense-masters/:id',
+  authMiddleware,
+  roleMiddleware('Exam_section', 'exam_section'),
+  expenseMasterController.deleteExpenseMaster
 );
 
 module.exports = router;
