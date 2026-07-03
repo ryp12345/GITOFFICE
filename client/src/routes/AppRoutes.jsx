@@ -62,6 +62,12 @@ import AssoProRecruitmentPage from '../pages/Faculty Recruitment/asso_pro_recrui
 import ProRecruitmentPage from '../pages/Faculty Recruitment/pro_recruitment';
 import RegistrarDashboard from '../pages/Registrar/Dashboard';
 import SidebarRegistrar from '../components/layout/SidebarRegistrar';
+import SidebarExamSection from '../components/layout/SidebarExamSection';
+import ExamSectionDashboard from '../pages/exam-section/Dashboard';
+import SchemeConfigPage from '../pages/exam-section/SchemeConfig';
+import CourseTypeConfigPage from '../pages/exam-section/CourseTypeConfig';
+import FastrackInstancePage from '../pages/exam-section/FastrackInstance';
+import FastrackCoursePage from '../pages/exam-section/FastrackCourse';
 
 // StaffViewPage now fetches its own data from API using id
 function StaffViewPageWrapper() {
@@ -238,6 +244,13 @@ export default function AppRoutes() {
           <Route path="/nonteaching/leave-application" element={<StaffLeavesPage />} />
           <Route path="/nonteaching/biometric/daily" element={<DailyDataPage />} />
           <Route path="/nonteaching/biometric/monthly" element={<MonthlyDataPage />} />
+        </Route>
+        <Route element={<RoleRoute role="Exam_section" />}>
+          <Route path="/exam-section" element={<ExamSectionDashboard />} />
+          <Route path="/exam-section/fastrack-scheme-config" element={<SchemeConfigPage />} />
+          <Route path="/exam-section/fastcourse-setup" element={<CourseTypeConfigPage />} />
+          <Route path="/exam-section/fastrack-instance" element={<FastrackInstancePage />} />
+          <Route path="/exam-section/fastrack" element={<FastrackCoursePage />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

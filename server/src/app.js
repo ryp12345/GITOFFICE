@@ -96,6 +96,9 @@ app.use('/api/super-admin-leaves', superAdminLeaveRoutes);
 const ticketRoutes = require('./routes/tickets.routes');
 app.use('/api/tickets', ticketRoutes);
 
+const examSectionRoutes = require('./routes/exam-section.routes');
+app.use('/api/exam-section', examSectionRoutes);
+
 app.use(errorMiddleware);
 
 module.exports = app;
