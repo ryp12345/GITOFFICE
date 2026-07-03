@@ -132,8 +132,18 @@ export const getPayConfig = async () => {
   return res.data;
 };
 
-export const getPayConfigData = async () => {
-  const res = await api.get('/exam-section/Fastrackpay/getData');
+export const getPayConfigData = async (academicYear) => {
+  const res = await api.get('/exam-section/Fastrackpay/getData', { params: { academic_year: academicYear } });
+  return res.data;
+};
+
+export const createPayConfig = async (payload) => {
+  const res = await api.post('/exam-section/Fastrackpay/create', payload);
+  return res.data;
+};
+
+export const updatePayConfig = async (id, payload) => {
+  const res = await api.patch(`/exam-section/Fastrackpay/update/${id}`, payload);
   return res.data;
 };
 
