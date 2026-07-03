@@ -44,23 +44,34 @@ export default function FastrackCoursePage() {
   const [selectedInstance, setSelectedInstance] = useState('');
   const [academicYear, setAcademicYear] = useState(`${currentYear}-${currentYear + 1}`);
   const [useFilter, setUseFilter] = useState(false);
+  const [yearChanged, setYearChanged] = useState(false);
   const fileInputRef = useRef(null);
 
   const load = async () => {
     setLoading(true);
     try {
-      const [coursesRes, lookupRes] = await Promise.all([
-        useFilter && selectedInstance
-          ? getFastrackCoursesByAcademicYear({ fastrack_instance_id: selectedInstance, academic_year: academicYear })
-          : getFastrackCourses(),
-        getFastrackLookup()
-      ]);
-      const coursesData = coursesRes?.data?.data || coursesRes?.data || [];
-      setRows(Array.isArray(coursesData) ? coursesData : []);
+      const lookupRes = await getFastrackLookup();
       const lookupData = lookupRes?.data?.data || lookupRes?.data || {};
       setDepartments(Array.isArray(lookupData.departments) ? lookupData.departments : []);
       setInstances(Array.isArray(lookupData.instances) ? lookupData.instances : []);
       setCourseTypes(Array.isArray(lookupData.courseTypes) ? lookupData.courseTypes : []);
+
+      let coursesData = [];
+      if (useFilter && selectedInstance) {
+        const coursesRes = await getFastrackCoursesByAcademicYear({
+          fastrack_instance_id: selectedInstance,
+          academic_year: academicYear
+        });
+        coursesData = coursesRes?.data?.data || coursesRes?.data || [];
+        setYearChanged(false);
+      } else if (yearChanged) {
+        coursesData = [];
+      } else {
+        const coursesRes = await getFastrackCourses();
+        coursesData = coursesRes?.data?.data || coursesRes?.data || [];
+      }
+
+      setRows(Array.isArray(coursesData) ? coursesData : []);
     } catch (e) {
       const msg = e.response?.data?.message || e.message || 'Failed to fetch data';
       showNotification(msg, 'error');
@@ -247,8 +258,13 @@ export default function FastrackCoursePage() {
       const response = await fetch('/api/exam-section/fastrack/course_details/export', {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${token}`
-        }
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          fastrack_instance_id: selectedInstance || null,
+          academic_year: academicYear || null
+        })
       });
 
       if (!response.ok) {
@@ -358,6 +374,8 @@ export default function FastrackCoursePage() {
                               setAcademicYear(newYear);
                               setSelectedInstance('');
                               setUseFilter(false);
+                              setYearChanged(true);
+                              setRows([]);
                             }}
                             className="p-2 border border-gray-300 rounded hover:bg-gray-50"
                           >
@@ -372,6 +390,8 @@ export default function FastrackCoursePage() {
                               setAcademicYear(newYear);
                               setSelectedInstance('');
                               setUseFilter(false);
+                              setYearChanged(true);
+                              setRows([]);
                             }}
                             className="p-2 border border-gray-300 rounded hover:bg-gray-50"
                           >
@@ -386,6 +406,7 @@ export default function FastrackCoursePage() {
                           onChange={(e) => {
                             setSelectedInstance(e.target.value);
                             setUseFilter(Boolean(e.target.value));
+                            setYearChanged(false);
                           }}
                           className="block w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                         >
@@ -406,7 +427,8 @@ export default function FastrackCoursePage() {
               <div className="box-body flex flex-wrap items-center gap-3">
                 <button
                   onClick={openCreate}
-                  className="flex items-center justify-center px-6 py-3 font-medium text-white transition-all duration-300 transform rounded-lg shadow-lg bg-blue-600 hover:bg-blue-700 hover:-translate-y-1 hover:scale-105"
+                  disabled={!selectedInstance}
+                  className={`flex items-center justify-center px-6 py-3 font-medium text-white transition-all duration-300 transform rounded-lg shadow-lg ${selectedInstance ? 'bg-blue-600 hover:bg-blue-700 hover:-translate-y-1 hover:scale-105' : 'bg-slate-400 cursor-not-allowed opacity-70'}`}
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 mr-2" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" /></svg>
                   Add Fastrack Course Details
@@ -420,8 +442,9 @@ export default function FastrackCoursePage() {
                 </button>
                 <button
                   type="button"
+                  disabled={!selectedInstance}
                   onClick={() => fileInputRef.current?.click()}
-                  className="flex items-center justify-center px-6 py-3 font-medium text-white transition-all duration-300 transform rounded-lg shadow-lg bg-blue-600 hover:bg-blue-700 hover:-translate-y-1 hover:scale-105"
+                  className={`flex items-center justify-center px-6 py-3 font-medium text-white transition-all duration-300 transform rounded-lg shadow-lg ${selectedInstance ? 'bg-blue-600 hover:bg-blue-700 hover:-translate-y-1 hover:scale-105' : 'bg-slate-400 cursor-not-allowed opacity-70'}`}
                 >
                   Upload
                 </button>

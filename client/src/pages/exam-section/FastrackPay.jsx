@@ -163,7 +163,7 @@ export default function FastrackPayPage() {
             {/* Academic Year Selector */}
             <div className="flex items-center gap-4 mb-6">
               <button onClick={handleYearPrev} className="p-2 border border-gray-300 rounded hover:bg-gray-50">&lt;</button>
-              <span className="px-4 py-2 bg-primary text-white rounded font-bold">{academicYear}</span>
+              <span className="px-4 py-2 bg-primary text-black rounded font-bold">{academicYear}</span>
               <button onClick={handleYearNext} className="p-2 border border-gray-300 rounded hover:bg-gray-50">&gt;</button>
             </div>
 
@@ -178,12 +178,12 @@ export default function FastrackPayPage() {
                   </div>
                   <div className="overflow-x-auto">
                     <table className="min-w-full divide-y divide-gray-200">
-                      <thead className="bg-gray-50">
+                      <thead className="bg-blue-600">
                         <tr>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Academic Year</th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Total Income</th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Total Expenses</th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Balance (A)</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-white uppercase">Academic Year</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-white uppercase">Total Income</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-white uppercase">Total Expenses</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-white uppercase">Balance (A)</th>
                         </tr>
                       </thead>
                       <tbody className="bg-white divide-y divide-gray-200">
@@ -205,13 +205,13 @@ export default function FastrackPayPage() {
                   </div>
                   <div className="overflow-x-auto">
                     <table className="min-w-full divide-y divide-gray-200">
-                      <thead className="bg-gray-50">
+                      <thead className="bg-blue-600">
                         <tr>
-                          <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">S.NO</th>
-                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Particular</th>
-                          <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">No of Sessions</th>
-                          <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Control</th>
-                          <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Amount</th>
+                          <th className="px-4 py-3 text-center text-xs font-medium text-white uppercase">S.NO</th>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-white uppercase">Particular</th>
+                          <th className="px-4 py-3 text-center text-xs font-medium text-white uppercase">No of Sessions</th>
+                          <th className="px-4 py-3 text-center text-xs font-medium text-white uppercase">Control</th>
+                          <th className="px-4 py-3 text-right text-xs font-medium text-white uppercase">Amount</th>
                         </tr>
                       </thead>
                       <tbody className="bg-white divide-y divide-gray-200">
@@ -334,12 +334,12 @@ export default function FastrackPayPage() {
                   </div>
                   <div className="overflow-x-auto">
                     <table className="min-w-full divide-y divide-gray-200">
-                      <thead className="bg-gray-50">
+                      <thead className="bg-blue-600">
                         <tr>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Balance (A)</th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Management</th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Total Remuneration (B)</th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Final Balance</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-white uppercase">Balance (A)</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-white uppercase">Management</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-white uppercase">Total Remuneration (B)</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-white uppercase">Final Balance</th>
                         </tr>
                       </thead>
                       <tbody className="bg-white divide-y divide-gray-200">

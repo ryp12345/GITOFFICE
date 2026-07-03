@@ -222,17 +222,18 @@ async function uploadExcel(req, res, next) {
 
 async function exportCourses(req, res, next) {
   try {
-    const { rows } = await pool.query(
-      `SELECT fc.id,
-              fc.course_code,
-              fc.course_name,
-              fc.no_of_students,
-              d.dept_shortname,
-              ft.course_type,
-              fi.ft_instance_name,
-              COALESCE(fs.classes_conducted, 0) AS classes_conducted,
-              COALESCE(fs.labs_conducted, 0) AS labs_conducted,
-              fs.status AS staff_status
+    const { fastrack_instance_id, academic_year } = req.body || {};
+    let query = `SELECT fc.id,
+                    fc.course_code,
+                    fc.course_name,
+                    fc.no_of_students,
+                    d.dept_shortname,
+                    ft.course_type,
+                    fi.ft_instance_name,
+                    fi.academic_year,
+                    COALESCE(fs.classes_conducted, 0) AS classes_conducted,
+                    COALESCE(fs.labs_conducted, 0) AS labs_conducted,
+                    fs.status AS staff_status
        FROM fastrack_courses fc
        LEFT JOIN departments d ON d.id = fc.department_id
        LEFT JOIN ftcourses ft ON ft.id = fc.ft_course_type_id
@@ -242,33 +243,62 @@ async function exportCourses(req, res, next) {
          FROM fastrack_staffs fs
          WHERE fs.course_id = fc.id
          LIMIT 1
-       ) fs ON true
-       ORDER BY fc.id ASC`
-    );
+       ) fs ON true`;
+    const params = [];
+
+    if (fastrack_instance_id && academic_year) {
+      query += ` WHERE fi.id = $1 AND fi.academic_year = $2`;
+      params.push(fastrack_instance_id, academic_year);
+    }
+
+    query += ` ORDER BY fc.id ASC`;
+
+    const { rows } = await pool.query(query, params);
 
     const workbook = new ExcelJS.Workbook();
     const sheet = workbook.addWorksheet('Fastrack-Courses');
 
-    sheet.getCell('A2').value = 'Fastrack Course Details';
+    sheet.mergeCells('A1:J1');
+    sheet.getCell('A1').value = 'KLS Gogte Instittue of Technology, Belagavi';
+    sheet.getCell('A1').font = { bold: true, size: 16 };
+    sheet.getCell('A1').alignment = { horizontal: 'center' };
+
+    sheet.mergeCells('A2:J2');
+    const instanceLabel = rows.length > 0 && rows[0].ft_instance_name
+      ? `Fastrack ${rows[0].ft_instance_name} Details`
+      : 'Fastrack instance name Details';
+    sheet.getCell('A2').value = instanceLabel;
     sheet.getCell('A2').font = { bold: true, size: 14 };
     sheet.getCell('A2').alignment = { horizontal: 'center' };
 
-    sheet.getCell('A3').value = `Generated on : ${new Date().toLocaleString()}`;
-    sheet.getCell('A3').font = { italic: true, size: 10 };
+    const yearLabel = academic_year || (rows.length > 0 ? rows[0].academic_year : 'All Years');
+    sheet.mergeCells('A3:J3');
+    sheet.getCell('A3').value = `Academic Year: ${yearLabel}`;
+    sheet.getCell('A3').font = { italic: true, size: 12 };
     sheet.getCell('A3').alignment = { horizontal: 'center' };
 
+    const headerRowIndex = 5;
     const headers = [
       'S.No', 'Course Code', 'Course Name', 'Course Type', 'Department',
       'Fastrack Instance Name', 'No. of Students', 'Theory Class',
       'Lab Class', 'Status'
     ];
-    sheet.fromArray(headers, null, 'A5');
-    for (let c = 1; c <= 10; c++) {
-      sheet.getCell(5, c).font = { bold: true };
+
+    sheet.getRow(headerRowIndex).values = headers;
+    for (let c = 1; c <= headers.length; c++) {
+      const cell = sheet.getCell(headerRowIndex, c);
+      cell.font = { bold: true };
+      cell.alignment = { horizontal: 'center', vertical: 'middle' };
+      cell.border = {
+        top: { style: 'thin' }, bottom: { style: 'thin' },
+        left: { style: 'thin' }, right: { style: 'thin' }
+      };
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFDCE6F1' } };
     }
 
     rows.forEach((row, idx) => {
-      sheet.fromArray([
+      const rowIndex = headerRowIndex + 1 + idx;
+      const values = [
         idx + 1,
         row.course_code,
         row.course_name,
@@ -278,36 +308,50 @@ async function exportCourses(req, res, next) {
         row.no_of_students || 0,
         row.classes_conducted || '--NA--',
         row.labs_conducted || '--NA--',
-        row.staff_status || '--NA--',
-      ], null, `A${6 + idx}`);
+        row.staff_status || '--NA--'
+      ];
+      sheet.getRow(rowIndex).values = values;
+      for (let c = 1; c <= values.length; c++) {
+        const cell = sheet.getCell(rowIndex, c);
+        cell.border = {
+          top: { style: 'thin' }, bottom: { style: 'thin' },
+          left: { style: 'thin' }, right: { style: 'thin' }
+        };
+      }
     });
 
-    const totalRow = 6 + rows.length;
-    sheet.getCell(`F${totalRow}`).value = 'Total';
-    sheet.getCell(`G${totalRow}`).value = rows.reduce((sum, r) => sum + (parseInt(r.no_of_students, 10) || 0), 0);
-    sheet.getCell(`F${totalRow}`).font = { bold: true };
-    sheet.getCell(`G${totalRow}`).font = { bold: true };
-    sheet.getCell(`F${totalRow}`).alignment = { horizontal: 'right' };
+    const totalRowIndex = headerRowIndex + 1 + rows.length;
+    sheet.getCell(`F${totalRowIndex}`).value = 'Total';
+    sheet.getCell(`G${totalRowIndex}`).value = rows.reduce((sum, r) => sum + (parseInt(r.no_of_students, 10) || 0), 0);
+    sheet.getCell(`F${totalRowIndex}`).font = { bold: true };
+    sheet.getCell(`G${totalRowIndex}`).font = { bold: true };
+    sheet.getCell(`F${totalRowIndex}`).alignment = { horizontal: 'right' };
 
-    for (const col of ['A','B','C','D','E','F','G','H','I','J']) {
-      sheet.getColumn(col).autoSize = true;
-    }
+    const columns = [
+      { key: 'sno', width: 8 },
+      { key: 'course_code', width: 20 },
+      { key: 'course_name', width: 30 },
+      { key: 'course_type', width: 20 },
+      { key: 'department', width: 20 },
+      { key: 'instance', width: 25 },
+      { key: 'students', width: 15 },
+      { key: 'theory', width: 15 },
+      { key: 'lab', width: 15 },
+      { key: 'status', width: 15 }
+    ];
+    sheet.columns = columns;
 
-    const borderStyle = {
-      top: { style: 'thin' }, bottom: { style: 'thin' },
-      left: { style: 'thin' }, right: { style: 'thin' }
-    };
-    for (let r = 5; r <= totalRow; r++) {
-      for (let c = 1; c <= 10; c++) {
-        sheet.getCell(r, c).border = borderStyle;
-      }
+    const fileNameParts = ['fastrack_courses', academic_year || 'all_years'];
+    if (rows.length > 0 && rows[0].ft_instance_name) {
+      fileNameParts.push(rows[0].ft_instance_name.replace(/[^a-zA-Z0-9_-]/g, '_'));
     }
+    const fileName = `${fileNameParts.join('_')}.xlsx`;
 
     const buffer = await workbook.xlsx.writeBuffer();
     console.log('Export buffer length:', buffer.length, 'first bytes:', buffer.slice(0, 4).toString('hex'));
 
-    res.setHeader('Content-Type', 'application/octet-stream');
-    res.setHeader('Content-Disposition', `attachment; filename=fastrack_courses_${new Date().toISOString().slice(0,10)}.xlsx`);
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename=${fileName}`);
     res.setHeader('Cache-Control', 'no-cache');
     res.send(buffer);
   } catch (error) {
