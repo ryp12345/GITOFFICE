@@ -1,5 +1,7 @@
 
 import { useEffect, useMemo, useState, useRef } from 'react';
+import noUiSlider from 'nouislider';
+import 'nouislider/dist/nouislider.css';
 import Notification from '../../components/common/Notification';
 import Header from '../../components/layout/Header';
 import SidebarExamSection from '../../components/layout/SidebarExamSection';
@@ -31,6 +33,13 @@ export default function FastrackPayPage() {
     sessions_lab: 0,
   });
   const [initialized, setInitialized] = useState(false);
+  const [dataVersion, setDataVersion] = useState(0);
+
+  const sliderRoundRef = useRef(null);
+  const slider3000Ref = useRef(null);
+  const slider2000Ref = useRef(null);
+  const slider1000Ref = useRef(null);
+  const slider500Ref = useRef(null);
 
   const showNotification = (message, type = 'success') => {
     setNotification({ show: true, message, type });
@@ -69,6 +78,7 @@ export default function FastrackPayPage() {
         setSliders({ management: 0, rem_theory: 0, rem_lab_teaching: 0, rem_lab_instructors: 0, rem_lab_peon: 0 });
       }
       setInitialized(true);
+      setDataVersion((v) => v + 1);
     } catch (e) {
       showNotification(e.response?.data?.message || e.message || 'Failed to load pay data', 'error');
     }
@@ -78,6 +88,37 @@ export default function FastrackPayPage() {
   useEffect(() => {
     loadData(academicYear);
   }, [academicYear]);
+
+  useEffect(() => {
+    if (!initialized) return;
+    const slidersConfig = [
+      { ref: sliderRoundRef, min: 0, max: 100, step: 1, start: sliders.management, unit: '%', field: 'management' },
+      { ref: slider3000Ref, min: 0, max: 3000, step: 10, start: sliders.rem_theory, unit: '₹', field: 'rem_theory' },
+      { ref: slider2000Ref, min: 0, max: 2000, step: 10, start: sliders.rem_lab_teaching, unit: '₹', field: 'rem_lab_teaching' },
+      { ref: slider1000Ref, min: 0, max: 1000, step: 10, start: sliders.rem_lab_instructors, unit: '₹', field: 'rem_lab_instructors' },
+      { ref: slider500Ref, min: 0, max: 500, step: 10, start: sliders.rem_lab_peon, unit: '₹', field: 'rem_lab_peon' },
+    ];
+    slidersConfig.forEach((config) => {
+      if (config.ref.current) {
+        if (config.ref.current.noUiSlider) {
+          config.ref.current.noUiSlider.destroy();
+        }
+        noUiSlider.create(config.ref.current, {
+          start: [config.start],
+          step: config.step,
+          connect: [true, false],
+          range: { min: config.min, max: config.max },
+          format: {
+            to: (value) => Math.round(value),
+            from: (value) => Number(value),
+          },
+        });
+        config.ref.current.noUiSlider.on('update', (values, handle) => {
+          handleSliderChange(config.field, values[handle]);
+        });
+      }
+    });
+  }, [initialized, academicYear, dataVersion]);
 
   const handleYearPrev = () => {
     const parts = academicYear.split('-');
@@ -143,6 +184,11 @@ export default function FastrackPayPage() {
 
   const handleReset = () => {
     setSliders({ management: 0, rem_theory: 0, rem_lab_teaching: 0, rem_lab_instructors: 0, rem_lab_peon: 0 });
+    [sliderRoundRef, slider3000Ref, slider2000Ref, slider1000Ref, slider500Ref].forEach((ref) => {
+      if (ref.current && ref.current.noUiSlider) {
+        ref.current.noUiSlider.set(0);
+      }
+    });
   };
 
   const balance = useMemo(() => totals.income - totals.expenses, [totals]);
@@ -220,14 +266,7 @@ export default function FastrackPayPage() {
                           <td className="px-4 py-4 text-sm text-gray-900">Management</td>
                           <td className="px-4 py-4 text-center text-sm text-gray-900">-NA-</td>
                           <td className="px-4 py-4">
-                            <input
-                              type="range"
-                              min="0"
-                              max="100"
-                              value={sliders.management}
-                              onChange={(e) => handleSliderChange('management', e.target.value)}
-                              className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
-                            />
+                            <div ref={sliderRoundRef} id="slider-round" className="slider-round w-full"></div>
                             <div className="text-center text-sm font-semibold mt-1">{sliders.management}%</div>
                           </td>
                           <td className="px-4 py-4 text-right">
@@ -239,15 +278,7 @@ export default function FastrackPayPage() {
                           <td className="px-4 py-4 text-sm text-gray-900">Remuneration for Theory</td>
                           <td className="px-4 py-4 text-center text-sm text-gray-900">{totals.sessions_theory}</td>
                           <td className="px-4 py-4">
-                            <input
-                              type="range"
-                              min="0"
-                              max="3000"
-                              step="10"
-                              value={sliders.rem_theory}
-                              onChange={(e) => handleSliderChange('rem_theory', e.target.value)}
-                              className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
-                            />
+                            <div ref={slider3000Ref} id="slider_rupees_3000" className="slider-round w-full"></div>
                             <div className="text-center text-sm font-semibold mt-1">₹ {sliders.rem_theory}</div>
                           </td>
                           <td className="px-4 py-4 text-right">
@@ -259,15 +290,7 @@ export default function FastrackPayPage() {
                           <td className="px-4 py-4 text-sm text-gray-900">Remuneration for Lab-Teaching</td>
                           <td className="px-4 py-4 text-center text-sm text-gray-900">{totals.sessions_lab}</td>
                           <td className="px-4 py-4">
-                            <input
-                              type="range"
-                              min="0"
-                              max="2000"
-                              step="10"
-                              value={sliders.rem_lab_teaching}
-                              onChange={(e) => handleSliderChange('rem_lab_teaching', e.target.value)}
-                              className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
-                            />
+                            <div ref={slider2000Ref} id="slider_teaching_2000_1" className="slider-round w-full"></div>
                             <div className="text-center text-sm font-semibold mt-1">₹ {sliders.rem_lab_teaching}</div>
                           </td>
                           <td className="px-4 py-4 text-right">
@@ -279,15 +302,7 @@ export default function FastrackPayPage() {
                           <td className="px-4 py-4 text-sm text-gray-900">Remuneration for Lab-Instructors</td>
                           <td className="px-4 py-4 text-center text-sm text-gray-900">{totals.sessions_lab}</td>
                           <td className="px-4 py-4">
-                            <input
-                              type="range"
-                              min="0"
-                              max="1000"
-                              step="10"
-                              value={sliders.rem_lab_instructors}
-                              onChange={(e) => handleSliderChange('rem_lab_instructors', e.target.value)}
-                              className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
-                            />
+                            <div ref={slider1000Ref} id="slider_lab_instructor_1000_12" className="slider-round w-full"></div>
                             <div className="text-center text-sm font-semibold mt-1">₹ {sliders.rem_lab_instructors}</div>
                           </td>
                           <td className="px-4 py-4 text-right">
@@ -299,15 +314,7 @@ export default function FastrackPayPage() {
                           <td className="px-4 py-4 text-sm text-gray-900">Remuneration for Lab-Peon</td>
                           <td className="px-4 py-4 text-center text-sm text-gray-900">{totals.sessions_lab}</td>
                           <td className="px-4 py-4">
-                            <input
-                              type="range"
-                              min="0"
-                              max="500"
-                              step="10"
-                              value={sliders.rem_lab_peon}
-                              onChange={(e) => handleSliderChange('rem_lab_peon', e.target.value)}
-                              className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
-                            />
+                            <div ref={slider500Ref} id="slider_lab_person_500" className="slider-round w-full"></div>
                             <div className="text-center text-sm font-semibold mt-1">₹ {sliders.rem_lab_peon}</div>
                           </td>
                           <td className="px-4 py-4 text-right">

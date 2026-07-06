@@ -95,7 +95,7 @@ async function createInstance({
       let idx = 1;
       for (const programId of programIds) {
         for (const semester of semesters) {
-          values.push(`($${idx++}, $${idx++}, $${idx++})`);
+          values.push(`($${idx++}, $${idx++}, $${idx++}, NOW(), NOW())`);
           params.push(instanceId, programId, semester);
         }
       }
@@ -162,7 +162,7 @@ async function updateInstance(id, {
       let idx = 1;
       for (const programId of programIds) {
         for (const semester of semesters) {
-          values.push(`($${idx++}, $${idx++}, $${idx++})`);
+          values.push(`($${idx++}, $${idx++}, $${idx++}, NOW(), NOW())`);
           params.push(id, programId, semester);
         }
       }
