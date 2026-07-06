@@ -191,3 +191,18 @@ export const getExpensesByAcademicYear = async (params) => {
   const res = await api.get('/exam-section/fastrack_expenses/filter', { params });
   return res.data;
 };
+
+export const createExpense = async (payload) => {
+  const res = await api.post('/exam-section/fastrack_expenses', payload);
+  return res.data;
+};
+
+export const updateExpense = async (id, payload) => {
+  const res = await api.patch(`/exam-section/fastrack_expenses/${id}`, payload);
+  return res.data;
+};
+
+export const deleteExpense = async (id) => {
+  const res = await api.delete(`/exam-section/fastrack_expenses/${id}`);
+  return res.data;
+};

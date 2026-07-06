@@ -1,0 +1,55 @@
+GITOFFICE Project Tree
+
+.
+|-- client/
+|   |-- public/
+|   |-- src/
+|   |   |-- api/
+|   |   |-- App.jsx
+|   |   |-- components/
+|   |   |   |-- common/
+|   |   |   |-- employee/
+|   |   |   |-- establishment/
+|   |   |   `-- layout/
+|   |   |-- context/
+|   |   |-- hooks/
+|   |   |-- pages/
+|   |   |   |-- auth/
+|   |   |   |-- biometric/
+|   |   |   |-- exam-section/
+|   |   |   |-- establishment/
+|   |   |   |-- Faculty Recruitment/
+|   |   |   |-- hod/
+|   |   |   |-- leave_management/
+|   |   |   |-- PrincipalDean/
+|   |   |   |-- Registrar/
+|   |   |   |-- staff/
+|   |   |   |-- super-admin/
+|   |   |   |-- tickets/
+|   |   |   `-- user/
+|   |   |-- routes/
+|   |   |-- styles/
+|   |   `-- utils/
+|   |-- index.html
+|   |-- package.json
+|   |-- postcss.config.js
+|   |-- tailwind.config.js
+|   `-- vite.config.js
+|-- server/
+|   |-- database/
+|   |-- scripts/
+|   |-- src/
+|   |-- tests/
+|   |-- uploads/
+|   |-- package.json
+|   `-- nodemon.json
+|-- public/
+|-- resources/
+|-- routes/
+|-- storage/
+|-- tests/
+|-- artisan
+|-- composer.json
+|-- package.json
+|-- phpunit.xml
+`-- README.md
