@@ -195,12 +195,12 @@ export default function FastrackExpensesPage() {
               </div>
               <div className="overflow-x-auto">
                 <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50 dark:bg-black/20">
+                  <thead className="bg-blue-600">
                     <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">S.No</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Expense Title</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Expense Amount</th>
-                      <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Action</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-white uppercase">S.No</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-white uppercase">Expense Title</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-white uppercase">Expense Amount</th>
+                      <th className="px-6 py-3 text-center text-xs font-medium text-white uppercase">Action</th>
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
@@ -257,12 +257,12 @@ export default function FastrackExpensesPage() {
                   </div>
                   <div className="overflow-x-auto">
                     <table className="min-w-full divide-y divide-gray-200 border border-gray-300">
-                      <thead className="bg-gray-50">
+                      <thead className="bg-blue-600">
                         <tr>
-                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Sl.No</th>
-                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Expense Title</th>
-                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Expense Amount</th>
-                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Action</th>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-white uppercase">Sl.No</th>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-white uppercase">Expense Title</th>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-white uppercase">Expense Amount</th>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-white uppercase">Action</th>
                         </tr>
                       </thead>
                       <tbody className="bg-white divide-y divide-gray-200">
