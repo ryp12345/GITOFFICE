@@ -10,6 +10,7 @@ const expenseMasterController = require('../controllers/exam-section/fastrack_ex
 const fastrackPayController = require('../controllers/exam-section/fastrack_pay.controller');
 const fastrackExpensesController = require('../controllers/exam-section/fastrack_expenses.controller');
 const fastrackInsightsController = require('../controllers/exam-section/fastrack_insights.controller');
+const coeprogramController = require('../controllers/exam-section/coeprogram.controller');
 const multer = require('multer');
 const upload = multer({ storage: multer.memoryStorage() });
 
@@ -308,6 +309,41 @@ router.get(
   authMiddleware,
   roleMiddleware('Exam_section', 'exam_section'),
   fastrackInsightsController.getInsights
+);
+
+router.get(
+  '/coeprogram',
+  authMiddleware,
+  roleMiddleware('Exam_section', 'exam_section'),
+  coeprogramController.listPrograms
+);
+
+router.get(
+  '/coeprogram/departments',
+  authMiddleware,
+  roleMiddleware('Exam_section', 'exam_section'),
+  coeprogramController.getDepartments
+);
+
+router.post(
+  '/coeprogram',
+  authMiddleware,
+  roleMiddleware('Exam_section', 'exam_section'),
+  coeprogramController.createProgram
+);
+
+router.patch(
+  '/coeprogram/:id',
+  authMiddleware,
+  roleMiddleware('Exam_section', 'exam_section'),
+  coeprogramController.updateProgram
+);
+
+router.delete(
+  '/coeprogram/:id',
+  authMiddleware,
+  roleMiddleware('Exam_section', 'exam_section'),
+  coeprogramController.deleteProgram
 );
 
 module.exports = router;

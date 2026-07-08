@@ -157,6 +157,31 @@ export const getInsights = async () => {
   return res.data;
 };
 
+export const getCoeprograms = async () => {
+  const res = await api.get('/exam-section/coeprogram');
+  return res.data;
+};
+
+export const getCoeprogramDepartments = async () => {
+  const res = await api.get('/exam-section/coeprogram/departments');
+  return res.data;
+};
+
+export const createCoeprogram = async (payload) => {
+  const res = await api.post('/exam-section/coeprogram', payload);
+  return res.data;
+};
+
+export const updateCoeprogram = async (id, payload) => {
+  const res = await api.patch(`/exam-section/coeprogram/${id}`, payload);
+  return res.data;
+};
+
+export const deleteCoeprogram = async (id) => {
+  const res = await api.delete(`/exam-section/coeprogram/${id}`);
+  return res.data;
+};
+
 export const getExpenseMasters = async () => {
   const res = await api.get('/exam-section/expense-masters');
   return res.data;
