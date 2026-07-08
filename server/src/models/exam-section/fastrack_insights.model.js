@@ -52,6 +52,38 @@ async function getInsights() {
   return rows;
 }
 
+async function exportInsights() {
+  const { rows } = await pool.query(
+    `SELECT
+        fc.id,
+        fc.course_code,
+        fc.course_name,
+        fc.no_of_students,
+        ft.course_type,
+        d.dept_shortname,
+        fi.ft_instance_name,
+        fs.status AS staff_status,
+        fs.classes_conducted,
+        fs.labs_conducted,
+        TRIM(CONCAT(COALESCE(st.fname, ''), ' ', COALESCE(st.mname, ''), ' ', COALESCE(st.lname, ''))) AS staff_name
+     FROM fastrack_courses fc
+     LEFT JOIN ftcourses ft ON ft.id = fc.ft_course_type_id
+     LEFT JOIN departments d ON d.id = fc.department_id
+     LEFT JOIN fastrack_instances fi ON fi.id = fc.ft_instance_id
+     LEFT JOIN LATERAL (
+        SELECT fs.status, fs.classes_conducted, fs.labs_conducted, fs.staff_id
+        FROM fastrack_staffs fs
+        WHERE fs.course_id = fc.id
+        ORDER BY fs.id
+        LIMIT 1
+     ) fs ON true
+     LEFT JOIN staff st ON st.id = fs.staff_id
+     ORDER BY fc.id ASC`
+  );
+  return rows;
+}
+
 module.exports = {
   getInsights,
+  exportInsights,
 };

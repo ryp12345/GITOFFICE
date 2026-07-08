@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Notification from '../../components/common/Notification';
 import Header from '../../components/layout/Header';
 import SidebarExamSection from '../../components/layout/SidebarExamSection';
-import { getInsights } from '../../api/examSectionApi';
+import { getInsights, exportInsights } from '../../api/examSectionApi';
 
 export default function FastrackInsightsPage() {
   const [insights, setInsights] = useState([]);
@@ -17,6 +17,23 @@ export default function FastrackInsightsPage() {
   const showNotification = (message, type = 'success') => {
     setNotification({ show: true, message, type });
     setTimeout(() => setNotification({ show: false, message: '', type: '' }), 4000);
+  };
+
+  const handleExport = async () => {
+    try {
+      const blob = await exportInsights();
+      const url = window.URL.createObjectURL(new Blob([blob]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', 'fastrack_courses_insights.xlsx');
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      showNotification('Export started successfully', 'success');
+    } catch (e) {
+      showNotification(e.response?.data?.message || e.message || 'Failed to export', 'error');
+    }
   };
 
   const load = async () => {
@@ -81,6 +98,10 @@ export default function FastrackInsightsPage() {
                 />
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-400 absolute left-3 top-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
               </div>
+              <button onClick={handleExport} className="flex items-center justify-center px-6 py-3 font-medium text-white transition-all duration-300 transform rounded-lg shadow-lg bg-green-600 hover:bg-green-700 hover:-translate-y-1 hover:scale-105 sm:w-auto">
+                <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 mr-2" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" /></svg>
+                Export to Excel
+              </button>
             </div>
 
             <div className="bg-white shadow-xl rounded-xl mb-8 overflow-hidden">

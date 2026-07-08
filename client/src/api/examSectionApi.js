@@ -157,6 +157,11 @@ export const getInsights = async () => {
   return res.data;
 };
 
+export const exportInsights = async () => {
+  const res = await api.post('/exam-section/fastrack_insights/export', {}, { responseType: 'blob' });
+  return res.data;
+};
+
 export const getCoeprograms = async () => {
   const res = await api.get('/exam-section/coeprogram');
   return res.data;

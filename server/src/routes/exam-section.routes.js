@@ -346,4 +346,11 @@ router.delete(
   coeprogramController.deleteProgram
 );
 
+router.post(
+  '/fastrack_insights/export',
+  authMiddleware,
+  roleMiddleware('Exam_section', 'exam_section'),
+  fastrackInsightsController.exportInsights
+);
+
 module.exports = router;
