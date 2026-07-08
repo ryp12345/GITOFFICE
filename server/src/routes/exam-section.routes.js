@@ -9,6 +9,7 @@ const fastrackCourseController = require('../controllers/exam-section/fastrack_c
 const expenseMasterController = require('../controllers/exam-section/fastrack_expenses_master.controller');
 const fastrackPayController = require('../controllers/exam-section/fastrack_pay.controller');
 const fastrackExpensesController = require('../controllers/exam-section/fastrack_expenses.controller');
+const fastrackInsightsController = require('../controllers/exam-section/fastrack_insights.controller');
 const multer = require('multer');
 const upload = multer({ storage: multer.memoryStorage() });
 
@@ -300,6 +301,13 @@ router.delete(
   authMiddleware,
   roleMiddleware('Exam_section', 'exam_section'),
   fastrackExpensesController.deleteExpense
+);
+
+router.get(
+  '/fastrack_insights',
+  authMiddleware,
+  roleMiddleware('Exam_section', 'exam_section'),
+  fastrackInsightsController.getInsights
 );
 
 module.exports = router;
