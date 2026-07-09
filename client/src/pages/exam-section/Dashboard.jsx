@@ -26,7 +26,7 @@ export default function ExamSectionDashboard() {
       try {
         setLoading(true);
         const res = await getExamSectionDashboard();
-        const data = res?.data || res;
+        const data = res?.data?.data || res?.data || res;
 
         setStats({
           ft_instance_count: data.ft_instance_count ?? 0,

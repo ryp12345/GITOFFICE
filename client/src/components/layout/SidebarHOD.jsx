@@ -39,7 +39,8 @@ export default function SidebarHOD() {
         { name: 'Associate Professor Applications', path: '/Faculty Recruitment/asso_pro_recruitment' },
         { name: 'Professor Applications', path: '/Faculty Recruitment/pro_recruitment' },
       ]
-    }
+    },
+    { name: 'Coordinator Management', path: '/HOD/coordinator_management', icon: '🗂️' }
   ];
 
   const toggleSubmenu = (index) => {
