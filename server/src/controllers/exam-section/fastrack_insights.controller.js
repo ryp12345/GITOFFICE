@@ -64,6 +64,14 @@ async function exportInsights(req, res, next) {
       }
     });
 
+    const totalRowIndex = headerRowIndex + 1 + rows.length;
+    const grandTotal = rows.reduce((sum, r) => sum + (parseInt(r.no_of_students, 10) || 0), 0);
+    sheet.getCell(`F${totalRowIndex}`).value = 'Total';
+    sheet.getCell(`G${totalRowIndex}`).value = grandTotal;
+    sheet.getCell(`F${totalRowIndex}`).font = { bold: true };
+    sheet.getCell(`G${totalRowIndex}`).font = { bold: true };
+    sheet.getCell(`F${totalRowIndex}`).alignment = { horizontal: 'right' };
+
     const columns = [
       { width: 8 }, { width: 20 }, { width: 30 }, { width: 20 }, { width: 20 },
       { width: 25 }, { width: 15 }, { width: 15 }, { width: 15 }, { width: 15 }, { width: 25 }
