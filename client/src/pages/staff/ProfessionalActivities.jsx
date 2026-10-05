@@ -116,7 +116,7 @@ function calculateNoOfDays(fromDate, toDate) {
 }
 
 const FIELD_CLASS =
-  'block w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500';
+  'block w-full px-6 py-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500';
 const READONLY_DAYS_CLASS = `${FIELD_CLASS} bg-gray-100 cursor-not-allowed`;
 const LABEL_CLASS = 'block mb-2 text-sm font-medium text-gray-700';
 
@@ -197,6 +197,7 @@ export default function ProfessionalActivities() {
 
   const [modalKind, setModalKind] = useState(null);
   const [editingId, setEditingId] = useState(null);
+  const [editingDocument, setEditingDocument] = useState('');
   const [form, setForm] = useState(ATTENDED_INITIAL_FORM);
   const [formErrors, setFormErrors] = useState({});
   const [documentFile, setDocumentFile] = useState(null);
@@ -316,6 +317,7 @@ export default function ProfessionalActivities() {
     setActiveTab(kind);
     setModalKind(kind);
     setEditingId(null);
+    setEditingDocument('');
     setForm(kind === 'attended' ? ATTENDED_INITIAL_FORM : CONDUCTED_INITIAL_FORM);
     setDocumentFile(null);
     setFormErrors({});
@@ -325,6 +327,7 @@ export default function ProfessionalActivities() {
   const openEditModal = (kind, row) => {
     setModalKind(kind);
     setEditingId(row.id);
+    setEditingDocument(row.document || '');
     setFormErrors({});
     setDocumentFile(null);
 
@@ -363,11 +366,12 @@ export default function ProfessionalActivities() {
     if (saving) return;
     setModalKind(null);
     setEditingId(null);
+    setEditingDocument('');
     setFormErrors({});
     setDocumentFile(null);
   };
 
-  const validateForm = (kind, currentForm, file) => {
+  const validateForm = (kind, currentForm, file, isEditing) => {
     const errors = {};
 
     if (!currentForm.title.trim()) errors.title = 'title is required field';
@@ -411,8 +415,12 @@ export default function ProfessionalActivities() {
     const days = calculateNoOfDays(currentForm.from_date, currentForm.to_date);
     if (!errors.to_date && days > maxDays) errors.no_of_days = `no_of_days should be max ${maxDays} days`;
 
-    if (!file) errors.document = 'document is required field';
-    else if (file.size > MAX_DOCUMENT_BYTES) errors.document = 'File size is more than 500KB. Please consider re-uploading.';
+    // A PDF is mandatory when creating. On edit the stored file is kept unless the
+    // user picks a replacement, so an existing record can be updated without re-uploading.
+    if (!file && !isEditing) errors.document = 'document is required field';
+    else if (file && file.size > MAX_DOCUMENT_BYTES) {
+      errors.document = 'File size is more than 500KB. Please consider re-uploading.';
+    }
 
     return errors;
   };
@@ -421,7 +429,7 @@ export default function ProfessionalActivities() {
     event.preventDefault();
     if (!modalKind || saving) return;
 
-    const errors = validateForm(modalKind, form, documentFile);
+    const errors = validateForm(modalKind, form, documentFile, Boolean(editingId));
     if (Object.keys(errors).length > 0) {
       setFormErrors(errors);
       return;
@@ -451,7 +459,13 @@ export default function ProfessionalActivities() {
 
     payload.append('from_date', form.from_date);
     payload.append('to_date', form.to_date);
-    payload.append('document', documentFile);
+
+    // Only send the document when one was actually chosen. FormData.append(name, null)
+    // would otherwise write the literal string "null" into a text field and multer would
+    // never populate req.file.
+    if (documentFile) {
+      payload.append('document', documentFile);
+    }
 
     setSaving(true);
     setError('');
@@ -510,17 +524,40 @@ export default function ProfessionalActivities() {
   const noOfDays = calculateNoOfDays(form.from_date, form.to_date);
   const noOfDaysInvalid = Boolean(form.from_date && form.to_date && form.from_date > form.to_date);
 
-  const ActionButtons = ({ row, kind }) => (
+  const iconClass = 'w-5 h-5 shrink-0';
+  const ACTION_BUTTON_BASE =
+    'inline-flex items-center justify-center p-2.5 rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-offset-1';
+
+  // Every icon carries its own width/height attributes and its own stroke, so the
+  // global `svg { height: auto }` base rule can never collapse it and the glyph
+  // never depends on inheriting paint from an ancestor.
+  const ICON_PROPS = {
+    xmlns: 'http://www.w3.org/2000/svg',
+    width: 20,
+    height: 20,
+    viewBox: '0 0 24 24',
+    fill: 'none',
+    stroke: 'currentColor',
+    strokeWidth: 2,
+    strokeLinecap: 'round',
+    strokeLinejoin: 'round',
+    className: iconClass,
+    'aria-hidden': 'true',
+    focusable: 'false',
+  };
+
+  const renderActionButtons = (row, kind) => (
     <div className="flex items-center justify-center gap-2">
       {row.validation_status === 'invalid' && (
         <button
           type="button"
           onClick={() => setReasonRow(row)}
           title="Reason"
-          className="p-2 text-white bg-amber-600 rounded-lg hover:bg-amber-700"
+          aria-label="View rejection reason"
+          className={`${ACTION_BUTTON_BASE} text-amber-700 bg-white border-2 border-amber-400 hover:bg-amber-100 focus:ring-amber-500`}
         >
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className="w-4 h-4" fill="currentColor">
-            <path d="M12 2a8 8 0 108 8h-2a6 6 0 11-6-6v2l4-4-4-4v2z" />
+          <svg {...ICON_PROPS}>
+            <path d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
           </svg>
         </button>
       )}
@@ -530,10 +567,12 @@ export default function ProfessionalActivities() {
         target="_blank"
         rel="noreferrer"
         title="View Document"
-        className="p-2 text-white bg-indigo-600 rounded-lg hover:bg-indigo-700"
+        aria-label="View document"
+        className={`${ACTION_BUTTON_BASE} text-blue-700 bg-white border-2 border-blue-400 hover:bg-blue-100 focus:ring-blue-500`}
       >
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className="w-4 h-4" fill="currentColor">
-          <path d="M12 3a9 9 0 109 9h-2a7 7 0 11-7-7v2l4.5-4L12 1v2zm0 4a5 5 0 100 10 5 5 0 000-10zm0 3a2 2 0 110 4 2 2 0 010-4z" />
+        <svg {...ICON_PROPS}>
+          <path d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.964-7.178z" />
+          <path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
         </svg>
       </a>
 
@@ -541,10 +580,11 @@ export default function ProfessionalActivities() {
         type="button"
         onClick={() => openEditModal(kind, row)}
         title="Edit"
-        className="p-2 text-white bg-blue-600 rounded-lg hover:bg-blue-700"
+        aria-label="Edit professional activity"
+        className={`${ACTION_BUTTON_BASE} text-white bg-blue-700 hover:bg-blue-800 focus:ring-blue-500`}
       >
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+        <svg {...ICON_PROPS}>
+          <path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
         </svg>
       </button>
 
@@ -552,30 +592,40 @@ export default function ProfessionalActivities() {
         type="button"
         onClick={() => handleDelete(kind, row)}
         title="Delete"
-        className="p-2 text-white bg-red-600 rounded-lg hover:bg-red-700"
+        aria-label="Delete professional activity"
+        className={`${ACTION_BUTTON_BASE} text-white bg-red-700 hover:bg-red-800 focus:ring-red-500`}
       >
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+        <svg {...ICON_PROPS}>
+          <path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
         </svg>
       </button>
     </div>
   );
 
   const thClass =
-    'px-4 py-3 text-xs font-semibold text-white uppercase tracking-wider text-left whitespace-nowrap';
+    'px-6 py-4 text-left text-xs font-medium text-white uppercase tracking-wider';
+
+  // The tables carry 13 and 15 columns, so the Action column sits far off-screen on a
+  // normal display. Pinning it to the right edge keeps every control reachable.
+  const ACTION_TH_CLASS =
+    'sticky right-0 z-20 bg-blue-600 px-6 py-4 text-center text-xs font-medium text-white uppercase tracking-wider border-l border-blue-500';
+
+  const rowBackground = (row) => VALIDATION_ROW_COLORS[row.validation_status] || '#ffffff';
 
   const renderAttendedTable = () => (
-    <div className="overflow-x-auto">
-      <table className="min-w-full divide-y divide-gray-200">
-        <thead className="bg-[#001f3f]">
+    <div className="overflow-auto rounded-b-xl">
+      {/* Firefox ignores position:sticky on th/td while border-collapse is collapse. */}
+      <table className="min-w-full divide-y divide-gray-200" style={{ borderCollapse: 'separate', borderSpacing: 0 }}>
+        <thead className="bg-blue-600">
           <tr>
-            {['S.No', 'E-Gov ID', 'Title', 'Organizer', 'Role', 'Level', 'Category', 'Sponsored', 'Sponsored By', 'From Date', 'To Date', 'No OF days', 'Action'].map(
+            {['S.No', 'E-Gov ID', 'Title', 'Organizer', 'Role', 'Level', 'Category', 'Sponsored', 'Sponsored By', 'From Date', 'To Date', 'No OF days'].map(
               (heading) => (
                 <th key={heading} className={thClass}>
                   {heading}
                 </th>
               )
             )}
+            <th className={ACTION_TH_CLASS}>Action</th>
           </tr>
         </thead>
         <tbody className="bg-white divide-y divide-gray-200">
@@ -590,8 +640,8 @@ export default function ProfessionalActivities() {
           ) : (
             filteredRows.map((row, index) => (
               <tr key={row.id || index} style={{ backgroundColor: VALIDATION_ROW_COLORS[row.validation_status] }}>
-                <td className="px-4 py-3 text-sm text-gray-900">{index + 1}</td>
-                <td className="px-4 py-3 text-sm">
+                <td className="px-6 py-4 text-sm text-gray-900">{index + 1}</td>
+                <td className="px-6 py-4 text-sm">
                   <a
                     href={resolveDocumentUrl('attended', row.document)}
                     target="_blank"
@@ -601,18 +651,21 @@ export default function ProfessionalActivities() {
                     {row.egov_id}
                   </a>
                 </td>
-                <td className="px-4 py-3 text-sm text-gray-900">{row.title}</td>
-                <td className="px-4 py-3 text-sm text-gray-900">{row.organizer}</td>
-                <td className="px-4 py-3 text-sm text-gray-900">{row.role}</td>
-                <td className="px-4 py-3 text-sm text-gray-900">{row.level}</td>
-                <td className="px-4 py-3 text-sm text-gray-900">{row.category}</td>
-                <td className="px-4 py-3 text-sm text-gray-900">{row.sponsored}</td>
-                <td className="px-4 py-3 text-sm text-gray-900">{row.sponsored === 'No' ? notApplicable : row.sponsored_by || '-'}</td>
-                <td className="px-4 py-3 text-sm whitespace-nowrap text-gray-900">{formatDateDMY(row.from_date)}</td>
-                <td className="px-4 py-3 text-sm whitespace-nowrap text-gray-900">{formatDateDMY(row.to_date)}</td>
-                <td className="px-4 py-3 text-sm text-gray-900">{row.no_of_days}</td>
-                <td className="px-4 py-3 text-center">
-                  <ActionButtons row={row} kind="attended" />
+                <td className="px-6 py-4 text-sm text-gray-900">{row.title}</td>
+                <td className="px-6 py-4 text-sm text-gray-900">{row.organizer}</td>
+                <td className="px-6 py-4 text-sm text-gray-900">{row.role}</td>
+                <td className="px-6 py-4 text-sm text-gray-900">{row.level}</td>
+                <td className="px-6 py-4 text-sm text-gray-900">{row.category}</td>
+                <td className="px-6 py-4 text-sm text-gray-900">{row.sponsored}</td>
+                <td className="px-6 py-4 text-sm text-gray-900">{row.sponsored === 'No' ? notApplicable : row.sponsored_by || '-'}</td>
+                <td className="px-6 py-4 text-sm whitespace-nowrap text-gray-900">{formatDateDMY(row.from_date)}</td>
+                <td className="px-6 py-4 text-sm whitespace-nowrap text-gray-900">{formatDateDMY(row.to_date)}</td>
+                <td className="px-6 py-4 text-sm text-gray-900">{row.no_of_days}</td>
+                <td
+                  className="sticky right-0 z-10 px-6 py-4 whitespace-nowrap text-center text-sm font-medium border-l border-gray-200"
+                  style={{ backgroundColor: rowBackground(row) }}
+                >
+                  {renderActionButtons(row, 'attended')}
                 </td>
               </tr>
             ))
@@ -623,9 +676,10 @@ export default function ProfessionalActivities() {
   );
 
   const renderConductedTable = () => (
-    <div className="overflow-x-auto">
-      <table className="min-w-full divide-y divide-gray-200">
-        <thead className="bg-[#001f3f]">
+    <div className="overflow-auto rounded-b-xl">
+      {/* Firefox ignores position:sticky on th/td while border-collapse is collapse. */}
+      <table className="min-w-full divide-y divide-gray-200" style={{ borderCollapse: 'separate', borderSpacing: 0 }}>
+        <thead className="bg-blue-600">
           <tr>
             {[
               'S.No',
@@ -642,12 +696,12 @@ export default function ProfessionalActivities() {
               'Place',
               'No Of Days',
               'Role',
-              'Action',
             ].map((heading) => (
               <th key={heading} className={thClass}>
                 {heading}
               </th>
             ))}
+            <th className={ACTION_TH_CLASS}>Action</th>
           </tr>
         </thead>
         <tbody className="bg-white divide-y divide-gray-200">
@@ -662,8 +716,8 @@ export default function ProfessionalActivities() {
           ) : (
             filteredRows.map((row, index) => (
               <tr key={row.id || index} style={{ backgroundColor: VALIDATION_ROW_COLORS[row.validation_status] }}>
-                <td className="px-4 py-3 text-sm text-gray-900">{index + 1}</td>
-                <td className="px-4 py-3 text-sm">
+                <td className="px-6 py-4 text-sm text-gray-900">{index + 1}</td>
+                <td className="px-6 py-4 text-sm">
                   <a
                     href={resolveDocumentUrl('conducted', row.document)}
                     target="_blank"
@@ -673,22 +727,25 @@ export default function ProfessionalActivities() {
                     {row.egov_id}
                   </a>
                 </td>
-                <td className="px-4 py-3 text-sm text-gray-900">{row.title}</td>
-                <td className="px-4 py-3 text-sm text-gray-900">{row.level}</td>
-                <td className="px-4 py-3 text-sm text-gray-900">{row.organizer}</td>
-                <td className="px-4 py-3 text-sm text-gray-900">{row.co_organizer || '-'}</td>
-                <td className="px-4 py-3 text-sm text-gray-900">{row.category}</td>
-                <td className="px-4 py-3 text-sm text-gray-900">{row.sponsored}</td>
-                <td className="px-4 py-3 text-sm text-gray-900">
+                <td className="px-6 py-4 text-sm text-gray-900">{row.title}</td>
+                <td className="px-6 py-4 text-sm text-gray-900">{row.level}</td>
+                <td className="px-6 py-4 text-sm text-gray-900">{row.organizer}</td>
+                <td className="px-6 py-4 text-sm text-gray-900">{row.co_organizer || '-'}</td>
+                <td className="px-6 py-4 text-sm text-gray-900">{row.category}</td>
+                <td className="px-6 py-4 text-sm text-gray-900">{row.sponsored}</td>
+                <td className="px-6 py-4 text-sm text-gray-900">
                   {row.sponsored === 'No' ? notApplicable : row.sponsoring_agency_name_address || '-'}
                 </td>
-                <td className="px-4 py-3 text-sm whitespace-nowrap text-gray-900">{formatDateDMY(row.from_date)}</td>
-                <td className="px-4 py-3 text-sm whitespace-nowrap text-gray-900">{formatDateDMY(row.to_date)}</td>
-                <td className="px-4 py-3 text-sm text-gray-900">{row.place}</td>
-                <td className="px-4 py-3 text-sm text-gray-900">{row.no_of_days}</td>
-                <td className="px-4 py-3 text-sm text-gray-900">{row.role}</td>
-                <td className="px-4 py-3 text-center">
-                  <ActionButtons row={row} kind="conducted" />
+                <td className="px-6 py-4 text-sm whitespace-nowrap text-gray-900">{formatDateDMY(row.from_date)}</td>
+                <td className="px-6 py-4 text-sm whitespace-nowrap text-gray-900">{formatDateDMY(row.to_date)}</td>
+                <td className="px-6 py-4 text-sm text-gray-900">{row.place}</td>
+                <td className="px-6 py-4 text-sm text-gray-900">{row.no_of_days}</td>
+                <td className="px-6 py-4 text-sm text-gray-900">{row.role}</td>
+                <td
+                  className="sticky right-0 z-10 px-6 py-4 whitespace-nowrap text-center text-sm font-medium border-l border-gray-200"
+                  style={{ backgroundColor: rowBackground(row) }}
+                >
+                  {renderActionButtons(row, 'conducted')}
                 </td>
               </tr>
             ))
@@ -717,42 +774,9 @@ export default function ProfessionalActivities() {
               <p className="mt-1 text-lg font-medium text-blue-700">
                 Welcome{resolvedName ? `, ${resolvedName}` : ''}
               </p>
-              <p className="mt-1 text-sm text-gray-500">
+              <p className="mt-1 text-sm text-slate-600">
                 Module path: <span className="font-mono">{activePath}</span>
               </p>
-            </div>
-
-            <div className="mb-6 border-b border-gray-200">
-              <div className="flex gap-4">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setActiveTab('attended');
-                    setSearch('');
-                  }}
-                  className={`px-4 py-2 text-sm font-semibold border-b-2 ${
-                    activeTab === 'attended'
-                      ? 'border-blue-600 text-blue-700'
-                      : 'border-transparent text-gray-500 hover:text-gray-700'
-                  }`}
-                >
-                  Professional Activity Attended Details
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setActiveTab('conducted');
-                    setSearch('');
-                  }}
-                  className={`px-4 py-2 text-sm font-semibold border-b-2 ${
-                    activeTab === 'conducted'
-                      ? 'border-blue-600 text-blue-700'
-                      : 'border-transparent text-gray-500 hover:text-gray-700'
-                  }`}
-                >
-                  Professional Activity Conducted Details
-                </button>
-              </div>
             </div>
 
             <div className="flex flex-col items-start justify-between gap-4 mb-6 sm:flex-row sm:items-center">
@@ -781,10 +805,46 @@ export default function ProfessionalActivities() {
             </div>
 
             {error && (
-              <div className="mb-4 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
+              <div className="mb-4 rounded-md border border-red-200 bg-red-50 px-6 py-4 text-sm text-red-700">{error}</div>
             )}
 
-            <div className="mb-10 overflow-hidden bg-white shadow-xl rounded-xl">
+            {/* No overflow-hidden here on purpose: Firefox anchors position:sticky to the
+                nearest ancestor with overflow != visible. Clipping this card would make it
+                the sticky scrollport and the Action column would never follow the scroll. */}
+            <div className="mb-10 bg-white shadow-xl rounded-xl">
+              <div className="rounded-t-xl border-b border-gray-200">
+                <nav className="-mb-0.5 flex justify-center space-x-6" aria-label="Professional activity tabs">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveTab('attended');
+                      setSearch('');
+                    }}
+                    className={`py-4 px-2 inline-flex items-center gap-2 border-b-[3px] text-sm whitespace-nowrap ${
+                      activeTab === 'attended'
+                        ? 'font-semibold border-blue-600 text-blue-700'
+                        : 'border-transparent text-gray-500 hover:text-blue-600'
+                    }`}
+                  >
+                    Professional Activity Attended Details
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveTab('conducted');
+                      setSearch('');
+                    }}
+                    className={`py-4 px-2 inline-flex items-center gap-2 border-b-[3px] text-sm whitespace-nowrap ${
+                      activeTab === 'conducted'
+                        ? 'font-semibold border-blue-600 text-blue-700'
+                        : 'border-transparent text-gray-500 hover:text-blue-600'
+                    }`}
+                  >
+                    Professional Activity Conducted Details
+                  </button>
+                </nav>
+              </div>
+
               {activeTab === 'attended' ? renderAttendedTable() : renderConductedTable()}
             </div>
 
@@ -801,9 +861,9 @@ export default function ProfessionalActivities() {
                           {' - '}
                           {editingId ? 'Edit' : 'Add'}
                         </h3>
-                        <button type="button" className="text-white hover:text-gray-200" onClick={closeModal}>
-                          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" className="w-6 h-6">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        <button type="button" onClick={closeModal} aria-label="Close modal" className="text-white hover:text-gray-200 focus:outline-none">
+                          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                           </svg>
                         </button>
                       </div>
@@ -990,9 +1050,35 @@ export default function ProfessionalActivities() {
                             <FieldError>{formErrors.no_of_days}</FieldError>
                           </div>
 
-                          <div>
+                          <div className="md:col-span-2">
+                            {editingId && editingDocument && (
+                              <div className="mb-2 flex flex-wrap items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-800">
+                                <span className="font-medium">Current document:</span>
+                                <span className="font-mono break-all">{editingDocument}</span>
+                                <a
+                                  href={resolveDocumentUrl(modalKind, editingDocument)}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="ml-auto inline-flex shrink-0 items-center gap-1 rounded-md bg-blue-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-blue-700"
+                                >
+                                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                    <path d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.964-7.178z" />
+                                    <path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                  </svg>
+                                  View
+                                </a>
+                              </div>
+                            )}
+
                             <label className={LABEL_CLASS} htmlFor="pa-document">
-                              Document <span className="text-red-500">* Only PDF files up to 500 KB in size are accepted.</span>
+                              Document{' '}
+                              {editingId ? (
+                                <span className="font-normal text-slate-600">
+                                  (optional &mdash; leave empty to keep the current file)
+                                </span>
+                              ) : (
+                                <span className="text-red-500">* Only PDF files up to 500 KB in size are accepted.</span>
+                              )}
                             </label>
                             <input
                               id="pa-document"
@@ -1002,6 +1088,12 @@ export default function ProfessionalActivities() {
                               onChange={handleDocumentChange}
                               className={formErrors.document ? 'w-full text-sm text-red-600' : 'w-full text-sm text-gray-600'}
                             />
+                            {documentFile && (
+                              <p className="mt-1 text-xs text-slate-600">
+                                New file selected: <span className="font-mono">{documentFile.name}</span> (
+                                {Math.ceil(documentFile.size / 1024)} KB)
+                              </p>
+                            )}
                             <FieldError>{formErrors.document}</FieldError>
                           </div>
                         </div>
@@ -1038,9 +1130,9 @@ export default function ProfessionalActivities() {
                     <h3 className="text-lg font-medium text-gray-900">
                       Reason Details of Professional Activity {activeTab === 'attended' ? 'Attended' : 'Conducted'}
                     </h3>
-                    <button type="button" className="text-gray-500 hover:text-gray-800" onClick={() => setReasonRow(null)}>
-                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" className="w-6 h-6">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    <button type="button" aria-label="Close reason details" className="text-gray-500 hover:text-gray-800 focus:outline-none" onClick={() => setReasonRow(null)}>
+                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                       </svg>
                     </button>
                   </div>

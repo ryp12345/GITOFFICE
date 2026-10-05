@@ -81,7 +81,7 @@ function calculateNoOfDays(fromDate, toDate) {
   return Math.round((new Date(toDate) - new Date(fromDate)) / 86400000) + 1;
 }
 
-function validateAttended(body, file) {
+function validateAttended(body, file, requireDocument = true) {
   const errors = {};
 
   const title = readString(body, 'title');
@@ -129,7 +129,7 @@ function validateAttended(body, file) {
     }
   }
 
-  if (!file || !file.filename) errors.document = 'document is required field';
+  if (requireDocument && (!file || !file.filename)) errors.document = 'document is required field';
 
   if (Object.keys(errors).length > 0) return { errors };
 
@@ -149,7 +149,7 @@ function validateAttended(body, file) {
   };
 }
 
-function validateConducted(body, file) {
+function validateConducted(body, file, requireDocument = true) {
   const errors = {};
 
   const title = readString(body, 'title');
@@ -195,7 +195,7 @@ function validateConducted(body, file) {
     errors.role = 'Please select a valid option from the provided choices';
   }
 
-  if (!file || !file.filename) errors.document = 'document is required field';
+  if (requireDocument && (!file || !file.filename)) errors.document = 'document is required field';
 
   if (Object.keys(errors).length > 0) return { errors };
 
@@ -283,7 +283,7 @@ async function updateAttended(req, res, next) {
   try {
     const staffId = await resolveOwningStaffId(req);
 
-    const { data, errors } = validateAttended(req.body, req.file);
+    const { data, errors } = validateAttended(req.body, req.file, false);
     if (errors) {
       discardUpload(professionalActivityAttendedRoot, req.file);
       throw badRequest(errors);
@@ -348,7 +348,7 @@ async function updateConducted(req, res, next) {
   try {
     const staffId = await resolveOwningStaffId(req);
 
-    const { data, errors } = validateConducted(req.body, req.file);
+    const { data, errors } = validateConducted(req.body, req.file, false);
     if (errors) {
       discardUpload(professionalActivityConductedRoot, req.file);
       throw badRequest(errors);

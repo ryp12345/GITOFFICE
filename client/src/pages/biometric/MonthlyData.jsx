@@ -420,37 +420,42 @@ export default function MonthlyDataPage() {
                 <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{summaryError}</div>
               )}
 
+              {/* No overflow-hidden on the card below: Firefox anchors position:sticky to the nearest
+                  ancestor with overflow != visible, so a clipping card would stop the frozen
+                  Employee Name column from tracking horizontal scroll. */}
               {isHodUser && !selectedEmployee && hodMonthlySummary && Array.isArray(hodMonthlySummary.rows) && hodMonthlySummary.rows.length > 0 && (
-                <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl">
-                  <div className="border-b border-slate-200 px-4 py-3">
+                <div className="rounded-xl border border-slate-200 bg-white shadow-xl">
+                  <div className="rounded-t-xl border-b border-slate-200 px-4 py-3">
                     <h4 className="text-base font-bold text-slate-900">
                       Department Monthly Report Preview ({new Date(year, month - 1).toLocaleString('default', { month: 'long' })} {year})
                     </h4>
                     {/* <p className="text-xs text-slate-600">This table mirrors the Download Report sheet for all staff.</p> */}
                   </div>
-                  <div className="overflow-x-auto">
-                    <table className="min-w-full border-collapse text-xs">
+                  <div className="overflow-auto rounded-b-xl">
+                    {/* border-separate is required: Firefox ignores position:sticky on
+                        th/td while the table uses border-collapse: collapse. */}
+                    <table className="min-w-full border-separate border-spacing-0 text-xs">
                       <thead>
                         <tr className="bg-slate-100">
-                          <th rowSpan={2} className="sticky left-0 z-10 border border-slate-200 bg-slate-100 px-3 py-2 text-left font-semibold">Employee Name</th>
+                          <th rowSpan={2} className="sticky left-0 z-10 border-b border-r border-slate-200 bg-slate-100 px-3 py-2 text-left font-semibold">Employee Name</th>
                           {hodMonthlySummary.days.map((d) => (
-                            <th key={`d-${d.date}`} colSpan={2} className="border border-slate-200 px-2 py-2 text-center font-semibold">{d.label}</th>
+                            <th key={`d-${d.date}`} colSpan={2} className="border-b border-r border-slate-200 px-2 py-2 text-center font-semibold">{d.label}</th>
                           ))}
                         </tr>
                         <tr className="bg-slate-50">
                           {hodMonthlySummary.days.flatMap((d) => ([
-                            <th key={`in-${d.date}`} className="border border-slate-200 px-2 py-1 text-center font-medium">In</th>,
-                            <th key={`out-${d.date}`} className="border border-slate-200 px-2 py-1 text-center font-medium">Out</th>
+                            <th key={`in-${d.date}`} className="border-b border-r border-slate-200 px-2 py-1 text-center font-medium">In</th>,
+                            <th key={`out-${d.date}`} className="border-b border-r border-slate-200 px-2 py-1 text-center font-medium">Out</th>
                           ]))}
                         </tr>
                       </thead>
                       <tbody>
                         {hodMonthlySummary.rows.map((row, rowIdx) => (
                           <tr key={`${row.employeeCode}-${rowIdx}`} className={rowIdx % 2 === 0 ? 'bg-white' : 'bg-slate-50'}>
-                            <td className="sticky left-0 z-10 border border-slate-200 bg-inherit px-3 py-2 font-medium">{row.employeeName}</td>
+                            <td className="sticky left-0 z-10 border-b border-r border-slate-200 bg-inherit px-3 py-2 font-medium">{row.employeeName}</td>
                             {hodMonthlySummary.days.flatMap((d) => ([
-                              <td key={`${row.employeeCode}-${d.date}-in`} className="border border-slate-200 px-2 py-1 text-center">{row.punches?.[d.date]?.in || ''}</td>,
-                              <td key={`${row.employeeCode}-${d.date}-out`} className="border border-slate-200 px-2 py-1 text-center">{row.punches?.[d.date]?.out || ''}</td>
+                              <td key={`${row.employeeCode}-${d.date}-in`} className="border-b border-r border-slate-200 px-2 py-1 text-center">{row.punches?.[d.date]?.in || ''}</td>,
+                              <td key={`${row.employeeCode}-${d.date}-out`} className="border-b border-r border-slate-200 px-2 py-1 text-center">{row.punches?.[d.date]?.out || ''}</td>
                             ]))}
                           </tr>
                         ))}
