@@ -26,12 +26,12 @@ const COMMON_LINKS = [
       { name: 'Monthly Data', teachingPath: '/teaching/biometric/monthly', nonTeachingPath: '/nonteaching/biometric/monthly' },
     ]
   },
-//   {
-//     name: 'Professional Activities',
-//     teachingPath: '/teaching/professional-activities',
-//     nonTeachingPath: '/nonteaching/professional-activities',
-//     icon: '📚'
-//   },
+  {
+    name: 'Professional Activities',
+    teachingPath: '/teaching/professional-activities',
+    nonTeachingPath: '/nonteaching/professional-activities',
+    icon: '📚'
+  },
 ];
 
 const TEACHING_ONLY_LINKS = [

@@ -1,9 +1,13 @@
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 const multer = require('multer');
 
 const uploadsRoot = path.resolve(__dirname, '..', '..', 'uploads');
 const form16Root = path.join(uploadsRoot, 'form16');
+const professionalActivityRoot = path.join(uploadsRoot, 'professional_activity');
+const professionalActivityAttendedRoot = path.join(professionalActivityRoot, 'attended');
+const professionalActivityConductedRoot = path.join(professionalActivityRoot, 'conducted');
 
 function ensureDir(dirPath) {
   if (!fs.existsSync(dirPath)) {
@@ -12,6 +16,12 @@ function ensureDir(dirPath) {
 }
 
 ensureDir(form16Root);
+ensureDir(professionalActivityAttendedRoot);
+ensureDir(professionalActivityConductedRoot);
+
+// Laravel guarded professional activity uploads at 500000 bytes and rendered
+// "File size is more than 500KB. Please consider re-uploading."
+const PROFESSIONAL_ACTIVITY_MAX_FILE_SIZE = 500 * 1024;
 
 const storage = multer.diskStorage({
   destination: (req, _file, cb) => {
@@ -77,9 +87,37 @@ const uploadForm16Archive = multer({
   }
 });
 
+function buildPdfDiskStorage(dirPath) {
+  return multer.diskStorage({
+    destination: (_req, _file, cb) => cb(null, dirPath),
+    filename: (_req, file, cb) => {
+      const ext = path.extname(file.originalname || '').toLowerCase() || '.pdf';
+      cb(null, `${crypto.randomBytes(16).toString('hex').slice(0, 25)}${ext}`);
+    }
+  });
+}
+
+// Mirrors the Laravel Professional_Activity_Attended / Professional_Activity_Conducted folders.
+const uploadProfessionalActivityAttendedPdf = multer({
+  storage: buildPdfDiskStorage(professionalActivityAttendedRoot),
+  fileFilter: pdfOnlyFilter,
+  limits: { fileSize: PROFESSIONAL_ACTIVITY_MAX_FILE_SIZE }
+});
+
+const uploadProfessionalActivityConductedPdf = multer({
+  storage: buildPdfDiskStorage(professionalActivityConductedRoot),
+  fileFilter: pdfOnlyFilter,
+  limits: { fileSize: PROFESSIONAL_ACTIVITY_MAX_FILE_SIZE }
+});
+
 module.exports = {
   uploadForm16Pdf,
   uploadForm16Archive,
   form16Root,
+  uploadProfessionalActivityAttendedPdf,
+  uploadProfessionalActivityConductedPdf,
+  professionalActivityAttendedRoot,
+  professionalActivityConductedRoot,
+  PROFESSIONAL_ACTIVITY_MAX_FILE_SIZE,
   ensureDir
 };

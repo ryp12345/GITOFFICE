@@ -45,6 +45,7 @@ import DepartmentHistory from '../pages/staff/DepartmentHistory';
 import DesignationPayscale from '../pages/staff/DesignationPayscale';
 import AssociationPage from '../pages/staff/AssociationPage';
 import QualificationPage from '../pages/staff/QualificationPage';
+import ProfessionalActivitiesPage from '../pages/staff/ProfessionalActivities';
 import StaffPage from '../pages/establishment/Staff';
 import StaffViewPage from '../pages/establishment/StaffViewPage';
 import StaffStatisticsPage from '../pages/establishment/StaffStatistics';
@@ -234,6 +235,7 @@ export default function AppRoutes() {
           <Route path="/teaching/designation-payscale" element={<DesignationPayscale />} />
           <Route path="/teaching/association" element={<AssociationPage />} />
           <Route path="/teaching/qualification" element={<QualificationPage />} />
+          <Route path="/teaching/professional-activities" element={<ProfessionalActivitiesPage />} />
           <Route path="/teaching/leave-application" element={<StaffLeavesPage />} />
           <Route path="/teaching/biometric/daily" element={<DailyDataPage />} />
           <Route path="/teaching/biometric/monthly" element={<MonthlyDataPage />} />
@@ -246,6 +248,7 @@ export default function AppRoutes() {
           <Route path="/nonteaching/designation-payscale" element={<DesignationPayscale />} />
           <Route path="/nonteaching/association" element={<AssociationPage />} />
           <Route path="/nonteaching/qualification" element={<QualificationPage />} />
+          <Route path="/nonteaching/professional-activities" element={<ProfessionalActivitiesPage />} />
           <Route path="/nonteaching/leave-application" element={<StaffLeavesPage />} />
           <Route path="/nonteaching/biometric/daily" element={<DailyDataPage />} />
           <Route path="/nonteaching/biometric/monthly" element={<MonthlyDataPage />} />
