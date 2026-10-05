@@ -196,7 +196,7 @@ export default function SidebarEstablishment() {
                     <div className="space-y-1 mt-1">
                       {link.submenu.map((subitem) => (
                         <Link
-                          key={subitem.path}
+                          key={subitem.path || subitem.name}
                           to={subitem.path}
                           onClick={() => {
                             setIsMobileOpen(false);

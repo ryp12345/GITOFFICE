@@ -23,7 +23,9 @@ export const ROLE_ETENDER_USER = 'ETender_User';
 
 const ROLE_ALIAS_MAP = {
   teaching: ROLE_TEACHING,
+  Teaching: ROLE_TEACHING,
   'non-teaching': ROLE_NON_TEACHING,
+  'Non-Teaching': ROLE_NON_TEACHING,
   student: ROLE_STUDENT,
   'Super Admin': ROLE_SUPER_ADMIN,
   Admin: ROLE_ADMIN,
