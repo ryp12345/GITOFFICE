@@ -46,6 +46,13 @@ import DesignationPayscale from '../pages/staff/DesignationPayscale';
 import AssociationPage from '../pages/staff/AssociationPage';
 import QualificationPage from '../pages/staff/QualificationPage';
 import ProfessionalActivitiesPage from '../pages/staff/ProfessionalActivities';
+import ResearchConferencePage from '../pages/staff/research/ResearchConference';
+import ResearchPublicationPage from '../pages/staff/research/ResearchPublication';
+import ResearchBookChaptersPage from '../pages/staff/research/ResearchBookChapters';
+import ResearchFundingConsultancyPage from '../pages/staff/research/ResearchFundingConsultancy';
+import ResearchPatentsCopyrightsPage from '../pages/staff/research/ResearchPatentsCopyrights';
+import ResearchAchievementPage from '../pages/staff/research/ResearchAchievement';
+import ResearchReviewerEditorPage from '../pages/staff/research/ResearchReviewerEditor';
 import StaffPage from '../pages/establishment/Staff';
 import StaffViewPage from '../pages/establishment/StaffViewPage';
 import StaffStatisticsPage from '../pages/establishment/StaffStatistics';
@@ -236,6 +243,13 @@ export default function AppRoutes() {
           <Route path="/teaching/association" element={<AssociationPage />} />
           <Route path="/teaching/qualification" element={<QualificationPage />} />
           <Route path="/teaching/professional-activities" element={<ProfessionalActivitiesPage />} />
+          <Route path="/teaching/research/conference" element={<ResearchConferencePage />} />
+          <Route path="/teaching/research/publication" element={<ResearchPublicationPage />} />
+          <Route path="/teaching/research/book-chapters" element={<ResearchBookChaptersPage />} />
+          <Route path="/teaching/research/funding-consultancy" element={<ResearchFundingConsultancyPage />} />
+          <Route path="/teaching/research/copyright-patents" element={<ResearchPatentsCopyrightsPage />} />
+          <Route path="/teaching/research/achievement" element={<ResearchAchievementPage />} />
+          <Route path="/teaching/research/reviewer-editor" element={<ResearchReviewerEditorPage />} />
           <Route path="/teaching/leave-application" element={<StaffLeavesPage />} />
           <Route path="/teaching/biometric/daily" element={<DailyDataPage />} />
           <Route path="/teaching/biometric/monthly" element={<MonthlyDataPage />} />

@@ -102,6 +102,9 @@ app.use('/api/exam-section', examSectionRoutes);
 const professionalActivityRoutes = require('./routes/professionalActivity.routes');
 app.use('/api/professional-activities', professionalActivityRoutes);
 
+const researchRoutes = require('./routes/research.routes');
+app.use('/api/research', researchRoutes);
+
 app.use(errorMiddleware);
 
 module.exports = app;

@@ -110,6 +110,54 @@ const uploadProfessionalActivityConductedPdf = multer({
   limits: { fileSize: PROFESSIONAL_ACTIVITY_MAX_FILE_SIZE }
 });
 
+// One folder per research menu, mirroring the Laravel public/Uploads/Research/* directories
+// so a document stored by either application resolves under the same name.
+const RESEARCH_FOLDER_NAMES = {
+  'conference-attended': 'Conference_Attended',
+  'conference-conducted': 'Conference_Conducted',
+  publication: 'Publications',
+  'book-chapter': 'Book_Chapters',
+  'funded-project': 'fundedproject',
+  consultancy: 'Consultancy',
+  patent: 'patents',
+  copyright: 'Copyrights',
+  'reviewer-editor': 'Review_Editor',
+  achievement: 'Achievement'
+};
+
+const RESEARCH_MAX_FILE_SIZE = 500 * 1024;
+// ConsultancyController was the single research menu that allowed a larger upload.
+const RESEARCH_CONSULTANCY_MAX_FILE_SIZE = 20000 * 1024;
+
+const RESEARCH_DOCUMENT_ROOTS = {};
+
+const RESEARCH_UPLOADERS = {};
+
+Object.keys(RESEARCH_FOLDER_NAMES).forEach((resourceKey) => {
+  const root = path.join(uploadsRoot, 'research', RESEARCH_FOLDER_NAMES[resourceKey]);
+  ensureDir(root);
+  RESEARCH_DOCUMENT_ROOTS[resourceKey] = root;
+  RESEARCH_UPLOADERS[resourceKey] = multer({
+    storage: buildPdfDiskStorage(root),
+    fileFilter: pdfOnlyFilter,
+    limits: {
+      fileSize:
+        resourceKey === 'consultancy' ? RESEARCH_CONSULTANCY_MAX_FILE_SIZE : RESEARCH_MAX_FILE_SIZE
+    }
+  });
+});
+
+// multer is not a plain function, so the router needs the bound single-file middleware.
+function researchPdfUploader(resourceKey) {
+  const uploader = RESEARCH_UPLOADERS[resourceKey];
+  if (!uploader) {
+    const error = new Error('Unknown research resource');
+    error.statusCode = 404;
+    throw error;
+  }
+  return uploader.single('document');
+}
+
 module.exports = {
   uploadForm16Pdf,
   uploadForm16Archive,
@@ -119,5 +167,10 @@ module.exports = {
   professionalActivityAttendedRoot,
   professionalActivityConductedRoot,
   PROFESSIONAL_ACTIVITY_MAX_FILE_SIZE,
+  RESEARCH_DOCUMENT_ROOTS,
+  RESEARCH_FOLDER_NAMES,
+  RESEARCH_MAX_FILE_SIZE,
+  RESEARCH_CONSULTANCY_MAX_FILE_SIZE,
+  researchPdfUploader,
   ensureDir
 };

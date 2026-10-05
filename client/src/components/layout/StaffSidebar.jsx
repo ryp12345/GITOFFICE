@@ -35,19 +35,19 @@ const COMMON_LINKS = [
 ];
 
 const TEACHING_ONLY_LINKS = [
-//   {
-//     name: 'Research',
-//     icon: '🔬',
-//     submenu: [
-//       { name: 'Conference', teachingPath: '/teaching/research/conference' },
-//       { name: 'Publication', teachingPath: '/teaching/research/publication' },
-//       { name: 'Book and Chapters', teachingPath: '/teaching/research/book-chapters' },
-//       { name: 'Funding and Consultancy', teachingPath: '/teaching/research/funding-consultancy' },
-//       { name: 'Copyright and Patents', teachingPath: '/teaching/research/copyright-patents' },
-//       { name: 'Achievement', teachingPath: '/teaching/research/achievement' },
-//       { name: 'Reviewer Editor', teachingPath: '/teaching/research/reviewer-editor' }
-//     ]
-//   }
+  {
+    name: 'Research',
+    icon: '🔬',
+    submenu: [
+      { name: 'Conference', teachingPath: '/teaching/research/conference' },
+      { name: 'Publication', teachingPath: '/teaching/research/publication' },
+      { name: 'Book and Chapters', teachingPath: '/teaching/research/book-chapters' },
+      { name: 'Funding and Consultancy', teachingPath: '/teaching/research/funding-consultancy' },
+      { name: 'Copyright and Patents', teachingPath: '/teaching/research/copyright-patents' },
+      { name: 'Achievement', teachingPath: '/teaching/research/achievement' },
+      { name: 'Reviewer Editor', teachingPath: '/teaching/research/reviewer-editor' }
+    ]
+  }
 ];
 
 const NON_TEACHING_ONLY_LINKS = [
