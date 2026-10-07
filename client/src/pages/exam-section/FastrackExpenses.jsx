@@ -13,7 +13,11 @@ for (let y = currentYear; y >= 2020; y--) {
 export default function FastrackExpensesPage() {
   const [expenses, setExpenses] = useState([]);
   const [expenseMasters, setExpenseMasters] = useState([]);
-  const [academicYear, setAcademicYear] = useState(`${currentYear}-${currentYear + 1}`);
+  // Laravel's expenses page rolls the academic year over in June
+  const [academicYear, setAcademicYear] = useState(() => {
+    const start = new Date().getMonth() >= 5 ? currentYear : currentYear - 1;
+    return `${start}-${start + 1}`;
+  });
   const [loading, setLoading] = useState(true);
   const [notification, setNotification] = useState({ show: false, message: '', type: '' });
 

@@ -156,6 +156,14 @@ router.get(
   fastrackCourseController.getCoursesByAcademicYear
 );
 
+// Must be registered before '/fastrack/:id', otherwise "download-template" is treated as an id
+router.get(
+  '/fastrack/download-template',
+  authMiddleware,
+  roleMiddleware('Exam_section', 'exam_section'),
+  fastrackCourseController.downloadTemplate
+);
+
 router.get(
   '/fastrack/:id',
   authMiddleware,
@@ -182,13 +190,6 @@ router.delete(
   authMiddleware,
   roleMiddleware('Exam_section', 'exam_section'),
   fastrackCourseController.deleteCourse
-);
-
-router.get(
-  '/fastrack/download-template',
-  authMiddleware,
-  roleMiddleware('Exam_section', 'exam_section'),
-  fastrackCourseController.downloadTemplate
 );
 
 router.post(

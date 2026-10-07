@@ -14,6 +14,7 @@ import {
   uploadFastrackExcel,
   exportFastrackCourses
 } from '../../api/examSectionApi';
+import { blobErrorMessage, currentAcademicYear, saveBlob, shiftAcademicYear } from '../../components/fastrack/fastrackUi';
 
 const emptyForm = {
   course_code: '',
@@ -23,11 +24,6 @@ const emptyForm = {
   no_of_students: '',
 };
 
-const YEARS = [];
-const currentYear = new Date().getFullYear();
-for (let y = currentYear; y >= 2020; y--) {
-  YEARS.push(`${y}-${y + 1}`);
-}
 
 export default function FastrackCoursePage() {
   const [rows, setRows] = useState([]);
@@ -42,8 +38,7 @@ export default function FastrackCoursePage() {
   const [error, setError] = useState('');
   const [notification, setNotification] = useState({ show: false, message: '', type: '' });
   const [selectedInstance, setSelectedInstance] = useState('');
-  const [academicYear, setAcademicYear] = useState(`${currentYear}-${currentYear + 1}`);
-  const [useFilter, setUseFilter] = useState(false);
+  const [academicYear, setAcademicYear] = useState(currentAcademicYear);
   const [yearChanged, setYearChanged] = useState(false);
   const fileInputRef = useRef(null);
 
@@ -57,20 +52,16 @@ export default function FastrackCoursePage() {
       setCourseTypes(Array.isArray(lookupData.courseTypes) ? lookupData.courseTypes : []);
 
       let coursesData = [];
-      if (useFilter && selectedInstance) {
+      if (selectedInstance) {
         const coursesRes = await getFastrackCoursesByAcademicYear({
           fastrack_instance_id: selectedInstance,
           academic_year: academicYear
         });
-        coursesData = coursesRes?.data?.data || coursesRes?.data || [];
-        setYearChanged(false);
-      } else if (yearChanged) {
-        coursesData = [];
-      } else {
+        coursesData = coursesRes?.data || [];
+      } else if (!yearChanged) {
         const coursesRes = await getFastrackCourses();
-        coursesData = coursesRes?.data?.data || coursesRes?.data || [];
+        coursesData = coursesRes?.data || [];
       }
-
       setRows(Array.isArray(coursesData) ? coursesData : []);
     } catch (e) {
       const msg = e.response?.data?.message || e.message || 'Failed to fetch data';
@@ -81,7 +72,7 @@ export default function FastrackCoursePage() {
 
   useEffect(() => {
     load();
-  }, [useFilter, selectedInstance, academicYear]);
+  }, [selectedInstance, academicYear]);
 
   const onClose = () => {
     setIsModalOpen(false);
@@ -159,7 +150,6 @@ export default function FastrackCoursePage() {
       showNotification('Fastrack Course Deleted successfully', 'success');
     } catch (e) {
       const msg = e.response?.data?.message || e.message || 'Failed to delete course';
-      alert(msg);
       showNotification(msg, 'error');
     }
   };
@@ -171,49 +161,10 @@ export default function FastrackCoursePage() {
 
   const handleDownloadTemplate = async () => {
     try {
-      const templateHeaders = [
-        'Sl.No',
-        'Course Code*',
-        'Course Name*',
-        'department_id*',
-        'USN*',
-        'Student Name*',
-        'Department Name',
-        'Department ID'
-      ];
-
-      const deptRows = Array.isArray(departments) ? departments : [];
-      const blankCells = Array(6).fill('<td style="padding:8px;"></td>').join('');
-      const noteText = 'Note I: The first blank row in the list will be considered as end of records and will stop reading any rows after that. Note II: For the column department_id, enter the department id from the right-side reference list.';
-
-      let tableContent = '<table border="1" cellspacing="0" cellpadding="0">';
-      tableContent += '<tr>' + templateHeaders.map((header) => `<th style="background:#1976d2;color:#ffffff;padding:8px;text-align:left;">${header}</th>`).join('') + '</tr>';
-      tableContent += `<tr><td colspan="6" style="padding:8px;color:#d32f2f;font-weight:bold;">${noteText}</td><td style="padding:8px;"></td><td style="padding:8px;"></td></tr>`;
-      tableContent += `<tr>${blankCells}<td style="padding:8px;font-weight:bold;background:#f3f4f6;">Department Name</td><td style="padding:8px;font-weight:bold;background:#f3f4f6;">Department ID</td></tr>`;
-      deptRows.forEach((dept) => {
-        const departmentName = dept.dept_shortname || dept.dept_name || dept.department || '';
-        const departmentId = dept.id != null ? String(dept.id) : '';
-        tableContent += `<tr>${blankCells}<td style="padding:8px;">${departmentName}</td><td style="padding:8px;">${departmentId}</td></tr>`;
-      });
-      for (let i = 0; i < 8; i += 1) {
-        tableContent += `<tr>${blankCells}<td style="padding:8px;"></td><td style="padding:8px;"></td></tr>`;
-      }
-      tableContent += '</table>';
-
-      const blob = new Blob([tableContent], { type: 'application/vnd.ms-excel' });
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = 'fastrack_course_template.xls';
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(url);
-
-      showNotification('Template downloaded successfully', 'success');
+      const blob = await downloadFastrackTemplate();
+      saveBlob(blob, 'fastrack_course_list.xlsx');
     } catch (e) {
-      console.error('Download error:', e);
-      showNotification(e.message || 'Failed to download template', 'error');
+      showNotification(await blobErrorMessage(e, 'Failed to download template'), 'error');
     }
   };
 
@@ -249,58 +200,20 @@ export default function FastrackCoursePage() {
 
   const handleExportCourses = async () => {
     try {
-      const token = localStorage.getItem('token');
-      if (!token) {
-        showNotification('Please login again to export courses', 'error');
-        return;
-      }
-
-      const response = await fetch('/api/exam-section/fastrack/course_details/export', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          fastrack_instance_id: selectedInstance || null,
-          academic_year: academicYear || null
-        })
-      });
-
-      if (!response.ok) {
-        let msg = 'Failed to export courses';
-        try {
-          const errData = await response.json();
-          msg = errData?.message || msg;
-        } catch (_) {
-          if (response.status === 401) msg = 'Session expired. Please login again.';
-        }
-        showNotification(msg, 'error');
-        return;
-      }
-
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `fastrack_courses_${new Date().toISOString().slice(0,10)}.xlsx`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(url);
-      showNotification('Courses exported successfully', 'success');
+      const blob = await exportFastrackCourses();
+      saveBlob(blob, `fastrack_courses_${new Date().toISOString().slice(0, 10)}.xlsx`);
     } catch (e) {
-      showNotification(e.message || 'Failed to export courses', 'error');
+      showNotification(await blobErrorMessage(e, 'Failed to export courses'), 'error');
     }
   };
 
   const getDepartmentName = (id) => {
-    const dept = departments.find(d => d.id === id);
+    const dept = departments.find(d => String(d.id) === String(id));
     return dept ? dept.dept_shortname : 'N/A';
   };
 
   const getInstanceName = (id) => {
-    const inst = instances.find(i => i.id === id);
+    const inst = instances.find(i => String(i.id) === String(id));
     return inst ? inst.ft_instance_name : 'N/A';
   };
 
@@ -369,13 +282,8 @@ export default function FastrackCoursePage() {
                           <button
                             type="button"
                             onClick={() => {
-                              const parts = academicYear.split('-');
-                              const newYear = `${parseInt(parts[0]) - 1}-${parseInt(parts[1]) - 1}`;
-                              setAcademicYear(newYear);
-                              setSelectedInstance('');
-                              setUseFilter(false);
+                              setAcademicYear(shiftAcademicYear(academicYear, -1));
                               setYearChanged(true);
-                              setRows([]);
                             }}
                             className="p-2 border border-gray-300 rounded hover:bg-gray-50"
                           >
@@ -385,13 +293,8 @@ export default function FastrackCoursePage() {
                           <button
                             type="button"
                             onClick={() => {
-                              const parts = academicYear.split('-');
-                              const newYear = `${parseInt(parts[0]) + 1}-${parseInt(parts[1]) + 1}`;
-                              setAcademicYear(newYear);
-                              setSelectedInstance('');
-                              setUseFilter(false);
+                              setAcademicYear(shiftAcademicYear(academicYear, 1));
                               setYearChanged(true);
-                              setRows([]);
                             }}
                             className="p-2 border border-gray-300 rounded hover:bg-gray-50"
                           >
@@ -405,13 +308,11 @@ export default function FastrackCoursePage() {
                           value={selectedInstance}
                           onChange={(e) => {
                             setSelectedInstance(e.target.value);
-                            setUseFilter(Boolean(e.target.value));
-                            setYearChanged(false);
                           }}
                           className="block w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                         >
                           <option value="">Select Fastrack Instance</option>
-                          {instances.filter(inst => String(inst.academic_year) === String(academicYear)).map(inst => (
+                          {instances.map(inst => (
                             <option key={inst.id} value={inst.id}>{inst.ft_instance_name}</option>
                           ))}
                         </select>
@@ -427,7 +328,6 @@ export default function FastrackCoursePage() {
               <div className="box-body flex flex-wrap items-center gap-3">
                 <button
                   onClick={openCreate}
-                  disabled={!selectedInstance}
                   className={`flex items-center justify-center px-6 py-3 font-medium text-white transition-all duration-300 transform rounded-lg shadow-lg ${selectedInstance ? 'bg-blue-600 hover:bg-blue-700 hover:-translate-y-1 hover:scale-105' : 'bg-slate-400 cursor-not-allowed opacity-70'}`}
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 mr-2" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" /></svg>
@@ -467,9 +367,6 @@ export default function FastrackCoursePage() {
               </div>
               <div className="overflow-x-auto">
                 <div className="flex justify-end mt-4">
-                  <h1 className="box-title ml-2 text-lg font-semibold text-gray-800">
-                    Fastrack Course Details for Instance - <span id="selected_instance" className="text-danger text-lg"></span>
-                  </h1>
                   <button
                     type="button"
                     onClick={handleExportCourses}
@@ -497,7 +394,11 @@ export default function FastrackCoursePage() {
                     {loading ? (
                       <tr><td colSpan="11" className="px-6 py-12 text-center text-gray-500">Loading...</td></tr>
                     ) : filtered.length === 0 ? (
-                      <tr><td colSpan="11" className="px-6 py-12 text-center text-gray-500">No courses found</td></tr>
+                      <tr><td colSpan="11" className="px-6 py-12 text-center text-gray-500">
+                        {!selectedInstance && yearChanged
+                          ? 'Please select both Fastrack Instance and Academic Year.'
+                          : 'No Courses Found for the Selected Academic Year and Instance.'}
+                      </td></tr>
                     ) : (
                       paginated.map((row, idx) => (
                         <tr key={row.id} className={`${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'} hover:bg-blue-50 transition-colors duration-150`}>
@@ -505,7 +406,7 @@ export default function FastrackCoursePage() {
                           <td className="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{row.course_code}</td>
                           <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-700">{row.course_name}</td>
                           <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-700">{getCourseType(row)}</td>
-                          <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-700">{getDepartmentName(row.department_id)}</td>
+                          <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-700">{row.dept_shortname || getDepartmentName(row.department_id)}</td>
                           <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-700">{row.no_of_students}</td>
                           <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-700">{row.classes_conducted ?? '--NA--'}</td>
                           <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-700">{row.labs_conducted ?? '--NA--'}</td>

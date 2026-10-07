@@ -237,4 +237,50 @@ async function sendPasswordResetEmail({ toEmail, resetUrl }) {
   });
 }
 
-module.exports = { sendForm16UploadIssueReport, sendPasswordResetEmail };
+function escapeHtml(value) {
+  return String(value ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+/**
+ * Fast-Track deadline notice (port of Laravel's DeadlineFastrackNotification).
+ * @param {Object} opts
+ * @param {string[]} opts.toEmails
+ * @param {string|Date} opts.deadline
+ */
+async function sendFastrackDeadlineEmail({ toEmails, deadline }) {
+  const transporter = createTransporter();
+  const deadlineText = deadline instanceof Date
+    ? deadline.toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+    : String(deadline || '');
+
+  if (!transporter) {
+    console.warn('[Email] SMTP not configured. Fastrack deadline notice not sent to', toEmails.length, 'staff');
+    return;
+  }
+
+  const html = `
+    <!DOCTYPE html>
+    <html>
+    <head><meta charset="utf-8"><title>Deadline Update</title></head>
+    <body>
+      <h1>Fast-Track Deadline Notification</h1>
+      <p>Dear Staff Member,</p>
+      <p>We would like to inform you that the deadline for updating the number of classes conducted under the Fast-Track Semester is <strong>${escapeHtml(deadlineText)}</strong>.</p>
+      <p>Please ensure all tasks are completed by the new deadline.</p>
+      <p>We request you to complete the necessary updates within the stipulated timeline to ensure smooth academic coordination.</p>
+      <p>Best regards,<br>Academic Coordination Team</p>
+    </body>
+    </html>
+  `;
+
+  // Laravel sends one message to all recipients; BCC keeps staff from seeing each other's addresses
+  await transporter.sendMail({
+    from: `"GIT Office" <${smtpFrom}>`,
+    to: smtpFrom,
+    bcc: toEmails,
+    subject: 'Deadline Fastrack Notification',
+    html
+  });
+}
+
+module.exports = { sendForm16UploadIssueReport, sendPasswordResetEmail, sendFastrackDeadlineEmail };

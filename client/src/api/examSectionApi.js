@@ -301,8 +301,9 @@ export const filterHodFastrackCourses = async (params) => {
   return res.data;
 };
 
-export const approveHodFastrackRecords = async (staffIds, courseIds) => {
-  const res = await api.post('/hod/fastrack/courses/approve', { staff_ids: staffIds, course_ids: courseIds });
+// items: [{ course_id, staff_id }]
+export const approveHodFastrackRecords = async (items) => {
+  const res = await api.post('/hod/fastrack/courses/approve', { items });
   return res.data;
 };
 

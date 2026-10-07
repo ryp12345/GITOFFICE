@@ -106,8 +106,18 @@ async function downloadTemplate(req, res, next) {
     sheet.getCell(1, 5).value = 'USN*';
     sheet.getCell(1, 6).value = 'Student Name*';
 
-    sheet.getCell(3, 1).value = 'Note I:-The first blank row in the list will be considered as end of records and will stop reading any rows after that.';
-    sheet.getCell(4, 1).value = 'Note II:-For the column department_id, copy the values from the list below as it is.';
+    // Notes sit beside the data (columns L-N) as in Laravel; rows 2+ of columns A-F are student data
+    sheet.mergeCells('L1:N1');
+    sheet.mergeCells('L2:N3');
+    sheet.getCell('L1').value = 'Note I:-The first blank row in the list will be considered as end of records and will stop reading any rows after that.';
+    sheet.getCell('L2').value = 'Note II:-For the column department_id, copy the values from the list below as it is.';
+    sheet.getCell('L1').font = { color: { argb: 'FFFF0000' } };
+    sheet.getCell('L2').font = { color: { argb: 'FFFF0000' } };
+    sheet.getCell('L2').alignment = { wrapText: true };
+    ['B1', 'C1', 'D1', 'E1', 'F1'].forEach((ref) => { sheet.getCell(ref).font = { color: { argb: 'FFFF0000' } }; });
+    sheet.getCell('L5').font = { bold: true };
+    sheet.getCell('M5').font = { bold: true };
+    [[2, 30], [3, 30], [4, 15], [5, 15], [6, 15]].forEach(([col, width]) => { sheet.getColumn(col).width = width; });
 
     sheet.getCell(5, 12).value = 'DeptID';
     sheet.getCell(5, 13).value = 'Department Name';
@@ -119,7 +129,6 @@ async function downloadTemplate(req, res, next) {
     });
 
     const buffer = await workbook.xlsx.writeBuffer();
-    console.log('Template buffer length:', buffer.length, 'first bytes:', buffer.slice(0, 4).toString('hex'));
 
     res.setHeader('Content-Type', 'application/octet-stream');
     res.setHeader('Content-Disposition', 'attachment; filename=fastrack_course_list.xlsx');
@@ -160,60 +169,64 @@ async function uploadExcel(req, res, next) {
     const sheet = workbook.Sheets[workbook.SheetNames[0]];
     const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: false });
 
-    if (!rows || rows.length < 3) {
-      return res.status(400).json({ success: false, message: 'Invalid Excel file format. The file does not contain enough data.' });
+    if (!rows || rows.length < 2) {
+      return res.status(400).json({ success: false, message: 'The Excel file does not contain any student rows.' });
     }
 
-    const headerRow = rows[2];
-    if (!Array.isArray(headerRow)) {
-      return res.status(400).json({ success: false, message: 'Invalid Excel file format. Header row is missing.' });
-    }
-    const headerMap = {
-      'Department': 'department_id',
-      'USN': 'usn',
-      'Name': 'name',
-      'Course Code*': 'course_code',
-      'Course Name': 'course_name',
-    };
+    // Same as Laravel: row 1 is the header, data starts at row 2 (index 1),
+    // columns B/C/D = course code/name/department, and the first blank course code ends the list.
+    // Each row is one registered student.
+    const client = await pool.connect();
+    let processed = 0;
+    try {
+      await client.query('BEGIN');
+      for (let i = 1; i < rows.length; i++) {
+        const row = rows[i] || [];
+        const course_code = String(row[1] || '').trim();
+        if (!course_code) break;
 
-    const columnMapping = {};
-    for (const [excelHeader, field] of Object.entries(headerMap)) {
-      const idx = headerRow.findIndex(h => h && String(h).trim() === excelHeader);
-      if (idx !== -1) {
-        columnMapping[idx] = field;
-      }
-    }
+        const course_name = String(row[2] || '').trim();
+        const dept_id = String(row[3] || '').trim();
 
-    let status = 1;
-    let message = 'Fastrack course added successfully';
-
-    for (let i = 3; i < rows.length; i++) {
-      const course_code = String(rows[i][1] || '').trim();
-      if (!course_code) break;
-
-      const course_name = String(rows[i][2] || '').trim();
-      const dept_id = String(rows[i][3] || '').trim();
-
-      const { rows: existingRows } = await pool.query(
-        `SELECT id FROM fastrack_courses WHERE ft_instance_id = $1 AND course_code = $2 LIMIT 1`,
-        [ft_instance_id, course_code]
-      );
-
-      if (existingRows.length > 0) {
-        await pool.query(
-          `UPDATE fastrack_courses SET no_of_students = no_of_students + 1 WHERE id = $1`,
-          [existingRows[0].id]
+        const { rows: existingRows } = await client.query(
+          `SELECT id FROM fastrack_courses WHERE ft_instance_id = $1 AND course_code = $2 LIMIT 1`,
+          [ft_instance_id, course_code]
         );
-      } else {
-        await pool.query(
-          `INSERT INTO fastrack_courses (course_code, course_name, department_id, ft_instance_id, no_of_students, created_at, updated_at)
-           VALUES ($1, $2, $3, $4, 1, NOW(), NOW())`,
-          [course_code, course_name, dept_id || null, ft_instance_id]
-        );
+
+        if (existingRows.length > 0) {
+          // no_of_students is a varchar column
+          await client.query(
+            `UPDATE fastrack_courses
+                SET no_of_students = (COALESCE(NULLIF(TRIM(no_of_students), '')::integer, 0) + 1)::text,
+                    updated_at = NOW()
+              WHERE id = $1`,
+            [existingRows[0].id]
+          );
+        } else {
+          await client.query(
+            `INSERT INTO fastrack_courses (course_code, course_name, department_id, ft_instance_id, no_of_students, created_at, updated_at)
+             VALUES ($1, $2, $3, $4, '1', NOW(), NOW())`,
+            [course_code, course_name, dept_id || null, ft_instance_id]
+          );
+        }
+        processed += 1;
       }
+      await client.query('COMMIT');
+    } catch (err) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({
+        success: false,
+        message: `Unable to add fastrack courses (row ${processed + 2}): ${err.message}. No rows were saved.`,
+      });
+    } finally {
+      client.release();
     }
 
-    res.json({ success: status === 1, message });
+    if (processed === 0) {
+      return res.status(400).json({ success: false, message: 'No student rows found. Data must start in row 2 with the course code in column B.' });
+    }
+
+    res.json({ success: true, message: 'Fastrack course added successfully', processed });
   } catch (error) {
     console.error('Upload Excel error:', error);
     res.status(500).json({ success: false, message: error.message || 'Failed to upload Excel file. Please try again.' });
@@ -242,6 +255,7 @@ async function exportCourses(req, res, next) {
          SELECT fs.classes_conducted, fs.labs_conducted, fs.status
          FROM fastrack_staffs fs
          WHERE fs.course_id = fc.id
+         ORDER BY fs.id
          LIMIT 1
        ) fs ON true`;
     const params = [];
@@ -259,7 +273,7 @@ async function exportCourses(req, res, next) {
     const sheet = workbook.addWorksheet('Fastrack-Courses');
 
     sheet.mergeCells('A1:J1');
-    sheet.getCell('A1').value = 'KLS Gogte Instittue of Technology, Belagavi';
+    sheet.getCell('A1').value = 'KLS Gogte Institute of Technology, Belagavi';
     sheet.getCell('A1').font = { bold: true, size: 16 };
     sheet.getCell('A1').alignment = { horizontal: 'center' };
 
@@ -348,7 +362,6 @@ async function exportCourses(req, res, next) {
     const fileName = `${fileNameParts.join('_')}.xlsx`;
 
     const buffer = await workbook.xlsx.writeBuffer();
-    console.log('Export buffer length:', buffer.length, 'first bytes:', buffer.slice(0, 4).toString('hex'));
 
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', `attachment; filename=${fileName}`);

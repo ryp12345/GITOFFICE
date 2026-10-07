@@ -1,4 +1,33 @@
 const instanceModel = require('../../models/exam-section/fastrack_instance.model');
+const { pool } = require('../../config/db');
+const { sendFastrackDeadlineEmail } = require('../email.service');
+
+// Laravel stores the deadline as the chosen date at 17:00
+function toDeadline(value) {
+  if (!value) return null;
+  const text = String(value).trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return `${text} 17:00:00`;
+  return text;
+}
+
+// Laravel emails every staff member with a Pending record on the instance's courses after an update
+async function notifyPendingStaffOfDeadline(instanceId, deadline) {
+  const { rows } = await pool.query(
+    `SELECT DISTINCT u.email
+       FROM fastrack_staffs fs
+       JOIN fastrack_courses fc ON fc.id = fs.course_id
+       JOIN staff s ON s.id = fs.staff_id
+       JOIN users u ON u.id = s.user_id
+      WHERE fc.ft_instance_id = $1
+        AND fs.status = 'Pending'
+        AND u.email IS NOT NULL AND u.email <> ''`,
+    [instanceId]
+  );
+  const emails = rows.map((r) => r.email);
+  if (emails.length === 0) return 0;
+  await sendFastrackDeadlineEmail({ toEmails: emails, deadline });
+  return emails.length;
+}
 
 async function getInstances() {
   return instanceModel.findAllWithPrograms();
@@ -73,7 +102,7 @@ async function createInstance(payload) {
     max_theory_class: String(payload.max_theory_class || '').trim(),
     max_lab_class: String(payload.max_lab_class || '').trim(),
     total_fees_collected: payload.total_fees_collected || 0,
-    deadline_date: payload.deadline_date || null,
+    deadline_date: toDeadline(payload.deadline_date),
     programIds,
     semesters
   });
@@ -101,7 +130,7 @@ async function updateInstance(id, payload) {
     throw err;
   }
 
-  return instanceModel.updateInstance(id, {
+  const updated = await instanceModel.updateInstance(id, {
     ft_instance_name: payload.ft_instance_name !== undefined ? String(payload.ft_instance_name).trim() : existing.ft_instance_name,
     start_date: payload.start_date || existing.start_date,
     end_date: payload.end_date || existing.end_date,
@@ -110,10 +139,21 @@ async function updateInstance(id, payload) {
     max_theory_class: payload.max_theory_class !== undefined ? String(payload.max_theory_class).trim() : existing.max_theory_class,
     max_lab_class: payload.max_lab_class !== undefined ? String(payload.max_lab_class).trim() : existing.max_lab_class,
     total_fees_collected: payload.total_fees_collected !== undefined ? payload.total_fees_collected : existing.total_fees_collected,
-    deadline_date: payload.deadline_date || existing.deadline_date,
-    programIds: programIds !== undefined ? programIds : [],
-    semesters: semesters !== undefined ? semesters : []
+    deadline_date: payload.deadline_date ? toDeadline(payload.deadline_date) : existing.deadline_date,
+    programIds,
+    semesters
   });
+
+  let notified = 0;
+  let notifyError = null;
+  try {
+    notified = await notifyPendingStaffOfDeadline(id, updated?.deadline_date);
+  } catch (e) {
+    // The update itself succeeded; report the mail problem instead of failing the request
+    notifyError = e.message;
+    console.error('[Fastrack] deadline email failed:', e.message);
+  }
+  return { ...updated, notified_staff: notified, notify_error: notifyError };
 }
 
 async function deleteInstance(id) {

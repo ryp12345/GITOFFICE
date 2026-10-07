@@ -12,35 +12,24 @@ import {
   filterCoordinatorCourses,
   getFastrackStaffLookup,
 } from '../../api/examSectionApi';
+import {
+  Pagination,
+  StatusBadge,
+  WelcomeHeader,
+  buildAcademicYears,
+  staffName as getStaffName,
+  usePagedRows,
+} from '../../components/fastrack/fastrackUi';
 
-const PAGE_SIZE = 10;
 const LOCKED_STATUSES = ['Pending', 'Approved', 'Verified'];
 const EMPTY_FORM = { staff_ids: [], instructor_foreman_id: '', peon_attender_id: '', ft_course_type_id: '' };
 
-// Same list as the Laravel page: current year back to 2020, formatted "YYYY-YYYY"
-const buildAcademicYears = () => {
-  const years = [];
-  for (let y = new Date().getFullYear(); y >= 2020; y -= 1) years.push(`${y}-${y + 1}`);
-  return years;
-};
 
 const idOf = (value) => (value === null || value === undefined || value === '' ? '' : String(value));
 
-const getStaffName = (staff) => {
-  if (!staff || !staff.fname) return '';
-  return [staff.fname, staff.lname].filter(Boolean).join(' ');
-};
 
 const getStaffOptionLabel = (s) => `${getStaffName(s)} (${s.design_name || ''}) (${s.dept_shortname || ''})`;
 
-const getStatusBadge = (status) => {
-  const badgeClass = {
-    Pending: 'bg-red-500',
-    Approved: 'bg-green-500',
-    Verified: 'bg-blue-500',
-  }[status] || 'bg-gray-300';
-  return <span className={`${badgeClass} text-white px-2 py-1 rounded text-xs font-medium`}>{status}</span>;
-};
 
 export default function FastrackCoordinatorMgtPage() {
   const { user } = useAuth();
@@ -192,10 +181,8 @@ export default function FastrackCoordinatorMgtPage() {
 
   useEffect(() => { setPage(1); }, [search]);
 
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-  const pageRows = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const { pageRows, totalPages, offset, page: currentPage } = usePagedRows(filtered, page);
 
-  const welcomeName = [user?.fname, user?.mname, user?.lname].filter(Boolean).join(' ');
 
   return (
     <div className="min-h-screen bg-slate-100 flex flex-col">
@@ -206,16 +193,7 @@ export default function FastrackCoordinatorMgtPage() {
           <div className="max-w-full mx-auto">
             <Notification show={notification.show} message={notification.message} type={notification.type} onClose={() => setNotification({ show: false, message: '', type: '' })} />
 
-            <div className="mb-6 sm:flex justify-between items-center">
-              <h1 className="text-2xl font-medium text-gray-700">
-                Welcome <span className="text-blue-600">{welcomeName}</span>
-              </h1>
-              <ol className="flex items-center text-sm font-semibold text-blue-600 mt-2 sm:mt-0">
-                <li>Faculty List</li>
-                <li className="mx-2 text-gray-400">›</li>
-                <li>My Department Faculty</li>
-              </ol>
-            </div>
+            <WelcomeHeader user={user} crumbs={['Faculty List', 'My Department Faculty']} />
 
             <div className="mb-10 bg-white shadow-xl rounded-xl overflow-hidden">
               <div className="px-6 py-4 border-b border-gray-200">
@@ -264,7 +242,7 @@ export default function FastrackCoordinatorMgtPage() {
                         const status = first?.status || '--NA--';
                         return (
                           <tr key={row.id} className={`${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'} hover:bg-blue-50 text-sm text-gray-700`}>
-                            <td className="px-4 py-3 border">{(page - 1) * PAGE_SIZE + idx + 1}</td>
+                            <td className="px-4 py-3 border">{offset + idx + 1}</td>
                             <td className="px-4 py-3 border">{row.academic_year}</td>
                             <td className="px-4 py-3 border">{row.ft_instance_name}</td>
                             <td className="px-4 py-3 border">{row.course_code}</td>
@@ -283,7 +261,7 @@ export default function FastrackCoordinatorMgtPage() {
                               ) : '--NA--'}
                             </td>
                             <td className="px-4 py-3 border">{row.amount ?? '--NA--'}</td>
-                            <td className="px-4 py-3 border">{getStatusBadge(status)}</td>
+                            <td className="px-4 py-3 border"><StatusBadge status={status} /></td>
                             <td className="px-4 py-3 border">
                               <div className="flex items-center gap-2">
                                 {!LOCKED_STATUSES.includes(first?.status) && (
@@ -306,20 +284,7 @@ export default function FastrackCoordinatorMgtPage() {
                 </table>
               </div>
 
-              {!loading && filtered.length > 0 && (
-                <div className="px-6 py-4 border-t border-gray-200 flex flex-wrap gap-2 items-center justify-between text-sm text-gray-700">
-                  <div>
-                    Showing {(page - 1) * PAGE_SIZE + 1} to {Math.min(page * PAGE_SIZE, filtered.length)} of {filtered.length} entries
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1}
-                      className="px-3 py-1 border border-gray-300 rounded-lg bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed">Previous</button>
-                    <span>Page {page} of {totalPages}</span>
-                    <button onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page === totalPages}
-                      className="px-3 py-1 border border-gray-300 rounded-lg bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed">Next</button>
-                  </div>
-                </div>
-              )}
+              {!loading && <Pagination page={currentPage} totalPages={totalPages} total={filtered.length} onChange={setPage} />}
             </div>
 
             {modal && (

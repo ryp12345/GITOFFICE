@@ -85,9 +85,25 @@ export default function FastrackPayPage() {
     setLoading(false);
   };
 
+  const [yearResolved, setYearResolved] = useState(false);
+
+  // Laravel opens on the academic year of the most recent fastrack instance
   useEffect(() => {
-    loadData(academicYear);
-  }, [academicYear]);
+    (async () => {
+      try {
+        const res = await getPayConfig();
+        const latestYear = res?.data?.academic_year;
+        if (latestYear) setAcademicYear(latestYear);
+      } catch {
+        // keep the calendar-year default
+      }
+      setYearResolved(true);
+    })();
+  }, []);
+
+  useEffect(() => {
+    if (yearResolved) loadData(academicYear);
+  }, [academicYear, yearResolved]);
 
   useEffect(() => {
     if (!initialized) return;

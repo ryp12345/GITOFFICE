@@ -59,29 +59,57 @@ async function listMyCourses(staffId) {
        fi.start_date,
        fi.end_date,
        fi.max_theory_class,
-       fi.max_lab_class
+       fi.max_lab_class,
+       (SELECT string_agg(DISTINCT fip.semester::text, ', ')
+          FROM fastrack_instance_program fip
+         WHERE fip.fastrack_instance_id = fi.id) AS semester
      FROM fastrack_staffs fs
      JOIN fastrack_courses fc ON fc.id = fs.course_id
-     JOIN ftcourses fct ON fct.id = fc.ft_course_type_id
+     LEFT JOIN ftcourses fct ON fct.id = fc.ft_course_type_id
      JOIN fastrack_instances fi ON fi.id = fc.ft_instance_id
      WHERE fs.staff_id = $1
-     ORDER BY fc.id ASC`,
+     ORDER BY fs.id ASC`,
     [staffId]
   );
   return result.rows;
 }
 
-async function updateMyCourse(staffId, courseId, { classes_conducted, labs_conducted, document }) {
+async function findMyCourseRecord(staffId, courseId) {
   const result = await pool.query(
-    `INSERT INTO fastrack_staffs (course_id, staff_id, classes_conducted, labs_conducted, document)
-     VALUES ($1, $2, $3, $4, $5)
-     ON CONFLICT (course_id, staff_id) DO UPDATE SET
-       classes_conducted = COALESCE(EXCLUDED.classes_conducted, fastrack_staffs.classes_conducted),
-       labs_conducted = COALESCE(EXCLUDED.labs_conducted, fastrack_staffs.labs_conducted),
-       document = COALESCE(EXCLUDED.document, fastrack_staffs.document),
+    `SELECT id, status FROM fastrack_staffs WHERE course_id = $1 AND staff_id = $2 ORDER BY id LIMIT 1`,
+    [courseId, staffId]
+  );
+  return result.rows[0] || null;
+}
+
+// Mirrors Laravel's firstOrNew: update the faculty's row for the course, or create it.
+// Only fields that were provided are changed (undefined = leave as is).
+async function updateMyCourse(staffId, courseId, { classes_conducted, labs_conducted, document }) {
+  const existing = await findMyCourseRecord(staffId, courseId);
+  if (!existing) {
+    const inserted = await pool.query(
+      `INSERT INTO fastrack_staffs (course_id, staff_id, classes_conducted, labs_conducted, document, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
+       RETURNING *`,
+      [courseId, staffId, classes_conducted ?? null, labs_conducted ?? null, document ?? null]
+    );
+    return inserted.rows[0];
+  }
+
+  const result = await pool.query(
+    `UPDATE fastrack_staffs SET
+       classes_conducted = CASE WHEN $2::boolean THEN $3::integer ELSE classes_conducted END,
+       labs_conducted = CASE WHEN $4::boolean THEN $5::integer ELSE labs_conducted END,
+       document = COALESCE($6, document),
        updated_at = NOW()
+     WHERE id = $1
      RETURNING *`,
-    [courseId, staffId, classes_conducted ?? null, labs_conducted ?? null, document ?? null]
+    [
+      existing.id,
+      classes_conducted !== undefined, classes_conducted ?? null,
+      labs_conducted !== undefined, labs_conducted ?? null,
+      document ?? null,
+    ]
   );
   return result.rows[0];
 }
@@ -131,7 +159,7 @@ async function listCoordinatorCourses(departmentId) {
            'mname', pa.mname,
            'lname', pa.lname
          )
-       )) FILTER (WHERE fs.id IS NOT NULL) AS fastrack_staffs
+       ) ORDER BY fs.id) FILTER (WHERE fs.id IS NOT NULL) AS fastrack_staffs
      FROM fastrack_courses fc
      LEFT JOIN ftcourses fct ON fct.id = fc.ft_course_type_id
      JOIN fastrack_instances fi ON fi.id = fc.ft_instance_id
@@ -280,7 +308,7 @@ async function filterCoordinatorCourses(departmentId, academicYear, instanceId) 
          'staff', json_build_object('id', s.id, 'fname', s.fname, 'mname', s.mname, 'lname', s.lname),
          'instructorForeman', json_build_object('id', inf.id, 'fname', inf.fname, 'mname', inf.mname, 'lname', inf.lname),
          'peonAttender', json_build_object('id', pa.id, 'fname', pa.fname, 'mname', pa.mname, 'lname', pa.lname)
-       )) FILTER (WHERE fs.id IS NOT NULL) AS fastrack_staffs
+       ) ORDER BY fs.id) FILTER (WHERE fs.id IS NOT NULL) AS fastrack_staffs
      FROM fastrack_courses fc
      LEFT JOIN ftcourses fct ON fct.id = fc.ft_course_type_id
      JOIN fastrack_instances fi ON fi.id = fc.ft_instance_id
@@ -308,9 +336,17 @@ async function listVerificationCourses(departmentId) {
        fc.course_name,
        fc.ft_course_type_id,
        fc.ft_instance_id,
+       fc.no_of_students,
        fct.course_type,
        fi.academic_year,
        fi.ft_instance_name,
+       fi.start_date,
+       fi.end_date,
+       fi.max_theory_class,
+       fi.max_lab_class,
+       (SELECT string_agg(DISTINCT fip.semester::text, ', ')
+          FROM fastrack_instance_program fip
+         WHERE fip.fastrack_instance_id = fi.id) AS semester,
        json_agg(json_build_object(
          'id', fs.id,
          'staff_id', fs.staff_id,
@@ -319,29 +355,35 @@ async function listVerificationCourses(departmentId) {
          'document', fs.document,
          'status', fs.status,
          'staff', json_build_object('id', s.id, 'fname', s.fname, 'mname', s.mname, 'lname', s.lname)
-       )) FILTER (WHERE fs.id IS NOT NULL) AS fastrack_staffs
+       ) ORDER BY fs.id) FILTER (WHERE fs.id IS NOT NULL) AS fastrack_staffs
      FROM fastrack_courses fc
-     JOIN ftcourses fct ON fct.id = fc.ft_course_type_id
+     LEFT JOIN ftcourses fct ON fct.id = fc.ft_course_type_id
      JOIN fastrack_instances fi ON fi.id = fc.ft_instance_id
      LEFT JOIN fastrack_staffs fs ON fs.course_id = fc.id
      LEFT JOIN staff s ON s.id = fs.staff_id
      WHERE fc.department_id = $1
-     GROUP BY fc.id, fct.course_type, fi.academic_year, fi.ft_instance_name
+     GROUP BY fc.id, fct.course_type, fi.id
      ORDER BY fc.id ASC`,
     [departmentId]
   );
   return result.rows;
 }
 
-// Coordinator Verification: verify selected records
-async function verifyRecords(items) {
+// Coordinator Verification: verify selected records.
+// Only courses in the coordinator's department, and never downgrade an Approved record.
+async function verifyRecords(items, departmentId) {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
     for (const item of items) {
       await client.query(
-        `UPDATE fastrack_staffs SET status = 'Verified' WHERE course_id = $1 AND staff_id = $2`,
-        [item.course_id, item.staff_id]
+        `UPDATE fastrack_staffs fs SET status = 'Verified', updated_at = NOW()
+          FROM fastrack_courses fc
+         WHERE fc.id = fs.course_id
+           AND fs.course_id = $1 AND fs.staff_id = $2
+           AND fc.department_id = $3
+           AND fs.status IS DISTINCT FROM 'Approved'`,
+        [item.course_id, item.staff_id, departmentId]
       );
     }
     await client.query('COMMIT');
@@ -373,6 +415,7 @@ module.exports = {
   isCoordinator,
   getStaffDepartmentId,
   listMyCourses,
+  findMyCourseRecord,
   updateMyCourse,
   listCoordinatorCourses,
   getStaffForAssignment,

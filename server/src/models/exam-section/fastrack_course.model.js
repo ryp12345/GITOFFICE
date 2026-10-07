@@ -15,8 +15,8 @@ async function findAll() {
             ft.course_type,
             fi.ft_instance_name,
             fi.academic_year,
-            COALESCE(fs.classes_conducted, 0) AS classes_conducted,
-            COALESCE(fs.labs_conducted, 0) AS labs_conducted,
+            fs.classes_conducted,
+            fs.labs_conducted,
             fs.status AS staff_status
      FROM fastrack_courses fc
      LEFT JOIN departments d ON d.id = fc.department_id
@@ -26,6 +26,7 @@ async function findAll() {
        SELECT fs.classes_conducted, fs.labs_conducted, fs.status
        FROM fastrack_staffs fs
        WHERE fs.course_id = fc.id
+       ORDER BY fs.id
        LIMIT 1
      ) fs ON true
      ORDER BY fc.id ASC`
@@ -66,8 +67,8 @@ async function findByInstanceAndYear(instanceId, academicYear) {
             ft.course_type,
             fi.ft_instance_name,
             fi.academic_year,
-            COALESCE(fs.classes_conducted, 0) AS classes_conducted,
-            COALESCE(fs.labs_conducted, 0) AS labs_conducted,
+            fs.classes_conducted,
+            fs.labs_conducted,
             fs.status AS staff_status
      FROM fastrack_courses fc
      LEFT JOIN departments d ON d.id = fc.department_id
@@ -77,6 +78,7 @@ async function findByInstanceAndYear(instanceId, academicYear) {
        SELECT fs.classes_conducted, fs.labs_conducted, fs.status
        FROM fastrack_staffs fs
        WHERE fs.course_id = fc.id
+       ORDER BY fs.id
        LIMIT 1
      ) fs ON true
      WHERE fi.id = $1 AND fi.academic_year = $2

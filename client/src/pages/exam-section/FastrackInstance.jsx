@@ -4,6 +4,7 @@ import Notification from '../../components/common/Notification';
 import Header from '../../components/layout/Header';
 import SidebarExamSection from '../../components/layout/SidebarExamSection';
 import { getInstances, getInstanceLookup, getInstanceById, createInstance, updateInstance, deleteInstance } from '../../api/examSectionApi';
+import { toLocalDateInput } from '../../components/fastrack/fastrackUi';
 
 const emptyForm = {
   ft_instance_name: '',
@@ -90,7 +91,7 @@ export default function FastrackInstancePage() {
         total_fees_collected: row.total_fees_collected || data.total_fees_collected || '',
         max_theory_class: row.max_theory_class || data.max_theory_class || '',
         max_lab_class: row.max_lab_class || data.max_lab_class || '',
-        deadline_date: normalizeDate(row.deadline_date ? row.deadline_date.slice(0, 16) : (data.deadline_date ? data.deadline_date.slice(0, 16) : '')),
+        deadline_date: normalizeDate(row.deadline_date || data.deadline_date),
         program_ids: programIds,
         semesters: selectedSemesters,
       });
@@ -148,8 +149,15 @@ export default function FastrackInstancePage() {
         semesters: form.semesters,
       };
       if (editingId) {
-        await updateInstance(editingId, payload);
-        showNotification('Fastrack instance updated successfully!', 'success');
+        const res = await updateInstance(editingId, payload);
+        const result = res?.data || {};
+        if (result.notify_error) {
+          showNotification(`Fastrack instance updated, but the deadline email failed: ${result.notify_error}`, 'error');
+        } else if (result.notified_staff > 0) {
+          showNotification(`Fastrack instance updated and emails sent to ${result.notified_staff} pending staff.`, 'success');
+        } else {
+          showNotification('Fastrack instance updated successfully!', 'success');
+        }
       } else {
         await createInstance(payload);
         showNotification('Fastrack Instances Added Successfully', 'success');
@@ -171,7 +179,6 @@ export default function FastrackInstancePage() {
       showNotification('Fastrack Instance Deleted successfully', 'success');
     } catch (e) {
       const msg = e.response?.data?.message || e.message || 'Failed to delete';
-      alert(msg);
       showNotification(msg, 'error');
     }
   };
@@ -181,12 +188,7 @@ export default function FastrackInstancePage() {
     setTimeout(() => setNotification({ show: false, message: '', type: '' }), 4000);
   };
 
-  const normalizeDate = (value) => {
-    if (!value) return '';
-    if (typeof value === 'string') return value.slice(0, 10);
-    if (value instanceof Date) return value.toISOString().slice(0, 10);
-    return '';
-  };
+  const normalizeDate = toLocalDateInput;
 
   const toggleProgram = (id) => {
     setForm(prev => ({
@@ -491,8 +493,8 @@ export default function FastrackInstancePage() {
                         {editingId && (
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                             <div>
-                              <label className="block mb-2 text-sm font-medium text-gray-700">Deadline Date n Time <span className="text-red-500">*</span></label>
-                              <input type="datetime-local" value={form.deadline_date} onChange={e => setForm({ ...form, deadline_date: e.target.value })} className="block w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500" required />
+                              <label className="block mb-2 text-sm font-medium text-gray-700">Deadline Date <span className="text-red-500">*</span> <span className="text-xs text-gray-500">(5:00 PM)</span></label>
+                              <input type="date" value={form.deadline_date} onChange={e => setForm({ ...form, deadline_date: e.target.value })} className="block w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500" required />
                             </div>
                           </div>
                         )}

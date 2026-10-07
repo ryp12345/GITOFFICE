@@ -40,6 +40,8 @@ async function listHodCourses(departmentId) {
        fi.ft_instance_name,
        fi.max_theory_class,
        fi.max_lab_class,
+       fi.start_date,
+       fi.end_date,
        json_agg(json_build_object(
          'id', fs.id,
          'staff_id', fs.staff_id,
@@ -53,16 +55,16 @@ async function listHodCourses(departmentId) {
          'staff', json_build_object('id', s.id, 'fname', s.fname, 'mname', s.mname, 'lname', s.lname),
          'instructorForeman', json_build_object('id', inf.id, 'fname', inf.fname, 'mname', inf.mname, 'lname', inf.lname),
          'peonAttender', json_build_object('id', pa.id, 'fname', pa.fname, 'mname', pa.mname, 'lname', pa.lname)
-       )) FILTER (WHERE fs.id IS NOT NULL) AS fastrack_staffs
+       ) ORDER BY fs.id) AS fastrack_staffs
      FROM fastrack_courses fc
-     JOIN ftcourses fct ON fct.id = fc.ft_course_type_id
+     LEFT JOIN ftcourses fct ON fct.id = fc.ft_course_type_id
      JOIN fastrack_instances fi ON fi.id = fc.ft_instance_id
-     LEFT JOIN fastrack_staffs fs ON fs.course_id = fc.id
+     JOIN fastrack_staffs fs ON fs.course_id = fc.id AND fs.staff_id IS NOT NULL
      LEFT JOIN staff s ON s.id = fs.staff_id
      LEFT JOIN staff inf ON inf.id = fs.instructor_foreman_id
      LEFT JOIN staff pa ON pa.id = fs.peon_attender_id
      WHERE fc.department_id = $1
-     GROUP BY fc.id, fct.course_type, fi.academic_year, fi.ft_instance_name, fi.max_theory_class, fi.max_lab_class
+     GROUP BY fc.id, fct.course_type, fi.id
      ORDER BY fc.id DESC`,
     [departmentId]
   );
@@ -78,11 +80,14 @@ async function filterHodCourses(departmentId, academicYear, instanceId) {
        fc.course_name,
        fc.ft_course_type_id,
        fc.ft_instance_id,
+       fc.no_of_students,
        fct.course_type,
        fi.academic_year,
        fi.ft_instance_name,
        fi.max_theory_class,
        fi.max_lab_class,
+       fi.start_date,
+       fi.end_date,
        json_agg(json_build_object(
          'id', fs.id,
          'staff_id', fs.staff_id,
@@ -96,34 +101,63 @@ async function filterHodCourses(departmentId, academicYear, instanceId) {
          'staff', json_build_object('id', s.id, 'fname', s.fname, 'mname', s.mname, 'lname', s.lname),
          'instructorForeman', json_build_object('id', inf.id, 'fname', inf.fname, 'mname', inf.mname, 'lname', inf.lname),
          'peonAttender', json_build_object('id', pa.id, 'fname', pa.fname, 'mname', pa.mname, 'lname', pa.lname)
-       )) FILTER (WHERE fs.id IS NOT NULL) AS fastrack_staffs
+       ) ORDER BY fs.id) AS fastrack_staffs
      FROM fastrack_courses fc
-     JOIN ftcourses fct ON fct.id = fc.ft_course_type_id
+     LEFT JOIN ftcourses fct ON fct.id = fc.ft_course_type_id
      JOIN fastrack_instances fi ON fi.id = fc.ft_instance_id
-     LEFT JOIN fastrack_staffs fs ON fs.course_id = fc.id
+     JOIN fastrack_staffs fs ON fs.course_id = fc.id AND fs.staff_id IS NOT NULL
      LEFT JOIN staff s ON s.id = fs.staff_id
      LEFT JOIN staff inf ON inf.id = fs.instructor_foreman_id
      LEFT JOIN staff pa ON pa.id = fs.peon_attender_id
      WHERE fc.department_id = $1
        AND fc.ft_instance_id = $2
        AND fi.academic_year = $3
-     GROUP BY fc.id, fct.course_type, fi.academic_year, fi.ft_instance_name, fi.max_theory_class, fi.max_lab_class
+     GROUP BY fc.id, fct.course_type, fi.id
      ORDER BY fc.id DESC`,
     [departmentId, instanceId, academicYear]
   );
   return result.rows;
 }
 
-// HOD: approve staff records
-async function approveHodRecords(staffIds, courseIds) {
-  if (!staffIds.length || !courseIds.length) return { success: false, message: 'No staff or course selected' };
+// HOD: approve the selected (course, staff) records.
+// Only the HOD's department, and only records the coordinator has Verified.
+async function approveHodRecords(items, departmentId) {
+  const client = await pool.connect();
+  let approved = 0;
+  try {
+    await client.query('BEGIN');
+    for (const item of items) {
+      const r = await client.query(
+        `UPDATE fastrack_staffs fs SET status = 'Approved', updated_at = NOW()
+           FROM fastrack_courses fc
+          WHERE fc.id = fs.course_id
+            AND fs.course_id = $1 AND fs.staff_id = $2
+            AND fc.department_id = $3
+            AND fs.status = 'Verified'`,
+        [item.course_id, item.staff_id, departmentId]
+      );
+      approved += r.rowCount;
+    }
+    await client.query('COMMIT');
+  } catch (e) {
+    await client.query('ROLLBACK');
+    throw e;
+  } finally {
+    client.release();
+  }
+  return { success: true, approved, message: 'Staff records approved successfully.' };
+}
 
-  await pool.query(
-    `UPDATE fastrack_staffs SET status = 'Approved'
-     WHERE staff_id = ANY($1) AND course_id = ANY($2)`,
-    [staffIds, courseIds]
+// HOD: a fastrack_staffs record, only if it belongs to the department
+async function findStaffRecordInDepartment(staffRecordId, departmentId) {
+  const r = await pool.query(
+    `SELECT fs.id, fs.status
+       FROM fastrack_staffs fs
+       JOIN fastrack_courses fc ON fc.id = fs.course_id
+      WHERE fs.id = $1 AND fc.department_id = $2`,
+    [staffRecordId, departmentId]
   );
-  return { success: true, message: 'Staff records approved successfully.' };
+  return r.rows[0] || null;
 }
 
 // HOD: get course type for a fastrack_staff record
@@ -186,32 +220,22 @@ async function listHodFastrackManagement(departmentId) {
        fs.status,
        fs.staff_id,
        fs.instructor_foreman_id,
-       fs.peon_attender_id
+       fs.peon_attender_id,
+       fs.id AS staff_record_id,
+       CASE WHEN s.id IS NULL THEN NULL ELSE json_build_object('id', s.id, 'fname', s.fname, 'mname', s.mname, 'lname', s.lname) END AS "assignedStaff",
+       CASE WHEN inf.id IS NULL THEN NULL ELSE json_build_object('id', inf.id, 'fname', inf.fname, 'mname', inf.mname, 'lname', inf.lname) END AS "instructorForeman",
+       CASE WHEN pa.id IS NULL THEN NULL ELSE json_build_object('id', pa.id, 'fname', pa.fname, 'mname', pa.mname, 'lname', pa.lname) END AS "peonAttender"
      FROM fastrack_courses fc
      LEFT JOIN ftcourses fct ON fct.id = fc.ft_course_type_id
      LEFT JOIN fastrack_staffs fs ON fs.course_id = fc.id
+     LEFT JOIN staff s ON s.id = fs.staff_id
+     LEFT JOIN staff inf ON inf.id = fs.instructor_foreman_id
+     LEFT JOIN staff pa ON pa.id = fs.peon_attender_id
      WHERE fc.department_id = $1
-     ORDER BY fc.id DESC`,
+     ORDER BY fc.id DESC, fs.id`,
     [departmentId]
   );
-
-  // Map to include staff details
-  const rows = result.rows;
-  for (const row of rows) {
-    if (row.staff_id) {
-      const s = await pool.query('SELECT id, fname, mname, lname FROM staff WHERE id = $1', [row.staff_id]);
-      row.assignedStaff = s.rows[0] || null;
-    }
-    if (row.instructor_foreman_id) {
-      const s = await pool.query('SELECT id, fname, mname, lname FROM staff WHERE id = $1', [row.instructor_foreman_id]);
-      row.instructorForeman = s.rows[0] || null;
-    }
-    if (row.peon_attender_id) {
-      const s = await pool.query('SELECT id, fname, mname, lname FROM staff WHERE id = $1', [row.peon_attender_id]);
-      row.peonAttender = s.rows[0] || null;
-    }
-  }
-  return rows;
+  return result.rows;
 }
 
 // Lookup data for filter dropdowns
@@ -233,6 +257,7 @@ module.exports = {
   filterHodCourses,
   approveHodRecords,
   getCourseTypeForStaff,
+  findStaffRecordInDepartment,
   processJustification,
   listHodFastrackManagement,
   getHodLookupData,

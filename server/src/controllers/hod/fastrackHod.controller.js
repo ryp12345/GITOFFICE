@@ -38,8 +38,13 @@ async function filterCourses(req, res, next) {
 async function approveRecords(req, res, next) {
   try {
     const { deptId } = await resolveHodDept(req);
-    const { staff_ids, course_ids } = req.body;
-    const result = await hodFastrackModel.approveHodRecords(staff_ids || [], course_ids || []);
+    const items = (Array.isArray(req.body.items) ? req.body.items : [])
+      .map((item) => ({ course_id: Number(item?.course_id), staff_id: Number(item?.staff_id) }))
+      .filter((item) => item.course_id > 0 && item.staff_id > 0);
+    if (items.length === 0) {
+      throw { statusCode: 400, message: 'Please select at least one staff member to approve.' };
+    }
+    const result = await hodFastrackModel.approveHodRecords(items, deptId);
     res.json(result);
   } catch (e) { next(e); }
 }
@@ -58,11 +63,26 @@ async function getCourseType(req, res, next) {
 async function processJustification(req, res, next) {
   try {
     const { deptId } = await resolveHodDept(req);
-    const { id } = req.params;
-    const { classes_conducted, labs_conducted, ft_justification } = req.body;
-    const result = await hodFastrackModel.processJustification(Number(id), {
-      classes_conducted,
-      labs_conducted,
+    const id = Number(req.params.id);
+    const record = await hodFastrackModel.findStaffRecordInDepartment(id, deptId);
+    if (!record) throw { statusCode: 404, message: 'Staff record not found.' };
+    if (record.status === 'Approved') throw { statusCode: 409, message: 'This record is already Approved.' };
+
+    // Laravel rule: ft_justification required|string|max:255
+    const ft_justification = String(req.body.ft_justification || '').trim();
+    if (!ft_justification) throw { statusCode: 422, message: 'The justification field is required.' };
+    if (ft_justification.length > 255) throw { statusCode: 422, message: 'The justification may not be greater than 255 characters.' };
+
+    const parseCount = (value, label) => {
+      if (value === undefined || value === null || String(value).trim() === '') return undefined;
+      const n = Number(value);
+      if (!Number.isInteger(n) || n < 0) throw { statusCode: 422, message: `${label} must be a whole number of 0 or more` };
+      return n;
+    };
+
+    const result = await hodFastrackModel.processJustification(id, {
+      classes_conducted: parseCount(req.body.classes_conducted, 'Classes conducted'),
+      labs_conducted: parseCount(req.body.labs_conducted, 'Labs conducted'),
       ft_justification,
     });
     res.json(result);

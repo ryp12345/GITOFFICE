@@ -125,8 +125,8 @@ async function updateInstance(id, {
   max_lab_class,
   total_fees_collected,
   deadline_date,
-  programIds = [],
-  semesters = []
+  programIds,
+  semesters
 }) {
   const client = await pool.connect();
   try {
@@ -151,12 +151,16 @@ async function updateInstance(id, {
 
     const instance = rows[0];
 
-    await client.query(
-      `DELETE FROM fastrack_instance_program WHERE fastrack_instance_id = $1`,
-      [id]
-    );
+    // Only replace the program/semester mapping when the caller sent one
+    const replaceMapping = Array.isArray(programIds) && Array.isArray(semesters);
+    if (replaceMapping) {
+      await client.query(
+        `DELETE FROM fastrack_instance_program WHERE fastrack_instance_id = $1`,
+        [id]
+      );
+    }
 
-    if (programIds.length > 0 && semesters.length > 0) {
+    if (replaceMapping && programIds.length > 0 && semesters.length > 0) {
       const values = [];
       const params = [];
       let idx = 1;

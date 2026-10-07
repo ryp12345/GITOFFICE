@@ -37,7 +37,31 @@ async function updateMyCourse(req, res, next) {
   try {
     const { staffId } = await resolveTeachingStaff(req);
     const courseId = Number(req.params.id);
-    const { classes_conducted, labs_conducted } = req.body;
+    if (!Number.isInteger(courseId) || courseId <= 0) {
+      throw { statusCode: 400, message: 'Valid course id is required' };
+    }
+
+    // Laravel rule: nullable|integer|min:0, and a blank field means "leave unchanged"
+    const parseCount = (value, label) => {
+      if (value === undefined || value === null || String(value).trim() === '') return undefined;
+      const n = Number(value);
+      if (!Number.isInteger(n) || n < 0) {
+        throw { statusCode: 422, message: `${label} must be a whole number of 0 or more` };
+      }
+      return n;
+    };
+    const classes_conducted = parseCount(req.body.classes_conducted, 'Classes conducted');
+    const labs_conducted = parseCount(req.body.labs_conducted, 'Labs conducted');
+
+    if (classes_conducted === undefined && labs_conducted === undefined && !req.file) {
+      throw { statusCode: 422, message: 'Nothing to update.' };
+    }
+
+    const existing = await fastrackStaffModel.findMyCourseRecord(staffId, courseId);
+    if (existing && ['Approved', 'Verified'].includes(existing.status)) {
+      throw { statusCode: 403, message: `This record is already ${existing.status} and can no longer be changed.` };
+    }
+
     let document = null;
 
     if (req.file) {
@@ -53,8 +77,8 @@ async function updateMyCourse(req, res, next) {
     }
 
     const row = await fastrackStaffModel.updateMyCourse(staffId, courseId, {
-      classes_conducted: classes_conducted ? Number(classes_conducted) : null,
-      labs_conducted: labs_conducted ? Number(labs_conducted) : null,
+      classes_conducted,
+      labs_conducted,
       document,
     });
 
@@ -182,7 +206,7 @@ async function verifyRecords(req, res, next) {
       throw { statusCode: 400, message: 'No items to verify' };
     }
 
-    await fastrackStaffModel.verifyRecords(items);
+    await fastrackStaffModel.verifyRecords(items, deptId);
     res.json({ success: true, message: 'Staff Fastrack Records Verified Successfully.' });
   } catch (e) {
     next(e);
