@@ -19,7 +19,9 @@ import HODFastrackCoursesPage from '../pages/hod/HODFastrackCourses';
 import HODFastrackInsightsPage from '../pages/hod/HODFastrackInsights';
 import HODCoordinatorListPage from '../pages/hod/HODCoordinatorList';
 import HODCoordinatorViewPage from '../pages/hod/HODCoordinatorView';
-import HODActivityReport from '../pages/hod/activityReports/HODActivityReport';
+import DepartmentActivityReport from '../pages/activityReports/DepartmentActivityReport';
+import EgovDashboard from '../pages/egov/Dashboard';
+import { getEgovReport, validateEgovRecord } from '../api/egovApi';
 import LeaveApplicationPage from '../pages/leave_management/LeaveApplication';
 import LeaveListPage from '../pages/leave_management/LeaveList';
 import SidebarHOD from '../components/layout/SidebarHOD';
@@ -89,6 +91,27 @@ import FastrackPayPage from '../pages/exam-section/FastrackPay';
 import FastrackExpensesPage from '../pages/exam-section/FastrackExpenses';
 import FastrackInsightsPage from '../pages/exam-section/FastrackInsights';
 import CoeprogramPage from '../pages/exam-section/Coeprogram';
+
+// Professional Activity and Research menus shared by the HOD (/hod...) and e-Governance admin
+// (/egov-admin...) portals, as [path below the portal prefix, server report key].
+const DEPARTMENT_REPORT_ROUTES = [
+  ['/teaching/professional-activities/attended', 'pa-attended-teaching'],
+  ['/teaching/professional-activities/conducted', 'pa-conducted-teaching'],
+  ['/nonteaching/professional-activities/attended', 'pa-attended-nonteaching'],
+  ['/nonteaching/professional-activities/conducted', 'pa-conducted-nonteaching'],
+  ['/research/conference/attended', 'conference-attended'],
+  ['/research/conference/conducted', 'conference-conducted'],
+  ['/research/publication', 'publication'],
+  ['/research/funded-project', 'funded-project'],
+  ['/research/book-chapters', 'book-chapter'],
+  ['/research/consultancy', 'consultancy'],
+  ['/research/patents', 'patent'],
+  ['/research/copyrights', 'copyright'],
+  ['/research/achievements', 'achievement'],
+  ['/research/reviewer-editor', 'reviewer-editor'],
+];
+
+const EGOV_VALIDATION = { submit: validateEgovRecord };
 
 // StaffViewPage now fetches its own data from API using id
 function StaffViewPageWrapper() {
@@ -197,23 +220,12 @@ export default function AppRoutes() {
           <Route path="/hod/coordinator-management/:id" element={<HODCoordinatorViewPage />} />
 
           {/* Professional Activity and Research menus (read-only department reports) */}
-          {[
-            ['/hod/teaching/professional-activities/attended', 'pa-attended-teaching'],
-            ['/hod/teaching/professional-activities/conducted', 'pa-conducted-teaching'],
-            ['/hod/nonteaching/professional-activities/attended', 'pa-attended-nonteaching'],
-            ['/hod/nonteaching/professional-activities/conducted', 'pa-conducted-nonteaching'],
-            ['/hod/research/conference/attended', 'conference-attended'],
-            ['/hod/research/conference/conducted', 'conference-conducted'],
-            ['/hod/research/publication', 'publication'],
-            ['/hod/research/funded-project', 'funded-project'],
-            ['/hod/research/book-chapters', 'book-chapter'],
-            ['/hod/research/consultancy', 'consultancy'],
-            ['/hod/research/patents', 'patent'],
-            ['/hod/research/copyrights', 'copyright'],
-            ['/hod/research/achievements', 'achievement'],
-            ['/hod/research/reviewer-editor', 'reviewer-editor'],
-          ].map(([path, report]) => (
-            <Route key={path} path={path} element={<HODActivityReport key={report} report={report} />} />
+          {DEPARTMENT_REPORT_ROUTES.map(([path, report]) => (
+            <Route
+              key={path}
+              path={`/hod${path}`}
+              element={<DepartmentActivityReport key={report} report={report} />}
+            />
           ))}
           <Route path="/Faculty Recruitment/asso_pro_recruitment" element={<AssoProRecruitmentPage />} />
           <Route path="/Faculty Recruitment/pro_recruitment" element={<ProRecruitmentPage />} />
@@ -226,6 +238,23 @@ export default function AppRoutes() {
           <Route path="/biometric/daily" element={<DailyDataPage />} />
           <Route path="/biometric/monthly" element={<MonthlyDataPage />} />
           <Route path="/biometric/muster" element={<MusterPage />} />
+        </Route>
+        <Route element={<RoleRoute role="egov_admin" />}>
+          <Route path="/egov-admin" element={<EgovDashboard />} />
+          {DEPARTMENT_REPORT_ROUTES.map(([path, report]) => (
+            <Route
+              key={path}
+              path={`/egov-admin${path}`}
+              element={
+                <DepartmentActivityReport
+                  key={report}
+                  report={report}
+                  loadReport={getEgovReport}
+                  validation={EGOV_VALIDATION}
+                />
+              }
+            />
+          ))}
         </Route>
         <Route element={<RoleRoute role="Registrar" />}>
           <Route path="/registrar" element={<RegistrarDashboard />} />

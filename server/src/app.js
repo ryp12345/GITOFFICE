@@ -105,6 +105,10 @@ app.use('/api/professional-activities', professionalActivityRoutes);
 const researchRoutes = require('./routes/research.routes');
 app.use('/api/research', researchRoutes);
 
+// e-Governance admin portal: department dashboard, reports and record validation
+const egovRoutes = require('./routes/egov.routes');
+app.use('/api/egov', egovRoutes);
+
 const teachingFastrackRoutes = require('./routes/teachingFastrack.routes');
 app.use('/api/teaching/fastrack', teachingFastrackRoutes);
 

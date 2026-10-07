@@ -7,7 +7,8 @@ import SidebarHOD from './SidebarHOD';
 import SidebarRegistrar from './SidebarRegistrar';
 import StaffSidebar from './StaffSidebar';
 import PrincipalDeansidebar from './PrincipalDeansidebar';
-import { ROLE_SUPER_ADMIN, ROLE_ESTABLISHMENT, ROLE_HOD, ROLE_PRINCIPAL, ROLE_DEAN_ADMIN, ROLE_REGISTRAR, ROLE_TEACHING, ROLE_NON_TEACHING, isRoleMatch } from '../../utils/role';
+import SidebarEgov from './SidebarEgov';
+import { ROLE_SUPER_ADMIN, ROLE_ESTABLISHMENT, ROLE_HOD, ROLE_PRINCIPAL, ROLE_DEAN_ADMIN, ROLE_REGISTRAR, ROLE_TEACHING, ROLE_NON_TEACHING, ROLE_EGOV_ADMIN, isRoleMatch } from '../../utils/role';
 
 export default function Sidebar() {
   const { user } = useAuth();
@@ -20,5 +21,6 @@ export default function Sidebar() {
   if (isRoleMatch(user?.role, ROLE_DEAN_ADMIN)) return <PrincipalDeansidebar />;
   if (isRoleMatch(user?.role, ROLE_TEACHING)) return <StaffSidebar />;
   if (isRoleMatch(user?.role, ROLE_NON_TEACHING)) return <StaffSidebar />;
+  if (isRoleMatch(user?.role, ROLE_EGOV_ADMIN)) return <SidebarEgov />;
   return null;
 }

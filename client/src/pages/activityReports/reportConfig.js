@@ -1,6 +1,6 @@
-// Column, filter and document metadata for every page under the HOD "Professional Activity"
-// and "Research" menus. Each entry follows the matching Laravel blade in
-// resources/views/HOD/{Teaching,Non-Teaching}/..., keyed by the server report it reads.
+// Column, filter and document metadata for every page under the HOD and e-Governance admin
+// "Professional Activity" and "Research" menus. Each entry follows the matching Laravel blade in
+// resources/views/{HOD,egov}/..., keyed by the server report it reads.
 //
 // column.type:
 //   'staff'      - fname mname lname of the owning staff member
@@ -31,7 +31,7 @@ const NO_OF_DAYS = { key: 'no_of_days', label: 'No Of Days' };
 
 const SPAN_FILTER = { mode: 'span', from: 'from_date', to: 'to_date', fromLabel: 'From Date', toLabel: 'To Date' };
 
-export const HOD_REPORTS = {
+export const DEPARTMENT_REPORTS = {
   'pa-attended-teaching': {
     title: 'Professional Activity Attended',
     group: 'Professional Activity · Teaching',

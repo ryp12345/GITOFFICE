@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 
-import Notification from '../../../components/common/Notification';
-import Header from '../../../components/layout/Header';
-import Sidebar from '../../../components/layout/Sidebar';
-import { useAuth } from '../../../context/AuthContext';
-import api from '../../../api/axios';
-import { getHodActivityReport } from '../../../api/hodApi';
+import Notification from '../../components/common/Notification';
+import Header from '../../components/layout/Header';
+import Sidebar from '../../components/layout/Sidebar';
+import { useAuth } from '../../context/AuthContext';
+import api from '../../api/axios';
+import { getHodActivityReport } from '../../api/hodApi';
 import {
   ACTION_TH_CLASS,
   TH_CLASS,
@@ -15,8 +15,8 @@ import {
   notApplicable,
   rowBackground,
   toInputDate,
-} from '../../staff/research/researchShared';
-import { HOD_REPORTS } from './reportConfig';
+} from '../staff/research/researchShared';
+import { DEPARTMENT_REPORTS } from './reportConfig';
 
 const PAGE_SIZES = [10, 25, 50, 100];
 
@@ -114,14 +114,20 @@ function CountCard({ label, count }) {
   );
 }
 
-export default function HODActivityReport({ report }) {
-  const config = HOD_REPORTS[report];
+// Shared page for the HOD (read-only) and e-Governance admin (read + validate) portals.
+//   loadReport(token, report)            - fetches { department, rows, counts }
+//   validation.submit(token, report, id, { validation_status, reason })
+//                                        - when given, each row gets a Validate action
+// Routes mount one instance per report with key={report}, so filters start fresh per page.
+export default function DepartmentActivityReport({ report, loadReport = getHodActivityReport, validation = null }) {
+  const config = DEPARTMENT_REPORTS[report];
   const { token } = useAuth() || {};
 
   const [department, setDepartment] = useState(null);
   const [rows, setRows] = useState([]);
   const [counts, setCounts] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [reloadKey, setReloadKey] = useState(0);
   const [notification, setNotification] = useState({ show: false, message: '', type: 'info' });
 
   const [search, setSearch] = useState('');
@@ -131,18 +137,15 @@ export default function HODActivityReport({ report }) {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(PAGE_SIZES[0]);
 
+  const [validatingRow, setValidatingRow] = useState(null);
+
   useEffect(() => {
     let active = true;
 
-    setLoading(true);
-    setRows([]);
-    setCounts([]);
-    setSearch('');
-    setFromInput('');
-    setToInput('');
-    setAppliedRange({ from: '', to: '' });
+    // A reload after validating keeps the current table on screen instead of flashing "Loading".
+    if (reloadKey === 0) setLoading(true);
 
-    getHodActivityReport(token, report)
+    loadReport(token, report)
       .then((response) => {
         if (!active) return;
         const payload = response?.data?.data || {};
@@ -165,7 +168,13 @@ export default function HODActivityReport({ report }) {
     return () => {
       active = false;
     };
-  }, [token, report, config.title]);
+  }, [token, report, config.title, loadReport, reloadKey]);
+
+  const handleValidated = (message) => {
+    setValidatingRow(null);
+    setNotification({ show: true, message, type: 'success' });
+    setReloadKey((current) => current + 1);
+  };
 
   const filteredRows = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -336,7 +345,7 @@ export default function HODActivityReport({ report }) {
                           {column.label}
                         </th>
                       ))}
-                      <th className={ACTION_TH_CLASS}>Document</th>
+                      <th className={ACTION_TH_CLASS}>{validation ? 'Action' : 'Document'}</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-200 bg-white">
@@ -370,6 +379,7 @@ export default function HODActivityReport({ report }) {
                               className="sticky right-0 z-10 border-l border-gray-200 px-6 py-4 text-center"
                               style={{ backgroundColor: rowBackground(row) }}
                             >
+                              <div className="flex items-center justify-center gap-2">
                               {documentUrl ? (
                                 <a
                                   href={documentUrl}
@@ -387,6 +397,21 @@ export default function HODActivityReport({ report }) {
                               ) : (
                                 <span className="text-sm text-slate-400">-</span>
                               )}
+                              {validation && (
+                                <button
+                                  type="button"
+                                  onClick={() => setValidatingRow(row)}
+                                  title="Validate"
+                                  aria-label="Validate record"
+                                  className="inline-flex items-center justify-center rounded-lg bg-blue-700 p-2 text-white hover:bg-blue-800"
+                                >
+                                  <svg {...iconProps()}>
+                                    <path d="M9 12l2 2 4-4" />
+                                    <path d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                  </svg>
+                                </button>
+                              )}
+                              </div>
                             </td>
                           </tr>
                         );
@@ -437,8 +462,146 @@ export default function HODActivityReport({ report }) {
                 </div>
               </div>
             </div>
+
+            {validation && validatingRow && (
+              <ValidationModal
+                title={config.title}
+                row={validatingRow}
+                onClose={() => setValidatingRow(null)}
+                onSubmit={(payload) => validation.submit(token, report, validatingRow.id, payload)}
+                onDone={handleValidated}
+              />
+            )}
           </div>
         </main>
+      </div>
+    </div>
+  );
+}
+
+// The Laravel "Validate the <menu> Details" modal: a Valid / In-Valid choice, with a Reason
+// field that only appears for In-Valid. A rejected record turns red on the staff member's page
+// with this reason, and returns as "updated" once they edit it.
+function ValidationModal({ title, row, onClose, onSubmit, onDone }) {
+  const [status, setStatus] = useState('');
+  const [reason, setReason] = useState('');
+  const [error, setError] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+    if (saving) return;
+
+    if (status !== 'valid' && status !== 'invalid') {
+      setError('Please choose a validate type.');
+      return;
+    }
+
+    setSaving(true);
+    setError('');
+    try {
+      const response = await onSubmit({ validation_status: status, reason: status === 'invalid' ? reason.trim() : '' });
+      onDone(response?.data?.message || 'Validation status updated successfully');
+    } catch (requestError) {
+      const fieldErrors = requestError?.response?.data?.errors;
+      setError(
+        (fieldErrors && Object.values(fieldErrors)[0]) ||
+          requestError?.response?.data?.message ||
+          'Failed to update the validation status.'
+      );
+      setSaving(false);
+    }
+  };
+
+  const close = () => {
+    if (!saving) onClose();
+  };
+
+  const currentStatus = row.validation_status || 'new';
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center px-4" role="dialog" aria-modal="true">
+      <div className="fixed inset-0 bg-gray-500 bg-opacity-75" onClick={close} />
+      <div className="relative w-full max-w-2xl overflow-hidden rounded-lg bg-white text-left shadow-xl">
+        <div className="flex items-center justify-between bg-blue-600 px-6 py-4">
+          <h3 className="text-lg font-medium text-white">Validate the {title} Details</h3>
+          <button type="button" onClick={close} aria-label="Close" className="text-white hover:text-gray-200">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-5 px-6 py-5">
+          <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-slate-700">
+            <div>
+              <span className="font-medium">Staff:</span> {staffName(row)}
+              {row.egov_id && (
+                <>
+                  {' '}
+                  · <span className="font-medium">E-Gov ID:</span> {row.egov_id}
+                </>
+              )}
+            </div>
+            <div className="mt-1">
+              <span className="font-medium">Current status:</span> <span className="capitalize">{currentStatus}</span>
+              {currentStatus === 'invalid' && row.reason && <span> — {row.reason}</span>}
+            </div>
+          </div>
+
+          {error && <div className="rounded border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>}
+
+          <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+            <label className="block text-sm font-medium text-gray-700">
+              Validate Type <span className="text-red-500">*</span>
+              <select
+                value={status}
+                onChange={(event) => {
+                  setStatus(event.target.value);
+                  setError('');
+                }}
+                className="mt-2 block w-full rounded-lg border border-gray-300 px-4 py-3 focus:border-blue-500 focus:ring-2 focus:ring-blue-500"
+                required
+              >
+                <option value="">Choose One</option>
+                <option value="valid">Valid</option>
+                <option value="invalid">In-Valid</option>
+              </select>
+            </label>
+
+            {status === 'invalid' && (
+              <label className="block text-sm font-medium text-gray-700">
+                Reason
+                <input
+                  type="text"
+                  value={reason}
+                  maxLength={225}
+                  onChange={(event) => setReason(event.target.value)}
+                  placeholder="Reason"
+                  className="mt-2 block w-full rounded-lg border border-gray-300 px-4 py-3 focus:border-blue-500 focus:ring-2 focus:ring-blue-500"
+                />
+              </label>
+            )}
+          </div>
+
+          <div className="flex justify-end gap-3 pt-2">
+            <button
+              type="button"
+              onClick={close}
+              disabled={saving}
+              className="rounded-lg border border-gray-300 bg-white px-6 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50"
+            >
+              Close
+            </button>
+            <button
+              type="submit"
+              disabled={saving}
+              className="rounded-lg bg-blue-600 px-6 py-3 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-60"
+            >
+              {saving ? 'Updating...' : 'Update'}
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   );

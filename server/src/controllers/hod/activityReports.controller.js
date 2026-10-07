@@ -1,5 +1,5 @@
 const { findDepartmentByHodUserId } = require('../../models/hodDepartmentOverview.model');
-const hodActivityReportsModel = require('../../models/hod/hodActivityReports.model');
+const hodActivityReportsModel = require('../../models/departmentActivityReports.model');
 
 // GET /api/hod/activity-reports/:report
 // The department always comes from the signed-in HOD (Laravel read it from session('deptid')),

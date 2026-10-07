@@ -1,5 +1,5 @@
-const { pool } = require('../../config/db');
-const { normalizeDateColumns } = require('../../utils/pgDate');
+const { pool } = require('../config/db');
+const { normalizeDateColumns } = require('../utils/pgDate');
 
 // Every DATE column across the professional activity and research tables.
 const DATE_COLUMNS = [
@@ -13,9 +13,10 @@ const DATE_COLUMNS = [
   'reviewed_date',
 ];
 
-// Read-only department reports behind the HOD "Professional Activity" and "Research" menus.
-// Laravel served each one from its own near-identical query in HodController /
-// HodResearchController; here one registry describes the table, how a record reaches its
+// Department reports behind the "Professional Activity" and "Research" menus of the HOD
+// (read-only) and e-Governance admin (read + validate) portals. Laravel served each one from
+// its own near-identical query in HodController / HodResearchController / EgovAdminController /
+// EgovResearchController; here one registry describes the table, how a record reaches its
 // staff, which employee type it belongs to and which count cards sit above the table.
 //
 // ownership:
@@ -213,9 +214,13 @@ function normalize(value) {
 // One row per (record, staff member) pair. Membership and employee type are tested with
 // EXISTS rather than joins, so a staff member with several department_staff or employee_types
 // rows does not duplicate their records the way the Laravel joins could.
-async function listDepartmentReport(reportKey, departmentId) {
-  const report = getReport(reportKey);
-
+//
+// options.activeMembersOnly: list only staff who are still active in the department. The HOD
+//   pages leave it off (see activeListOnly above); every e-Governance page in Laravel joined
+//   department_staff.status = 'active', so the egov portal turns it on.
+// options.recordId: restrict the query to one record, used to prove a record belongs to the
+//   caller's department before it is validated.
+async function selectDepartmentRows(report, departmentId, options = {}) {
   const ownerJoin = report.ownership
     ? `JOIN ${report.ownership.pivot} p ON p.${report.ownership.fk} = r.id
        JOIN staff s ON s.id = p.staff_id`
@@ -234,6 +239,15 @@ async function listDepartmentReport(reportKey, departmentId) {
          AND ds.department_id = $1
     )`;
 
+  const params = [departmentId, report.employeeType];
+  let recordFilter = '';
+  if (options.recordId !== undefined) {
+    params.push(options.recordId);
+    recordFilter = `AND r.id = $${params.length}`;
+  }
+
+  const activeOnly = options.activeMembersOnly || report.activeListOnly;
+
   const { rows } = await pool.query(
     `SELECT DISTINCT ON (r.${report.orderBy}, r.id, s.id)
             r.*,
@@ -244,17 +258,26 @@ async function listDepartmentReport(reportKey, departmentId) {
             ${activeMembership} AS is_active_member
        FROM ${report.table} r
        ${ownerJoin}
-      WHERE ${report.activeListOnly ? activeMembership : anyMembership}
+      WHERE ${activeOnly ? activeMembership : anyMembership}
         AND EXISTS (
               SELECT 1 FROM employee_types et
                WHERE et.staff_id = s.id
                  AND LOWER(et.employee_type) = LOWER($2)
             )
+        ${recordFilter}
       ORDER BY r.${report.orderBy} DESC NULLS LAST, r.id DESC, s.id`,
-    [departmentId, report.employeeType]
+    params
   );
 
   rows.forEach((row) => normalizeDateColumns(row, DATE_COLUMNS));
+  return rows;
+}
+
+async function listDepartmentReport(reportKey, departmentId, options = {}) {
+  const report = getReport(reportKey);
+  const rows = await selectDepartmentRows(report, departmentId, {
+    activeMembersOnly: options.activeMembersOnly,
+  });
 
   const activeRows = rows.filter((row) => row.is_active_member);
   const counts = report.counts.map((card) => ({
@@ -265,8 +288,54 @@ async function listDepartmentReport(reportKey, departmentId) {
   return { rows, counts };
 }
 
+// Record totals for the e-Governance dashboard cards: one entry per (record, staff) pair of
+// active members, which is the same row set each listing page shows.
+async function countDepartmentRecords(reportKeys, departmentId) {
+  const totals = {};
+  for (const key of reportKeys) {
+    const rows = await selectDepartmentRows(getReport(key), departmentId, { activeMembersOnly: true });
+    totals[key] = rows.length;
+  }
+  return totals;
+}
+
+const VALIDATION_STATUSES = ['valid', 'invalid'];
+
+// EgovUpdateValidationStatusController: the status is always written, the reason only when the
+// record is rejected (an earlier reason is left in place when a record is later accepted).
+// Laravel looked the record up by id alone, so any egov admin could validate any department's
+// record; here the record must be listed for the caller's department first.
+async function setValidationStatus(reportKey, departmentId, recordId, status, reason) {
+  const report = getReport(reportKey);
+
+  const owned = await selectDepartmentRows(report, departmentId, {
+    activeMembersOnly: true,
+    recordId,
+  });
+  if (owned.length === 0) {
+    const error = new Error('Record not found in your department');
+    error.statusCode = 404;
+    throw error;
+  }
+
+  const { rows } = await pool.query(
+    `UPDATE ${report.table}
+        SET validation_status = $2,
+            reason = CASE WHEN $2 = 'invalid' THEN $3 ELSE reason END,
+            updated_at = NOW()
+      WHERE id = $1
+      RETURNING id, validation_status, reason`,
+    [recordId, status, reason]
+  );
+
+  return rows[0];
+}
+
 module.exports = {
   REPORTS,
+  VALIDATION_STATUSES,
   getReport,
   listDepartmentReport,
+  countDepartmentRecords,
+  setValidationStatus,
 };
