@@ -97,7 +97,7 @@ async function listCoordinatorCourses(departmentId) {
        fc.ft_instance_id,
        fc.department_id,
        fc.no_of_students,
-       fc.amount,
+       dpt.dept_shortname,
        fct.course_type,
        fct.Is_Remunerated,
        fi.academic_year,
@@ -133,14 +133,15 @@ async function listCoordinatorCourses(departmentId) {
          )
        )) FILTER (WHERE fs.id IS NOT NULL) AS fastrack_staffs
      FROM fastrack_courses fc
-     JOIN ftcourses fct ON fct.id = fc.ft_course_type_id
+     LEFT JOIN ftcourses fct ON fct.id = fc.ft_course_type_id
      JOIN fastrack_instances fi ON fi.id = fc.ft_instance_id
+     LEFT JOIN departments dpt ON dpt.id = fc.department_id
      LEFT JOIN fastrack_staffs fs ON fs.course_id = fc.id
      LEFT JOIN staff s ON s.id = fs.staff_id
      LEFT JOIN staff inf ON inf.id = fs.instructor_foreman_id
      LEFT JOIN staff pa ON pa.id = fs.peon_attender_id
      WHERE fc.department_id = $1
-     GROUP BY fc.id, fct.course_type, fct.Is_Remunerated, fi.academic_year, fi.ft_instance_name, fi.max_theory_class, fi.max_lab_class
+     GROUP BY fc.id, dpt.dept_shortname, fct.course_type, fct.Is_Remunerated, fi.academic_year, fi.ft_instance_name, fi.max_theory_class, fi.max_lab_class
      ORDER BY fc.id DESC`,
     [departmentId]
   );
@@ -228,7 +229,8 @@ async function assignStaffToCourse(courseId, { staff_ids, instructor_foreman_id,
     await client.query(`DELETE FROM fastrack_staffs WHERE course_id = $1`, [courseId]);
 
     // Insert new assignments
-    const staffIds = Array.isArray(staff_ids) ? staff_ids : [staff_ids];
+    // Single select sends one id, ARCH checkboxes send several; drop blanks
+    const staffIds = (Array.isArray(staff_ids) ? staff_ids : [staff_ids]).filter(Boolean);
     for (const staffId of staffIds) {
       await client.query(
         `INSERT INTO fastrack_staffs (course_id, staff_id, instructor_foreman_id, peon_attender_id, status)
@@ -261,6 +263,7 @@ async function filterCoordinatorCourses(departmentId, academicYear, instanceId) 
        fc.course_name,
        fc.ft_course_type_id,
        fc.ft_instance_id,
+       dpt.dept_shortname,
        fct.course_type,
        fct.Is_Remunerated,
        fi.academic_year,
@@ -279,8 +282,9 @@ async function filterCoordinatorCourses(departmentId, academicYear, instanceId) 
          'peonAttender', json_build_object('id', pa.id, 'fname', pa.fname, 'mname', pa.mname, 'lname', pa.lname)
        )) FILTER (WHERE fs.id IS NOT NULL) AS fastrack_staffs
      FROM fastrack_courses fc
-     JOIN ftcourses fct ON fct.id = fc.ft_course_type_id
+     LEFT JOIN ftcourses fct ON fct.id = fc.ft_course_type_id
      JOIN fastrack_instances fi ON fi.id = fc.ft_instance_id
+     LEFT JOIN departments dpt ON dpt.id = fc.department_id
      LEFT JOIN fastrack_staffs fs ON fs.course_id = fc.id
      LEFT JOIN staff s ON s.id = fs.staff_id
      LEFT JOIN staff inf ON inf.id = fs.instructor_foreman_id
@@ -288,7 +292,7 @@ async function filterCoordinatorCourses(departmentId, academicYear, instanceId) 
      WHERE fc.department_id = $1
        AND fc.ft_instance_id = $2
        AND fi.academic_year = $3
-     GROUP BY fc.id, fct.course_type, fct.Is_Remunerated, fi.academic_year, fi.ft_instance_name
+     GROUP BY fc.id, dpt.dept_shortname, fct.course_type, fct.Is_Remunerated, fi.academic_year, fi.ft_instance_name
      ORDER BY fc.id DESC`,
     [departmentId, instanceId, academicYear]
   );
@@ -304,7 +308,6 @@ async function listVerificationCourses(departmentId) {
        fc.course_name,
        fc.ft_course_type_id,
        fc.ft_instance_id,
-       fc.amount,
        fct.course_type,
        fi.academic_year,
        fi.ft_instance_name,

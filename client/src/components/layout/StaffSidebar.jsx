@@ -1,8 +1,7 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { ROLE_TEACHING, ROLE_NON_TEACHING, isRoleMatch } from '../../utils/role';
-import api from '../../api/axios';
 
 const COMMON_LINKS = [
   { name: 'My Dashboard', teachingPath: '/teaching', nonTeachingPath: '/nonteaching', icon: '📊' },
@@ -75,25 +74,13 @@ export default function StaffSidebar() {
   const [isOpen, setIsOpen] = useState(true);
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [expandedMenu, setExpandedMenu] = useState(null);
-  const [isCoordinator, setIsCoordinator] = useState(false);
 
   const isTeaching = isRoleMatch(user?.role, ROLE_TEACHING);
   const isNonTeaching = isRoleMatch(user?.role, ROLE_NON_TEACHING);
-
-  useEffect(() => {
-    if (isTeaching && user?.id) {
-      api.get('/teaching/fastrack/lookup')
-        .then(res => {
-          // The lookup endpoint requires coordinator access, so we catch 403
-        })
-        .catch(() => {});
-
-      // Check if user is FASTRACK coordinator
-      api.get('/teaching/fastrack/coordinator/courses')
-        .then(() => setIsCoordinator(true))
-        .catch(() => setIsCoordinator(false));
-    }
-  }, [isTeaching, user?.id]);
+  
+  // Get coordinator names from user object (populated during login)
+  const coordinatorNames = user?.coordinator_names || [];
+  const isFastrackCoordinator = coordinatorNames.includes('FASTRACK');
 
   const links = useMemo(() => {
     const shared = COMMON_LINKS.map((item) => {
@@ -116,7 +103,7 @@ export default function StaffSidebar() {
           return {
             ...item,
             submenu: item.submenu
-              .filter(subitem => !subitem.coordinatorOnly || isCoordinator)
+              .filter(subitem => !subitem.coordinatorOnly || isFastrackCoordinator)
               .map((subitem) => ({ ...subitem, path: subitem.teachingPath }))
           };
         }
@@ -131,7 +118,7 @@ export default function StaffSidebar() {
     }
 
     return [];
-  }, [isTeaching, isNonTeaching, isCoordinator]);
+  }, [isTeaching, isNonTeaching, isFastrackCoordinator]);
 
   const shouldExpandForSubmenu = !isOpen && expandedMenu;
   const sidebarWidth = isOpen ? 'w-64' : shouldExpandForSubmenu ? 'w-64' : 'w-20';

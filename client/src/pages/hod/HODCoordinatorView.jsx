@@ -14,6 +14,8 @@ export default function HODCoordinatorViewPage() {
   const [editModal, setEditModal] = useState(null);
   const [formData, setFormData] = useState({ staff_id: '', start_date: '' });
   const [editFormData, setEditFormData] = useState({ staff_id: '', start_date: '', end_date: '' });
+  const [staffPage, setStaffPage] = useState(1);
+  const staffPerPage = 10;
 
   const showNotification = (message, type = 'success') => {
     setNotification({ show: true, message, type });
@@ -97,6 +99,15 @@ export default function HODCoordinatorViewPage() {
     }[status] || 'bg-gray-300';
     return <span className={`badge ${badgeClass} text-white px-2 py-1 rounded text-xs`}>{status}</span>;
   };
+
+  // Pagination for Available Staff
+  const totalStaffPages = Math.ceil((data?.staff?.length || 0) / staffPerPage);
+  const paginatedStaff = data?.staff?.slice((staffPage - 1) * staffPerPage, staffPage * staffPerPage) || [];
+
+  // Reset to page 1 when staff data changes
+  useEffect(() => {
+    setStaffPage(1);
+  }, [data?.staff?.length]);
 
   if (!data) {
     return (
@@ -186,12 +197,14 @@ export default function HODCoordinatorViewPage() {
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
-                    {data.staff?.length === 0 ? (
+                    {loading ? (
+                      <tr><td colSpan="3" className="px-6 py-12 text-center text-gray-500">Loading...</td></tr>
+                    ) : paginatedStaff.length === 0 ? (
                       <tr><td colSpan="3" className="px-6 py-12 text-center text-gray-500">No available staff</td></tr>
                     ) : (
-                      data.staff.map((staff, idx) => (
+                      paginatedStaff.map((staff, idx) => (
                         <tr key={staff.id} className={`${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'} hover:bg-blue-50`}>
-                          <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">{idx + 1}</td>
+                          <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">{(staffPage - 1) * staffPerPage + idx + 1}</td>
                           <td className="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{getStaffName(staff)}</td>
                           <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-700">{staff.employee_type}</td>
                         </tr>
@@ -200,6 +213,33 @@ export default function HODCoordinatorViewPage() {
                   </tbody>
                 </table>
               </div>
+              {/* Pagination Controls */}
+              {totalStaffPages > 1 && (
+                <div className="px-6 py-4 border-t border-gray-200 flex items-center justify-between">
+                  <div className="text-sm text-gray-700">
+                    Showing {(staffPage - 1) * staffPerPage + 1} to {Math.min(staffPage * staffPerPage, data.staff?.length || 0)} of {data.staff?.length || 0} entries
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <button
+                      onClick={() => setStaffPage(p => Math.max(1, p - 1))}
+                      disabled={staffPage === 1}
+                      className="px-3 py-1 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      Previous
+                    </button>
+                    <span className="px-3 py-1 text-sm font-medium text-gray-700">
+                      Page {staffPage} of {totalStaffPages}
+                    </span>
+                    <button
+                      onClick={() => setStaffPage(p => Math.min(totalStaffPages, p + 1))}
+                      disabled={staffPage === totalStaffPages}
+                      className="px-3 py-1 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      Next
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Add Staff Modal */}

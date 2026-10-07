@@ -30,6 +30,8 @@ function buildSafeUser(user, impersonator = null) {
     fname: user.fname || null,
     mname: user.mname || null,
     lname: user.lname || null,
+    staff_id: user.staff_id || null,
+    coordinator_names: user.coordinator_names || [],
     impersonating: Boolean(impersonator),
     impersonator
   };

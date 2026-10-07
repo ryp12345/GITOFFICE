@@ -1,21 +1,48 @@
 const { pool } = require('../config/db');
 
+async function getCoordinatorNames(staffId) {
+  if (!staffId) return [];
+  const { rows } = await pool.query(
+    `SELECT c.name as coordinator_name
+     FROM coordinator_staffs cs
+     JOIN coordinators c ON c.id = cs.coordinator_id
+     WHERE cs.staff_id = $1 AND cs.status = 'active'`,
+    [staffId]
+  );
+  return rows.map(r => r.coordinator_name);
+}
+
 async function findByEmail(email) {
   const { rows } = await pool.query(
     `SELECT u.id, u.email, u.password, u.role, u.status, u.created_at,
-       s.fname, s.mname, s.lname
+       s.fname, s.mname, s.lname, s.id as staff_id
      FROM users u
      LEFT JOIN staff s ON s.user_id = u.id
      WHERE u.email = $1
      LIMIT 1`,
     [email]
   );
-  return rows[0] || null;
+  const user = rows[0] || null;
+  if (user) {
+    user.coordinator_names = await getCoordinatorNames(user.staff_id);
+  }
+  return user;
 }
 
 async function findById(id) {
   const { rows } = await pool.query('SELECT id, email, role, status, created_at FROM users WHERE id = $1 LIMIT 1', [id]);
-  return rows[0] || null;
+  const user = rows[0] || null;
+  if (user) {
+    // Get staff_id for this user
+    const staffResult = await pool.query('SELECT id FROM staff WHERE user_id = $1 LIMIT 1', [id]);
+    if (staffResult.rows[0]) {
+      user.staff_id = staffResult.rows[0].id;
+      user.coordinator_names = await getCoordinatorNames(user.staff_id);
+    } else {
+      user.coordinator_names = [];
+    }
+  }
+  return user;
 }
 
 async function updatePasswordById(id, passwordHash) {

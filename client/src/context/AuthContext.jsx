@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
-import { loginRequest, registerRequest } from '../api/auth.api';
+import { loginRequest, meRequest, registerRequest } from '../api/auth.api';
 
 export const AuthContext = createContext(null);
 
@@ -18,6 +18,25 @@ export default function AuthProvider({ children }) {
       setToken(savedToken);
       setRefreshToken(savedRefreshToken);
       setUser(JSON.parse(savedUser));
+
+      // Stored sessions may predate coordinator data or a coordinator assignment change,
+      // so re-sync the fields the menus depend on from the server.
+      meRequest()
+        .then((response) => {
+          const freshUser = response.data?.data;
+          if (!freshUser) return;
+          setUser((prev) => {
+            if (!prev) return prev;
+            const nextUser = {
+              ...prev,
+              staff_id: freshUser.staff_id || null,
+              coordinator_names: freshUser.coordinator_names || []
+            };
+            localStorage.setItem('user', JSON.stringify(nextUser));
+            return nextUser;
+          });
+        })
+        .catch(() => {});
     }
 
     setIsLoading(false);
