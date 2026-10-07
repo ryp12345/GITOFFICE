@@ -105,6 +105,15 @@ app.use('/api/professional-activities', professionalActivityRoutes);
 const researchRoutes = require('./routes/research.routes');
 app.use('/api/research', researchRoutes);
 
+const teachingFastrackRoutes = require('./routes/teachingFastrack.routes');
+app.use('/api/teaching/fastrack', teachingFastrackRoutes);
+
+const hodFastrackRoutes = require('./routes/hodFastrack.routes');
+app.use('/api/hod/fastrack', hodFastrackRoutes);
+
+const hodCoordinatorRoutes = require('./routes/hodCoordinator.routes');
+app.use('/api/hod', hodCoordinatorRoutes);
+
 app.use(errorMiddleware);
 
 module.exports = app;

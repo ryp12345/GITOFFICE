@@ -1,7 +1,8 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { ROLE_TEACHING, ROLE_NON_TEACHING, isRoleMatch } from '../../utils/role';
+import api from '../../api/axios';
 
 const COMMON_LINKS = [
   { name: 'My Dashboard', teachingPath: '/teaching', nonTeachingPath: '/nonteaching', icon: '📊' },
@@ -15,7 +16,6 @@ const COMMON_LINKS = [
     icon: '🌿',
     submenu: [
       { name: 'Apply Leave', teachingPath: '/teaching/leave-application', nonTeachingPath: '/nonteaching/leave-application' },
-    //   { name: 'Leave List', teachingPath: '/teaching/leave-list', nonTeachingPath: '/nonteaching/leave-list' },
     ],
   },
   {
@@ -34,6 +34,12 @@ const COMMON_LINKS = [
   },
 ];
 
+const FASTRACK_SUBMENU = [
+  { name: 'My Courses', teachingPath: '/teaching/fastrack/my-courses', coordinatorOnly: false },
+  { name: 'Coordinator Management', teachingPath: '/teaching/fastrack/coordinator', coordinatorOnly: true },
+  { name: 'Fastrack Verification', teachingPath: '/teaching/fastrack/verification', coordinatorOnly: true },
+];
+
 const TEACHING_ONLY_LINKS = [
   {
     name: 'Research',
@@ -47,6 +53,11 @@ const TEACHING_ONLY_LINKS = [
       { name: 'Achievement', teachingPath: '/teaching/research/achievement' },
       { name: 'Reviewer Editor', teachingPath: '/teaching/research/reviewer-editor' }
     ]
+  },
+  {
+    name: 'FASTRACK',
+    icon: '⚡',
+    submenu: FASTRACK_SUBMENU,
   }
 ];
 
@@ -64,9 +75,25 @@ export default function StaffSidebar() {
   const [isOpen, setIsOpen] = useState(true);
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [expandedMenu, setExpandedMenu] = useState(null);
+  const [isCoordinator, setIsCoordinator] = useState(false);
 
   const isTeaching = isRoleMatch(user?.role, ROLE_TEACHING);
   const isNonTeaching = isRoleMatch(user?.role, ROLE_NON_TEACHING);
+
+  useEffect(() => {
+    if (isTeaching && user?.id) {
+      api.get('/teaching/fastrack/lookup')
+        .then(res => {
+          // The lookup endpoint requires coordinator access, so we catch 403
+        })
+        .catch(() => {});
+
+      // Check if user is FASTRACK coordinator
+      api.get('/teaching/fastrack/coordinator/courses')
+        .then(() => setIsCoordinator(true))
+        .catch(() => setIsCoordinator(false));
+    }
+  }, [isTeaching, user?.id]);
 
   const links = useMemo(() => {
     const shared = COMMON_LINKS.map((item) => {
@@ -84,10 +111,17 @@ export default function StaffSidebar() {
     });
 
     if (isTeaching) {
-      const teachingOnly = TEACHING_ONLY_LINKS.map((item) => ({
-        ...item,
-        submenu: item.submenu?.map((subitem) => ({ ...subitem, path: subitem.teachingPath })) || []
-      }));
+      const teachingOnly = TEACHING_ONLY_LINKS.map((item) => {
+        if (item.submenu) {
+          return {
+            ...item,
+            submenu: item.submenu
+              .filter(subitem => !subitem.coordinatorOnly || isCoordinator)
+              .map((subitem) => ({ ...subitem, path: subitem.teachingPath }))
+          };
+        }
+        return { ...item, path: item.teachingPath };
+      });
       return [...shared, ...teachingOnly];
     }
 
@@ -97,7 +131,7 @@ export default function StaffSidebar() {
     }
 
     return [];
-  }, [isTeaching, isNonTeaching]);
+  }, [isTeaching, isNonTeaching, isCoordinator]);
 
   const shouldExpandForSubmenu = !isOpen && expandedMenu;
   const sidebarWidth = isOpen ? 'w-64' : shouldExpandForSubmenu ? 'w-64' : 'w-20';

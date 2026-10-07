@@ -1,6 +1,11 @@
 import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 
+const FASTRACK_SUBMENU = [
+  { name: 'Fastrack Courses', path: '/hod/fastrack/courses' },
+  { name: 'Fastrack Insights', path: '/hod/fastrack/insights' },
+];
+
 export default function SidebarHOD() {
   const location = useLocation();
   const [isOpen, setIsOpen] = useState(true);
@@ -17,13 +22,12 @@ export default function SidebarHOD() {
       icon: '🌿',
       submenu: [
         { name: 'Entitlement', path: '/hod/leave-entitlement' },
-        { name: 'Holiday and RH List', path: '/hod/holidays', icon: '🎉' },
-        { name: 'Leave Application', path: '/hod/leave-application', icon: '🌿' }
+        { name: 'Holiday and RH List', path: '/hod/holidays' },
+        { name: 'Leave Application', path: '/hod/leave-application' }
       ]
     },
     {
       name: 'BIOMETRIC',
-      path: '/biometric',
       icon: '🔏',
       submenu: [
         { name: 'Daily Data', path: '/biometric/daily' },
@@ -32,15 +36,53 @@ export default function SidebarHOD() {
       ]
     },
     {
-      name: 'Faculty Recruitment',
-      path: '/Faculty Recruitment',
-      icon: '🎓',
+      name: 'Professional Activity',
+      icon: '📚',
       submenu: [
-        { name: 'Associate Professor Applications', path: '/Faculty Recruitment/asso_pro_recruitment' },
-        { name: 'Professor Applications', path: '/Faculty Recruitment/pro_recruitment' },
+        {
+          name: 'Teaching',
+          submenu: [
+            { name: 'Attended', path: '/hod/teaching/professional-activities/attended' },
+            { name: 'Conducted', path: '/hod/teaching/professional-activities/conducted' }
+          ]
+        },
+        {
+          name: 'Non-Teaching',
+          submenu: [
+            { name: 'Attended', path: '/hod/nonteaching/professional-activities/attended' },
+            { name: 'Conducted', path: '/hod/nonteaching/professional-activities/conducted' }
+          ]
+        }
       ]
     },
-    { name: 'Coordinator Management', path: '/HOD/coordinator_management', icon: '🗂️' }
+    {
+      name: 'Research',
+      icon: '🔬',
+      submenu: [
+        {
+          name: 'Conference',
+          submenu: [
+            { name: 'Attended', path: '/hod/research/conference/attended' },
+            { name: 'Conducted', path: '/hod/research/conference/conducted' }
+          ]
+        },
+        { name: 'Publication', path: '/hod/research/publication' },
+        { name: 'Funded Project', path: '/hod/research/funded-project' },
+        { name: 'Book Chapter', path: '/hod/research/book-chapters' },
+        { name: 'Consultancy', path: '/hod/research/consultancy' },
+        { name: 'Patents', path: '/hod/research/patents' },
+        { name: 'Copyrights', path: '/hod/research/copyrights' },
+        { name: 'Achievements', path: '/hod/research/achievements' },
+        { name: 'Reviewer/Editor', path: '/hod/research/reviewer-editor' }
+      ]
+    },
+    {
+      name: 'FASTRACK',
+      icon: '⚡',
+      submenu: FASTRACK_SUBMENU,
+    },
+    { name: 'Coordinator Management', path: '/hod/coordinator-management', icon: '🗂️' },
+    { name: 'Faculty Recruitment', path: '/Faculty Recruitment', icon: '🎓' },
   ];
 
   const toggleSubmenu = (index) => {
@@ -106,68 +148,95 @@ export default function SidebarHOD() {
         </div>
 
         <nav className="space-y-2 px-3 pb-4 overflow-y-auto md:overflow-visible">
-        {links.map((link, index) => (
-          <div key={link.path || index}>
-            {link.submenu ? (
-              <>
-                <button
-                  onClick={() => toggleSubmenu(index)}
+          {links.map((link, index) => (
+            <div key={link.path || index}>
+              {link.submenu ? (
+                <>
+                  <button
+                    onClick={() => toggleSubmenu(index)}
+                    title={!isOpen ? link.name : ''}
+                    className={`w-full flex items-center ${isOpen ? 'justify-between space-x-3' : 'justify-center'} px-4 py-3 md:py-3 rounded-lg transition duration-200 touch-manipulation ${
+                      expandedMenus[index]
+                        ? 'bg-slate-700 text-white'
+                        : 'text-slate-200 hover:bg-slate-700'
+                    }`}
+                  >
+                    <div className={`flex items-center ${isOpen ? 'space-x-3' : ''}`}>
+                      <span className="text-lg md:text-xl flex-shrink-0">{link.icon}</span>
+                      {isOpen && <span className="font-medium text-sm">{link.name}</span>}
+                    </div>
+                    {isOpen && (
+                      <span className={`text-xs transition-transform ${expandedMenus[index] ? 'rotate-180' : ''}`}>
+                        ▼
+                      </span>
+                    )}
+                  </button>
+                  {expandedMenus[index] && isOpen && (
+                    <div className="ml-4 space-y-1 border-l border-slate-600 pl-3 mt-1">
+                      {link.submenu.map((subitem) => (
+                        subitem.submenu ? (
+                          <>
+                            <button
+                              onClick={() => toggleSubmenu(`${index}-${subitem.name}`)}
+                              className="w-full flex items-center justify-between px-4 py-2 rounded-lg transition duration-200 text-sm text-slate-300 hover:text-white hover:bg-slate-700"
+                            >
+                              <span className="font-medium">{subitem.name}</span>
+                              <span className="text-xs">▶</span>
+                            </button>
+                            {expandedMenus[`${index}-${subitem.name}`] && (
+                              <div className="ml-4 space-y-1 border-l border-slate-600 pl-2 mt-1">
+                                {subitem.submenu.map((subsubitem) => (
+                                  <Link
+                                    key={subsubitem.path}
+                                    to={subsubitem.path}
+                                    onClick={() => { setIsMobileOpen(false); setExpandedMenus({}); }}
+                                    className={`flex items-center space-x-3 px-4 py-2 rounded-lg transition duration-200 text-sm ${
+                                      location.pathname === subsubitem.path
+                                        ? 'bg-blue-500 text-white'
+                                        : 'text-slate-300 hover:bg-slate-700'
+                                    }`}
+                                  >
+                                    <span className="font-medium">{subsubitem.name}</span>
+                                  </Link>
+                                ))}
+                              </div>
+                            )}
+                          </>
+                        ) : (
+                          <Link
+                            key={subitem.path}
+                            to={subitem.path}
+                            onClick={() => { setIsMobileOpen(false); setExpandedMenus({}); }}
+                            className={`flex items-center space-x-3 px-4 py-2 rounded-lg transition duration-200 text-sm ${
+                              location.pathname === subitem.path
+                                ? 'bg-blue-500 text-white'
+                                : 'text-slate-300 hover:bg-slate-700'
+                            }`}
+                          >
+                            <span className="font-medium">{subitem.name}</span>
+                          </Link>
+                        )
+                      ))}
+                    </div>
+                  )}
+                </>
+              ) : (
+                <Link
+                  to={link.path}
+                  onClick={() => setIsMobileOpen(false)}
                   title={!isOpen ? link.name : ''}
-                  className={`w-full flex items-center ${isOpen ? 'justify-between space-x-3' : 'justify-center'} px-4 py-3 md:py-3 rounded-lg transition duration-200 touch-manipulation ${
-                    expandedMenus[index]
-                      ? 'bg-slate-700 text-white'
+                  className={`flex items-center space-x-3 px-4 py-3 md:py-3 rounded-lg transition duration-200 touch-manipulation ${
+                    location.pathname === link.path
+                      ? 'bg-blue-500 text-white'
                       : 'text-slate-200 hover:bg-slate-700'
                   }`}
                 >
-                  <div className={`flex items-center ${isOpen ? 'space-x-3' : ''}`}>
-                    <span className="text-lg md:text-xl flex-shrink-0">{link.icon}</span>
-                    {isOpen && <span className="font-medium text-sm">{link.name}</span>}
-                  </div>
-                  {isOpen && (
-                    <span className={`text-xs transition-transform ${expandedMenus[index] ? 'rotate-180' : ''}`}>
-                      ▼
-                    </span>
-                  )}
-                </button>
-                {expandedMenus[index] && isOpen && (
-                  <div className="ml-4 space-y-1 border-l border-slate-600 pl-3 mt-1">
-                    {link.submenu.map((subitem) => (
-                      <Link
-                        key={subitem.path}
-                        to={subitem.path}
-                        onClick={() => {
-                          setIsMobileOpen(false);
-                          setExpandedMenus({});
-                        }}
-                        className={`flex items-center space-x-3 px-4 py-2 rounded-lg transition duration-200 text-sm ${
-                          location.pathname === subitem.path
-                            ? 'bg-blue-500 text-white'
-                            : 'text-slate-300 hover:bg-slate-700'
-                        }`}
-                      >
-                        <span className="font-medium">{subitem.name}</span>
-                      </Link>
-                    ))}
-                  </div>
-                )}
-              </>
-            ) : (
-              <Link
-                to={link.path}
-                onClick={() => setIsMobileOpen(false)}
-                title={!isOpen ? link.name : ''}
-                className={`flex items-center space-x-3 px-4 py-3 md:py-3 rounded-lg transition duration-200 touch-manipulation ${
-                  location.pathname === link.path
-                    ? 'bg-blue-500 text-white'
-                    : 'text-slate-200 hover:bg-slate-700'
-                }`}
-              >
-                <span className="text-lg md:text-xl flex-shrink-0">{link.icon}</span>
-                {isOpen && <span className="font-medium text-sm">{link.name}</span>}
-              </Link>
-            )}
-          </div>
-        ))}
+                  <span className="text-lg md:text-xl flex-shrink-0">{link.icon}</span>
+                  {isOpen && <span className="font-medium text-sm">{link.name}</span>}
+                </Link>
+              )}
+            </div>
+          ))}
         </nav>
       </aside>
     </>

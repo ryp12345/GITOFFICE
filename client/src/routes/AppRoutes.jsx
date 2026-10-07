@@ -15,6 +15,10 @@ import PrincipalDeanLeaveEntitlementPage from '../pages/PrincipalDean/LeaveEntit
 import HODDepartmentOverviewPage from '../pages/hod/DepartmentOverview';
 import HODMyStaffPage from '../pages/hod/MyStaff';
 import HODLeaveEntitlementPage from '../pages/hod/LeaveEntitlement';
+import HODFastrackCoursesPage from '../pages/hod/HODFastrackCourses';
+import HODFastrackInsightsPage from '../pages/hod/HODFastrackInsights';
+import HODCoordinatorListPage from '../pages/hod/HODCoordinatorList';
+import HODCoordinatorViewPage from '../pages/hod/HODCoordinatorView';
 import LeaveApplicationPage from '../pages/leave_management/LeaveApplication';
 import LeaveListPage from '../pages/leave_management/LeaveList';
 import SidebarHOD from '../components/layout/SidebarHOD';
@@ -46,6 +50,9 @@ import DesignationPayscale from '../pages/staff/DesignationPayscale';
 import AssociationPage from '../pages/staff/AssociationPage';
 import QualificationPage from '../pages/staff/QualificationPage';
 import ProfessionalActivitiesPage from '../pages/staff/ProfessionalActivities';
+import FastrackMyCoursesPage from '../pages/staff/FastrackMyCourses';
+import FastrackCoordinatorMgtPage from '../pages/staff/FastrackCoordinatorMgt';
+import FastrackVerificationPage from '../pages/staff/FastrackVerification';
 import ResearchConferencePage from '../pages/staff/research/ResearchConference';
 import ResearchPublicationPage from '../pages/staff/research/ResearchPublication';
 import ResearchBookChaptersPage from '../pages/staff/research/ResearchBookChapters';
@@ -183,6 +190,10 @@ export default function AppRoutes() {
           <Route path="/hod/my-staff" element={<HODMyStaffPage />} />
           <Route path="/hod/leave-entitlement" element={<HODLeaveEntitlementPage />} />
           <Route path="/hod/leave-application" element={<LeaveApplicationPage />} />
+          <Route path="/hod/fastrack/courses" element={<HODFastrackCoursesPage />} />
+          <Route path="/hod/fastrack/insights" element={<HODFastrackInsightsPage />} />
+          <Route path="/hod/coordinator-management" element={<HODCoordinatorListPage />} />
+          <Route path="/hod/coordinator-management/:id" element={<HODCoordinatorViewPage />} />
           <Route path="/Faculty Recruitment/asso_pro_recruitment" element={<AssoProRecruitmentPage />} />
           <Route path="/Faculty Recruitment/pro_recruitment" element={<ProRecruitmentPage />} />
 
@@ -243,6 +254,9 @@ export default function AppRoutes() {
           <Route path="/teaching/association" element={<AssociationPage />} />
           <Route path="/teaching/qualification" element={<QualificationPage />} />
           <Route path="/teaching/professional-activities" element={<ProfessionalActivitiesPage />} />
+          <Route path="/teaching/fastrack/my-courses" element={<FastrackMyCoursesPage />} />
+          <Route path="/teaching/fastrack/coordinator" element={<FastrackCoordinatorMgtPage />} />
+          <Route path="/teaching/fastrack/verification" element={<FastrackVerificationPage />} />
           <Route path="/teaching/research/conference" element={<ResearchConferencePage />} />
           <Route path="/teaching/research/publication" element={<ResearchPublicationPage />} />
           <Route path="/teaching/research/book-chapters" element={<ResearchBookChaptersPage />} />

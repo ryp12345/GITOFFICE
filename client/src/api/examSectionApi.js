@@ -236,3 +236,113 @@ export const deleteExpense = async (id) => {
   const res = await api.delete(`/exam-section/fastrack_expenses/${id}`);
   return res.data;
 };
+
+// Teaching Fastrack Staff API
+export const getMyFastrackCourses = async () => {
+  const res = await api.get('/teaching/fastrack/my-courses');
+  return res.data;
+};
+
+export const updateMyFastrackCourse = async (id, formData) => {
+  const res = await api.post(`/teaching/fastrack/my-courses/${id}`, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' }
+  });
+  return res.data;
+};
+
+export const getCoordinatorFastrackCourses = async () => {
+  const res = await api.get('/teaching/fastrack/coordinator/courses');
+  return res.data;
+};
+
+export const getStaffForAssignment = async () => {
+  const res = await api.get('/teaching/fastrack/coordinator/staff-assignment');
+  return res.data;
+};
+
+export const assignStaffToFastrackCourse = async (payload) => {
+  const res = await api.post('/teaching/fastrack/coordinator/assign', payload);
+  return res.data;
+};
+
+export const updateStaffAssignment = async (payload) => {
+  const res = await api.post('/teaching/fastrack/coordinator/update', payload);
+  return res.data;
+};
+
+export const filterCoordinatorCourses = async (params) => {
+  const res = await api.get('/teaching/fastrack/coordinator/filter', { params });
+  return res.data;
+};
+
+export const getVerificationFastrackCourses = async () => {
+  const res = await api.get('/teaching/fastrack/verification/courses');
+  return res.data;
+};
+
+export const verifyFastrackRecords = async (items) => {
+  const res = await api.post('/teaching/fastrack/verification/verify', { items });
+  return res.data;
+};
+
+export const getFastrackStaffLookup = async () => {
+  const res = await api.get('/teaching/fastrack/lookup');
+  return res.data;
+};
+
+// HOD Fastrack API
+export const getHodFastrackCourses = async () => {
+  const res = await api.get('/hod/fastrack/courses');
+  return res.data;
+};
+
+export const filterHodFastrackCourses = async (params) => {
+  const res = await api.post('/hod/fastrack/courses/filter', params);
+  return res.data;
+};
+
+export const approveHodFastrackRecords = async (staffIds, courseIds) => {
+  const res = await api.post('/hod/fastrack/courses/approve', { staff_ids: staffIds, course_ids: courseIds });
+  return res.data;
+};
+
+export const getHodFastrackCourseType = async (id) => {
+  const res = await api.get(`/hod/fastrack/courses/course-type/${id}`);
+  return res.data;
+};
+
+export const processHodFastrackJustification = async (id, payload) => {
+  const res = await api.post(`/hod/fastrack/courses/justification/${id}`, payload);
+  return res.data;
+};
+
+export const getHodFastrackManagement = async () => {
+  const res = await api.get('/hod/fastrack/management');
+  return res.data;
+};
+
+export const getHodFastrackLookup = async () => {
+  const res = await api.get('/hod/fastrack/lookup');
+  return res.data;
+};
+
+// HOD Coordinator Management API
+export const getHodCoordinators = async () => {
+  const res = await api.get('/hod/coordinators');
+  return res.data;
+};
+
+export const getHodCoordinatorView = async (id) => {
+  const res = await api.get(`/hod/coordinators/${id}`);
+  return res.data;
+};
+
+export const addHodCoordinatorStaff = async (payload) => {
+  const res = await api.post('/hod/coordinators/staff', payload);
+  return res.data;
+};
+
+export const updateHodCoordinatorStaff = async (id, payload) => {
+  const res = await api.put(`/hod/coordinators/staff/${id}`, payload);
+  return res.data;
+};

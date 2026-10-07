@@ -158,6 +158,20 @@ function researchPdfUploader(resourceKey) {
   return uploader.single('document');
 }
 
+const FASTRACK_MAX_FILE_SIZE = 500 * 1024;
+const FASTRACK_UPLOAD_DIR = path.join(uploadsRoot, 'staff', 'fastrack_staff');
+ensureDir(FASTRACK_UPLOAD_DIR);
+
+const fastrackUploader = multer({
+  storage: buildPdfDiskStorage(FASTRACK_UPLOAD_DIR),
+  fileFilter: pdfOnlyFilter,
+  limits: { fileSize: FASTRACK_MAX_FILE_SIZE }
+});
+
+function fastrackPdfUploader() {
+  return fastrackUploader.single('document');
+}
+
 module.exports = {
   uploadForm16Pdf,
   uploadForm16Archive,
@@ -172,5 +186,6 @@ module.exports = {
   RESEARCH_MAX_FILE_SIZE,
   RESEARCH_CONSULTANCY_MAX_FILE_SIZE,
   researchPdfUploader,
+  fastrackPdfUploader,
   ensureDir
 };
