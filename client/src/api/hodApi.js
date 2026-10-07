@@ -43,3 +43,10 @@ export const bulkUpdateHodLeaveApplications = async (token, action, ids) => {
     headers: tokenHeaders(token),
   });
 };
+
+// Professional Activity / Research menus. `report` is a key of the server's REPORTS registry.
+export const getHodActivityReport = async (token, report) => {
+  return axios.get(`/hod/activity-reports/${report}`, {
+    headers: tokenHeaders(token),
+  });
+};

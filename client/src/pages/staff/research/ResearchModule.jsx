@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import Notification from '../../../components/common/Notification';
 import Header from '../../../components/layout/Header';
@@ -159,15 +159,22 @@ export default function ResearchModule({ resource, title, subtitle, modulePath, 
     };
   }, [user?.id, user?.staff_id]);
 
+  // The tabbed pages swap `resource` in place, so a slow response for the previous tab must not
+  // overwrite the table of the tab that is now showing.
+  const latestRequest = useRef(0);
+
   const refreshRecords = useCallback(async () => {
+    const requestId = ++latestRequest.current;
     try {
       const response = await getResearchRecords(resource);
+      if (requestId !== latestRequest.current) return;
       setRecords(Array.isArray(response?.data) ? response.data : []);
       setError('');
     } catch (err) {
+      if (requestId !== latestRequest.current) return;
       setError(err?.response?.data?.message || `Failed to load ${config.plural.toLowerCase()}`);
     } finally {
-      setLoading(false);
+      if (requestId === latestRequest.current) setLoading(false);
     }
   }, [resource, config.plural]);
 
@@ -408,7 +415,8 @@ export default function ResearchModule({ resource, title, subtitle, modulePath, 
     if (column.type === 'date') return formatDateDMY(value);
 
     if (column.type === 'egov') {
-      if (!config.hasEgovId && column.key === 'egov_id') return '-';
+      // Only Achievement opts out (hasEgovId: false); every other config leaves it undefined.
+      if (config.hasEgovId === false && column.key === 'egov_id') return '-';
       if (!value) return '-';
       return (
         <a href={resolveDocumentUrl(resource, row.document)} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">

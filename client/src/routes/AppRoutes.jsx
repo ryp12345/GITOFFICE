@@ -19,6 +19,7 @@ import HODFastrackCoursesPage from '../pages/hod/HODFastrackCourses';
 import HODFastrackInsightsPage from '../pages/hod/HODFastrackInsights';
 import HODCoordinatorListPage from '../pages/hod/HODCoordinatorList';
 import HODCoordinatorViewPage from '../pages/hod/HODCoordinatorView';
+import HODActivityReport from '../pages/hod/activityReports/HODActivityReport';
 import LeaveApplicationPage from '../pages/leave_management/LeaveApplication';
 import LeaveListPage from '../pages/leave_management/LeaveList';
 import SidebarHOD from '../components/layout/SidebarHOD';
@@ -194,6 +195,26 @@ export default function AppRoutes() {
           <Route path="/hod/fastrack/insights" element={<HODFastrackInsightsPage />} />
           <Route path="/hod/coordinator-management" element={<HODCoordinatorListPage />} />
           <Route path="/hod/coordinator-management/:id" element={<HODCoordinatorViewPage />} />
+
+          {/* Professional Activity and Research menus (read-only department reports) */}
+          {[
+            ['/hod/teaching/professional-activities/attended', 'pa-attended-teaching'],
+            ['/hod/teaching/professional-activities/conducted', 'pa-conducted-teaching'],
+            ['/hod/nonteaching/professional-activities/attended', 'pa-attended-nonteaching'],
+            ['/hod/nonteaching/professional-activities/conducted', 'pa-conducted-nonteaching'],
+            ['/hod/research/conference/attended', 'conference-attended'],
+            ['/hod/research/conference/conducted', 'conference-conducted'],
+            ['/hod/research/publication', 'publication'],
+            ['/hod/research/funded-project', 'funded-project'],
+            ['/hod/research/book-chapters', 'book-chapter'],
+            ['/hod/research/consultancy', 'consultancy'],
+            ['/hod/research/patents', 'patent'],
+            ['/hod/research/copyrights', 'copyright'],
+            ['/hod/research/achievements', 'achievement'],
+            ['/hod/research/reviewer-editor', 'reviewer-editor'],
+          ].map(([path, report]) => (
+            <Route key={path} path={path} element={<HODActivityReport key={report} report={report} />} />
+          ))}
           <Route path="/Faculty Recruitment/asso_pro_recruitment" element={<AssoProRecruitmentPage />} />
           <Route path="/Faculty Recruitment/pro_recruitment" element={<ProRecruitmentPage />} />
 

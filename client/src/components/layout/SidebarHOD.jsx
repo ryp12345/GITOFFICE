@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { Fragment, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 
 const FASTRACK_SUBMENU = [
@@ -175,7 +175,7 @@ export default function SidebarHOD() {
                     <div className="ml-4 space-y-1 border-l border-slate-600 pl-3 mt-1">
                       {link.submenu.map((subitem) => (
                         subitem.submenu ? (
-                          <>
+                          <Fragment key={subitem.name}>
                             <button
                               onClick={() => toggleSubmenu(`${index}-${subitem.name}`)}
                               className="w-full flex items-center justify-between px-4 py-2 rounded-lg transition duration-200 text-sm text-slate-300 hover:text-white hover:bg-slate-700"
@@ -201,7 +201,7 @@ export default function SidebarHOD() {
                                 ))}
                               </div>
                             )}
-                          </>
+                          </Fragment>
                         ) : (
                           <Link
                             key={subitem.path}

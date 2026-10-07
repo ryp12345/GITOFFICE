@@ -1,4 +1,21 @@
 const { pool } = require('../config/db');
+const { normalizeDateColumns } = require('../utils/pgDate');
+
+// Every DATE column across the research tables (see database/migrations).
+const DATE_COLUMNS = [
+  'from_date',
+  'to_date',
+  'date',
+  'application_date',
+  'appl_date',
+  'publication_date',
+  'copyright_date',
+  'reviewed_date',
+];
+
+function serializeRow(row) {
+  return normalizeDateColumns(row, DATE_COLUMNS);
+}
 
 const MONTH_ABBREVIATIONS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
@@ -229,14 +246,14 @@ async function list(resourceKey, staffId) {
         ORDER BY r.${resource.orderBy}`,
       [staffId]
     );
-    return result.rows;
+    return result.rows.map(serializeRow);
   }
 
   const result = await pool.query(
     `SELECT * FROM ${resource.table} WHERE staff_id = $1 ORDER BY ${resource.orderBy}`,
     [staffId]
   );
-  return result.rows;
+  return result.rows.map(serializeRow);
 }
 
 async function findOwned(client, resourceKey, id, staffId) {
@@ -349,7 +366,7 @@ async function create(resourceKey, staffId, data, document) {
     }
 
     await client.query('COMMIT');
-    return record;
+    return serializeRow(record);
   } catch (error) {
     await client.query('ROLLBACK');
     throw error;
@@ -380,10 +397,18 @@ async function update(resourceKey, id, staffId, data, document) {
       assignments.push(`${column} = $${values.length + 1}`);
     });
 
+    // Laravel re-ran gen_egov_id() on every update, so each edit gave the record a new e-Gov ID
+    // and broke any reference the approver already held. The ID only encodes year and month,
+    // so it is regenerated only when the edit moves the record into a different month.
     if (resource.egov) {
-      const egovId = await buildEgovId(client, resourceKey, data[resource.egov.dateColumn]);
-      values.push(egovId);
-      assignments.push(`egov_id = $${values.length + 1}`);
+      const previousPeriod = String(serializeRow({ ...owned })[resource.egov.dateColumn] || '').slice(0, 7);
+      const nextPeriod = String(data[resource.egov.dateColumn] || '').slice(0, 7);
+
+      if (!owned.egov_id || previousPeriod !== nextPeriod) {
+        const egovId = await buildEgovId(client, resourceKey, data[resource.egov.dateColumn]);
+        values.push(egovId);
+        assignments.push(`egov_id = $${values.length + 1}`);
+      }
     }
 
     // One new file replaces the stored one; sending none keeps whatever is already there.
@@ -405,7 +430,7 @@ async function update(resourceKey, id, staffId, data, document) {
     await client.query('COMMIT');
 
     return {
-      record: updated.rows[0],
+      record: serializeRow(updated.rows[0]),
       previousDocument: document ? owned.document : null,
     };
   } catch (error) {

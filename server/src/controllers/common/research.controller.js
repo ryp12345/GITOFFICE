@@ -375,7 +375,7 @@ const VALIDATORS = {
         award: requireText(errors, body, 'award', 'award'),
         year: requireNumber(errors, body, 'year', 'year'),
         details: readString(body, 'details') || null,
-        awarding_body: requireText(errors, body, 'awarding_body', 'award'),
+        awarding_body: requireText(errors, body, 'awarding_body', 'awarding body'),
       },
     };
   },
