@@ -5,6 +5,7 @@ import api from '../../api/axios';
 import { useAuth } from '../../context/AuthContext';
 import { isRoleMatch, ROLE_HOD } from '../../utils/role';
 import LoadError from '../../components/common/LoadError';
+import SearchInput from '../../components/common/SearchInput';
 import { getErrorMessage } from '../../utils/errors';
 
 export default function MusterPage() {
@@ -53,11 +54,9 @@ export default function MusterPage() {
   const filtered = useMemo(() => {
     const q = (search || '').trim().toLowerCase();
     if (!q) return staff;
-    return staff.filter(s => (
-      (s.staffname || '').toString().toLowerCase().includes(q) ||
-      (s.EmployeeCode || '').toString().toLowerCase().includes(q) ||
-      (s.active_departments || '').toString().toLowerCase().includes(q)
-    ));
+    // Staff Id is the column shown in the table, so it must be searchable too
+    return staff.filter(s => [s.id, s.staffname, s.EmployeeCode, s.active_departments]
+      .some((field) => field != null && String(field).toLowerCase().includes(q)));
   }, [staff, search]);
 
   const paginated = useMemo(() => {
@@ -89,13 +88,14 @@ export default function MusterPage() {
             </div>
 
             <div className="mt-6">
-              {/* <div className="flex items-center justify-between mb-3">
-                <div className="relative w-full sm:w-72">
-                  <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search staff..." className="w-full py-2 pl-10 pr-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" />
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-400 absolute left-3 top-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
-                </div>
-                <div className="ml-4 text-sm text-gray-600">Showing {filtered.length} results</div>
-              </div> */}
+              <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <SearchInput value={search} onChange={setSearch} placeholder="Search by staff id, name or department" />
+                {!loading && !loadError && (
+                  <div className="text-sm text-gray-600">
+                    {search.trim() ? `${filtered.length} of ${staff.length} staff` : `${staff.length} staff`}
+                  </div>
+                )}
+              </div>
 
               <div className="overflow-auto">
               {loading ? (<div>Loading...</div>) : loadError ? (
@@ -114,7 +114,11 @@ export default function MusterPage() {
                   </thead>
                   <tbody>
                     {paginated.length === 0 ? (
-                      <tr><td colSpan={3 + logDates.length} className="p-6 text-center text-gray-500">No records found</td></tr>
+                      <tr><td colSpan={3 + logDates.length} className="p-6 text-center text-gray-500">
+                        {search.trim() && staff.length > 0
+                          ? <>No staff match "{search.trim()}". <button type="button" onClick={() => setSearch('')} className="text-blue-600 underline">Clear search</button></>
+                          : 'No records found'}
+                      </td></tr>
                     ) : paginated.map((s, idx) => (
                       <tr key={s.id} className={`${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'} hover:bg-blue-50`}>
                         <td className="p-2 border">{s.id}</td>

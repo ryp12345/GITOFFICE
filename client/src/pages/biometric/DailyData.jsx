@@ -9,6 +9,7 @@ import { isRoleMatch, ROLE_HOD, ROLE_TEACHING, ROLE_NON_TEACHING } from '../../u
 import { getErrorMessage, reportError } from '../../utils/errors';
 import { toast } from '../../notifications/notifier';
 import LoadError from '../../components/common/LoadError';
+import SearchInput from '../../components/common/SearchInput';
 
 export default function DailyDataPage() {
   const [attendance, setAttendance] = useState([]);
@@ -496,11 +497,16 @@ export default function DailyDataPage() {
       : attendance;
     const q = search.trim().toLowerCase();
     if (!q) return scoped;
-    return scoped.filter(r => (
-      (r.EmployeeName || r.full_name || r.employeeName || r.EmployeeCode || '').toString().toLowerCase().includes(q) ||
-      (r.DepartmentName || r.department || '').toString().toLowerCase().includes(q)
-    ));
-  }, [attendance, search]);
+    // Name, employee code and department are each searchable on their own
+    return scoped.filter(r => [
+      r.EmployeeName, r.full_name, r.employeeName,
+      r.EmployeeCode, r.employeeCode, r.employeecode,
+      r.DepartmentName, r.department, r.dept_shortname,
+    ].some((field) => field != null && String(field).toLowerCase().includes(q)));
+  }, [attendance, search, isStaff, staffEmployeeCode]);
+
+  // A new search or a new day's data starts again from page 1
+  useEffect(() => { setPage(1); }, [search, attendance]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
 
@@ -556,7 +562,7 @@ export default function DailyDataPage() {
                     <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-full h-10 px-3 border border-gray-300 rounded-lg" />
                   </div>
                     {/* Re-runs the scoped load above; it used to duplicate the request without HOD/staff scoping */}
-                    <button onClick={() => setReloadKey((k) => k + 1)} disabled={loading} className="h-10 inline-flex items-center justify-center px-6 min-w-[140px] bg-blue-600 text-white rounded-lg disabled:opacity-60">Search</button>
+                    <button onClick={() => setReloadKey((k) => k + 1)} disabled={loading} className="h-10 inline-flex items-center justify-center px-6 min-w-[140px] bg-blue-600 text-white rounded-lg disabled:opacity-60">Refresh</button>
                 </div>
               </div>
               )}
@@ -633,6 +639,17 @@ export default function DailyDataPage() {
               </div>
               )}
 
+              {!isStaff && (
+                <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <SearchInput value={search} onChange={setSearch} placeholder="Search by name, code or department" />
+                  {!loading && !loadError && (
+                    <div className="text-sm text-gray-600">
+                      {search.trim() ? `${filtered.length} of ${attendance.length} employees` : `${attendance.length} employees`}
+                    </div>
+                  )}
+                </div>
+              )}
+
               <div className="overflow-x-auto">
                 <table className="min-w-full divide-y divide-gray-200">
                   <thead className="bg-blue-600">
@@ -655,7 +672,11 @@ export default function DailyDataPage() {
                     ) : loadError ? (
                       <tr><td colSpan={10} className="p-4"><LoadError message={loadError} onRetry={retryLoad} /></td></tr>
                     ) : paginated.length === 0 ? (
-                      <tr><td colSpan={10} className="p-6 text-center">No attendance data available</td></tr>
+                      <tr><td colSpan={10} className="p-6 text-center">
+                        {search.trim() && attendance.length > 0
+                          ? <>No employees match "{search.trim()}". <button type="button" onClick={() => setSearch('')} className="text-blue-600 underline">Clear search</button></>
+                          : 'No attendance data available'}
+                      </td></tr>
                     ) : (
                       paginated.map((row, idx) => {
                         const entry = row.entryLogs || row.entryLog || row.entry || null;
