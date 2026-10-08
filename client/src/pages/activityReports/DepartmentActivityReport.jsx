@@ -17,6 +17,7 @@ import {
   toInputDate,
 } from '../staff/research/researchShared';
 import { DEPARTMENT_REPORTS } from './reportConfig';
+import { statTone } from '../../components/dashboard/ActivityDashboardWidgets';
 
 const PAGE_SIZES = [10, 25, 50, 100];
 
@@ -104,10 +105,10 @@ function exportToExcel(config, columns, rows) {
   URL.revokeObjectURL(url);
 }
 
-function CountCard({ label, count }) {
+function CountCard({ label, count, tone }) {
   const empty = count === 0;
   return (
-    <div className="rounded-xl bg-white p-4 shadow">
+    <div className={`rounded-xl border p-4 shadow-sm ${tone}`}>
       <p className="text-sm font-bold text-slate-700">{label}</p>
       <p className={`mt-1 text-2xl font-semibold ${empty ? 'text-red-500' : 'text-slate-900'}`}>{count}</p>
     </div>
@@ -275,8 +276,8 @@ export default function DepartmentActivityReport({
 
             {counts.length > 0 && (
               <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
-                {counts.map((card) => (
-                  <CountCard key={card.label} label={card.label} count={card.count} />
+                {counts.map((card, index) => (
+                  <CountCard key={card.label} label={card.label} count={card.count} tone={statTone(index)} />
                 ))}
               </div>
             )}

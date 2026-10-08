@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom';
 import Header from '../../components/layout/Header';
 import Sidebar from '../../components/layout/Sidebar';
 import Notification from '../../components/common/Notification';
-import { CountValue, EventsPanel, NoticesPanel, OverviewChart } from '../../components/dashboard/ActivityDashboardWidgets';
+import { CountValue, EventsPanel, NoticesPanel, OverviewChart, statTone } from '../../components/dashboard/ActivityDashboardWidgets';
 import { useAuth } from '../../context/AuthContext';
 import { getDeanRndDashboard } from '../../api/deanrndApi';
 
@@ -178,8 +178,8 @@ export default function DeanRndDashboard() {
             </div>
 
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
-              {SUMMARY_CARDS.map((card) => (
-                <div key={card.key} className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+              {SUMMARY_CARDS.map((card, index) => (
+                <div key={card.key} className={`rounded-xl border p-5 shadow-sm ${statTone(index)}`}>
                   <span className="block text-sm font-bold text-slate-700">{card.label}</span>
                   <CountValue
                     value={data.summary[card.key]}
@@ -200,12 +200,12 @@ export default function DeanRndDashboard() {
             </div>
 
             <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-              {GROUPED_CARDS.map((group) => (
+              {GROUPED_CARDS.map((group, groupIndex) => (
                 <div key={group.label} className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
                   <p className="text-sm font-bold text-slate-700">{group.label}</p>
                   <div className="mt-3 grid grid-cols-2 gap-3">
                     {group.items.map((item) => (
-                      <Link key={item.key} to={item.path} className="rounded-lg bg-slate-50 p-3 hover:bg-blue-50">
+                      <Link key={item.key} to={item.path} className={`rounded-lg border p-3 ${statTone(groupIndex)}`}>
                         <span className="block text-xs text-slate-500">{item.label}</span>
                         <CountValue value={data.totals[item.key]} loading={loading} />
                       </Link>
@@ -216,11 +216,11 @@ export default function DeanRndDashboard() {
             </div>
 
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-              {SINGLE_CARDS.map((card) => (
+              {SINGLE_CARDS.map((card, index) => (
                 <Link
                   key={card.key}
                   to={card.path}
-                  className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm hover:border-blue-300"
+                  className={`rounded-xl border p-5 shadow-sm ${statTone(index + GROUPED_CARDS.length)}`}
                 >
                   <span className="block text-sm font-bold text-slate-700">{card.label}</span>
                   <CountValue value={data.totals[card.key]} loading={loading} />

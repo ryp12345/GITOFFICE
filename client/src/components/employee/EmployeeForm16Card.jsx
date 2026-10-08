@@ -61,17 +61,17 @@ export default function EmployeeForm16Card({ staffId, employeeName = 'Your' }) {
         <>
           {/* Summary Stats */}
           <div className="grid grid-cols-3 gap-4 mb-6">
-            <div className="bg-blue-50 rounded-lg p-4 text-center">
+            <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 text-center">
               <p className="text-2xl font-bold text-blue-600">{totalCount}</p>
               <p className="text-xs text-gray-600 mt-1">Total Files</p>
             </div>
             {latestYear && (
-              <div className="bg-green-50 rounded-lg p-4 text-center">
+              <div className="rounded-lg border border-green-200 bg-green-50 p-4 text-center">
                 <p className="text-2xl font-bold text-green-600">FY {latestYear}</p>
                 <p className="text-xs text-gray-600 mt-1">Latest Year</p>
               </div>
             )}
-            <div className="bg-purple-50 rounded-lg p-4 text-center">
+            <div className="rounded-lg border border-purple-200 bg-purple-50 p-4 text-center">
               <p className="text-sm text-gray-600">
                 <span className="font-semibold text-purple-600">{partACount}</span> Part A{' '}
                 <span className="font-semibold text-purple-600">{partBCount}</span> Part B

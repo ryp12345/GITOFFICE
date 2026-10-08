@@ -440,14 +440,14 @@ export default function DailyDataPage() {
               {!isStaff && (
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
                 <div className="flex items-center gap-3">
-                  <div className="flex items-center gap-2 bg-blue-50 px-4 py-2 rounded-lg">
+                  <div className="flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-4 py-2">
                     <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 text-blue-600" viewBox="0 0 24 24" fill="currentColor"><path d="M12 22C6.477 22 2 17.523 2 12S6.477 2 12 2s10 4.477 10 10-4.477 10-10 10z"></path></svg>
                     <div>
                       <div className="text-sm text-blue-600">Total In</div>
                       <div className="text-lg font-semibold">{totalIn ?? '—'}</div>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2 bg-green-50 px-4 py-2 rounded-lg">
+                  <div className="flex items-center gap-2 rounded-lg border border-green-200 bg-green-50 px-4 py-2">
                     <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 text-green-600" viewBox="0 0 24 24" fill="currentColor"><path d="M12 22C6.477 22 2 17.523 2 12S6.477 2 12 2s10 4.477 10 10-4.477 10-10 10z"></path></svg>
                     <div>
                       <div className="text-sm text-green-600">Total Out</div>
@@ -517,7 +517,7 @@ export default function DailyDataPage() {
                     <div className="p-4">
                       <div className="grid grid-cols-12 gap-x-4">
                         <div className="col-span-12 sm:col-span-6 mb-3">
-                          <div className="p-3 bg-blue-50 rounded-lg">
+                          <div className="rounded-lg border border-blue-200 bg-blue-50 p-3">
                             <div className="flex flex-wrap justify-between items-center">
                               <div className="flex-auto">
                                 <p className="mb-0 text-blue-600 text-sm">Total Present</p>
@@ -534,7 +534,7 @@ export default function DailyDataPage() {
                           </div>
                         </div>
                         <div className="col-span-12 sm:col-span-6 mb-3">
-                          <div className="p-3 bg-amber-50 rounded-lg">
+                          <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
                             <div className="flex flex-wrap justify-between items-center">
                               <div className="flex-auto">
                                 <p className="mb-0 text-amber-600 text-sm">Total On Leave</p>
@@ -551,7 +551,7 @@ export default function DailyDataPage() {
                           </div>
                         </div>
                         <div className="col-span-12 sm:col-span-6 mb-3">
-                          <div className="p-3 bg-red-50 rounded-lg">
+                          <div className="rounded-lg border border-red-200 bg-red-50 p-3">
                             <div className="flex flex-wrap justify-between items-center">
                               <div className="flex-auto" >
                                 <p className="mb-0 text-red-500 text-sm">Biometric Punch Missing</p>

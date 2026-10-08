@@ -23,6 +23,24 @@ export function CountValue({ value, loading, format = (v) => v }) {
   return <span className="text-2xl font-semibold text-slate-900">{loading ? '—' : format(value ?? 0)}</span>;
 }
 
+// Statistic boxes follow the convention of the other dashboards in the app (Super Admin,
+// Establishment, HOD, Tickets ...): a -50 tint with a matching -200 border. Class names are
+// spelled out in full so Tailwind keeps them in the build.
+const STAT_TONES = [
+  'border-blue-200 bg-blue-50 hover:border-blue-300',
+  'border-green-200 bg-green-50 hover:border-green-300',
+  'border-yellow-200 bg-yellow-50 hover:border-yellow-300',
+  'border-purple-200 bg-purple-50 hover:border-purple-300',
+  'border-indigo-200 bg-indigo-50 hover:border-indigo-300',
+  'border-pink-200 bg-pink-50 hover:border-pink-300',
+  'border-emerald-200 bg-emerald-50 hover:border-emerald-300',
+  'border-amber-200 bg-amber-50 hover:border-amber-300',
+];
+
+export function statTone(index) {
+  return STAT_TONES[index % STAT_TONES.length];
+}
+
 // series: [{ label, value }]
 export function OverviewChart({ series, loading, title = 'Overview' }) {
   const chartRef = useRef(null);
