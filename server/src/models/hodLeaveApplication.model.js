@@ -1,4 +1,5 @@
 const { pool } = require('../config/db');
+const LeaveRules = require('../services/leaveRules.service');
 
 async function getDepartmentLeaveApplications({ departmentId, month = null, year = null }) {
   const deptId = Number(departmentId);
@@ -38,7 +39,7 @@ async function getDepartmentLeaveApplications({ departmentId, month = null, year
       FROM leave_staff_applications lsa
       JOIN leaves l ON l.id = lsa.leave_id
       JOIN staff s1 ON s1.id = lsa.staff_id
-      JOIN staff s2 ON s2.id = lsa.alternate
+      LEFT JOIN staff s2 ON s2.id = lsa.alternate
       LEFT JOIN staff s3 ON s3.id = lsa.additional_alternate
       WHERE lsa.staff_id IN (
         SELECT ds.staff_id
@@ -98,64 +99,6 @@ async function getApplicationByIdForDepartment(client, applicationId, department
   return rows[0] || null;
 }
 
-async function syncConsumedEntitlement(client, staffId, leaveId, year) {
-  const numericStaffId = Number(staffId);
-  const numericLeaveId = Number(leaveId);
-  const numericYear = Number(year);
-  if (!numericStaffId || !numericLeaveId || !numericYear) return;
-
-  const sumResult = await client.query(
-    `
-      SELECT COALESCE(SUM(no_of_days), 0) AS consumed
-      FROM leave_staff_applications
-      WHERE staff_id = $1
-        AND leave_id = $2
-        AND year = $3
-        AND LOWER(COALESCE(appl_status, 'pending')) NOT IN ('rejected', 'cancelled')
-    `,
-    [numericStaffId, numericLeaveId, numericYear]
-  );
-
-  const consumed = Number(sumResult.rows[0]?.consumed || 0);
-
-  const entitlement = await client.query(
-    `
-      SELECT id
-      FROM leave_staff_entitlements
-      WHERE staff_id = $1
-        AND leave_id = $2
-        AND year = $3
-      ORDER BY id DESC
-      LIMIT 1
-    `,
-    [numericStaffId, numericLeaveId, numericYear]
-  );
-
-  if (entitlement.rows.length > 0) {
-    await client.query(
-      `
-        UPDATE leave_staff_entitlements
-        SET consumed_curr_year = $1,
-            status = 'active',
-            updated_at = NOW()
-        WHERE id = $2
-      `,
-      [consumed, entitlement.rows[0].id]
-    );
-    return;
-  }
-
-  await client.query(
-    `
-      INSERT INTO leave_staff_entitlements
-        (year, staff_id, leave_id, entitled_curr_year, accumulated, consumed_curr_year, encashed_curr_year, total_encashed, wef, status, created_at, updated_at)
-      VALUES
-        ($1, $2, $3, 0, 0, $4, 0, 0, $5, 'active', NOW(), NOW())
-    `,
-    [numericYear, numericStaffId, numericLeaveId, consumed, `${numericYear}-01-01`]
-  );
-}
-
 async function updateApplicationStatusForDepartment({ applicationId, departmentId, status, recommenderUserId = null }) {
   const appId = Number(applicationId);
   const deptId = Number(departmentId);
@@ -172,38 +115,29 @@ async function updateApplicationStatusForDepartment({ applicationId, departmentI
 
     const existing = await getApplicationByIdForDepartment(client, appId, deptId);
     if (!existing) {
-      await client.query('ROLLBACK');
       const err = new Error('Leave application not found for this department');
       err.statusCode = 404;
       throw err;
     }
 
-    if (existing.appl_status === 'cancelled') {
-      await client.query('ROLLBACK');
-      const err = new Error('Cancelled leave application cannot be updated');
-      err.statusCode = 409;
+    const app = await LeaveRules.getApplicationForAction(client, appId);
+    const additionalMap = await LeaveRules.getAdditionalDesignationMap([app.staff_id], client);
+    const additional = additionalMap.get(Number(app.staff_id)) || null;
+    const allowed = allowedStatus === 'recommended'
+      ? LeaveRules.canHodRecommend(app, additional)
+      : LeaveRules.canHodReject(app, additional);
+    if (!allowed) {
+      const err = new Error(`This leave application cannot be ${allowedStatus} by the HoD in its current state`);
+      err.statusCode = 403;
       throw err;
     }
 
-    const nextStatus = allowedStatus;
-    const recommender = Number(recommenderUserId) || null;
-
-    const { rows } = await client.query(
-      `
-        UPDATE leave_staff_applications
-        SET appl_status = $1,
-            recommender = CASE WHEN $1 = 'recommended' THEN $2 ELSE recommender END,
-            updated_at = NOW()
-        WHERE id = $3
-        RETURNING id, appl_status
-      `,
-      [nextStatus, recommender, appId]
-    );
-
-    await syncConsumedEntitlement(client, Number(existing.staff_id), Number(existing.leave_id), Number(existing.year));
+    const row = await LeaveRules.transitionApplicationStatus(client, app, allowedStatus, {
+      actorUserId: allowedStatus === 'recommended' ? recommenderUserId : null,
+    });
 
     await client.query('COMMIT');
-    return rows[0] || null;
+    return row;
   } catch (error) {
     await client.query('ROLLBACK');
     throw error;

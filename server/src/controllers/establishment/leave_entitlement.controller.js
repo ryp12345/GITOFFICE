@@ -1,6 +1,7 @@
 const LeaveEntitlement = require('../../models/leave_entitlement.model');
 const { sendSuccess, sendError } = require('../../utils/response');
-const { findDepartmentByHodUserId } = require('../../models/hodDepartmentOverview.model');
+const { resolveDepartmentOrThrow } = require('../../services/hodLeaveApplication.service');
+const { resolveStaffIdFromUserId } = require('../../models/leave_calendar.model');
 
 const toMapFromPrefixedFields = (body, prefix) => {
   const mapped = {};
@@ -90,10 +91,8 @@ exports.getForHod = async (req, res) => {
       return sendError(res, 'User not authenticated', 401);
     }
 
-    const department = await findDepartmentByHodUserId(userId);
-    if (!department || !department.id) {
-      return sendError(res, 'No department mapping found for this HOD user', 404);
-    }
+    // HoD → own department, Registrar → Office (same resolution as the HoD leave list)
+    const department = await resolveDepartmentOrThrow(req.user);
 
     const data = await LeaveEntitlement.getEntitlementScreenData({ year, departmentId: department.id, mode: 'yearwise' });
     // Attach resolved department so clients can display HOD's department name
@@ -101,5 +100,21 @@ exports.getForHod = async (req, res) => {
     sendSuccess(res, data);
   } catch (err) {
     sendError(res, err.message || 'Error fetching HOD leave entitlements', err.statusCode || 500);
+  }
+};
+
+// Logged-in staff member's own entitlements (staff must not receive everyone's balances).
+exports.getMine = async (req, res) => {
+  try {
+    const year = Number(req.query.year || new Date().getFullYear());
+    const staffId = await resolveStaffIdFromUserId(req.user && req.user.id);
+    if (!staffId) return sendError(res, 'Staff record not found', 404);
+
+    const data = await LeaveEntitlement.getEntitlementScreenData({ year, departmentId: null, mode: 'yearwise' });
+    const rows = Array.isArray(data.data) ? data.data : [];
+    data.data = rows.filter((row) => Number(row.id) === Number(staffId));
+    sendSuccess(res, data);
+  } catch (err) {
+    sendError(res, err.message || 'Error fetching leave entitlements', err.statusCode || 500);
   }
 };

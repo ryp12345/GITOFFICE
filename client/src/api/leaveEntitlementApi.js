@@ -29,6 +29,14 @@ export const getLeaveEntitlements = async ({ year, departmentId, mode } = {}, to
   });
 };
 
+// Logged-in staff member's own entitlement row(s) for a year.
+export const getMyLeaveEntitlements = async ({ year } = {}, token) => {
+  return axios.get('/leave-entitlements/me', {
+    params: { year },
+    headers: tokenHeaders(token),
+  });
+};
+
 export const getLeaveEntitlementsForHod = async ({ year }, token) => {
   const params = { year };
   return axios.get('/leave-entitlements/hod', {

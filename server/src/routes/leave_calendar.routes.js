@@ -7,12 +7,14 @@ const { roleMiddleware } = require('../middlewares/role.middleware');
 router.get('/meta', authMiddleware, controller.getMeta);
 router.get('/events', authMiddleware, controller.getEvents);
 router.get('/alternate-staff', authMiddleware, controller.getAlternateStaff);
+router.get('/alternate-options', authMiddleware, controller.getAlternateOptions);
+router.get('/eligible-leave-types', authMiddleware, controller.getEligibleLeaveTypes);
 router.get('/applications',     authMiddleware, controller.getApplicationsByStaff);
 router.get('/applications/:id', authMiddleware, controller.getApplicationById);
 router.get('/yearwise', authMiddleware, controller.getYearwiseLeaveData);
 router.get('/pdf/:id', authMiddleware, controller.getLeavePDF);
 
-router.post('/validate',      authMiddleware, roleMiddleware('Establishment'), controller.validateApplication);
+router.post('/validate',      authMiddleware, controller.validateApplication);
 router.post('/applications',  authMiddleware, controller.createApplication);
 router.patch('/applications/:id', authMiddleware, controller.updateApplication);
 router.post('/applications/:id/cancel', authMiddleware, controller.cancelApplication);

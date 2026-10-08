@@ -238,8 +238,10 @@ export default function EstablishementLeaveList() {
       setAlternateOptions([]);
       return;
     }
+    // The API resolves staff by user id; editFields.staff_id is a staff.id.
+    const selectedStaff = staffList.find((s) => String(s.id) === String(editFields.staff_id));
     axios.get('/leave-calendar/alternate-staff', {
-      params: { staff_id: editFields.staff_id, employee_type: '' },
+      params: { staff_id: selectedStaff?.user_id || editFields.staff_id, employee_type: '' },
       headers: { Authorization: `Bearer ${token}` },
     })
       .then((response) => setAlternateOptions(response.data?.data || []))

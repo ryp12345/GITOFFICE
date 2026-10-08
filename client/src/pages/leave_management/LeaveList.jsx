@@ -8,6 +8,12 @@ import {
 	approveDeanLeaveApplication,
 	rejectDeanLeaveApplication,
 } from '../../api/deanApi';
+import {
+	getPrincipalLeaveApplications,
+	approvePrincipalLeaveApplication,
+	rejectPrincipalLeaveApplication,
+} from '../../api/principalApi';
+import { isRoleMatch, ROLE_PRINCIPAL } from '../../utils/role';
 import { getErrorMessage } from '../../utils/errors';
 
 function normalizeLeaveStatus(status) {
@@ -45,7 +51,12 @@ function formatDateDMY(value) {
 }
 
 export default function LeaveListPage() {
-	const { token } = useAuth() || {};
+	const { token, user } = useAuth() || {};
+	// /principal/leave-list and /dean_admin/leave-list share this page; each role uses its own API.
+	const isPrincipal = isRoleMatch(user?.role, ROLE_PRINCIPAL);
+	const leaveApi = isPrincipal
+		? { list: getPrincipalLeaveApplications, approve: approvePrincipalLeaveApplication, reject: rejectPrincipalLeaveApplication }
+		: { list: getDeanLeaveApplications, approve: approveDeanLeaveApplication, reject: rejectDeanLeaveApplication };
 
 	const [rows, setRows] = useState([]);
 	const [month, setMonth] = useState(String(new Date().getMonth() + 1));
@@ -71,7 +82,7 @@ export default function LeaveListPage() {
 
 		setLoading(true);
 		try {
-			const response = await getDeanLeaveApplications(token, { month, year });
+			const response = await leaveApi.list(token, { month, year });
 			const payload = response?.data?.data || {};
 			const applications = Array.isArray(payload.applications) ? payload.applications : [];
 			setRows(applications);
@@ -125,7 +136,7 @@ export default function LeaveListPage() {
 
 		setProcessing(true);
 		try {
-			await approveDeanLeaveApplication(token, applicationId);
+			await leaveApi.approve(token, applicationId);
 			notify('Leave approved successfully.');
 			await loadRows();
 		} catch (error) {
@@ -141,7 +152,7 @@ export default function LeaveListPage() {
 
 		setProcessing(true);
 		try {
-			await rejectDeanLeaveApplication(token, applicationId);
+			await leaveApi.reject(token, applicationId);
 			notify('Leave rejected successfully.');
 			await loadRows();
 		} catch (error) {
@@ -293,7 +304,8 @@ export default function LeaveListPage() {
 										) : (
 											paginatedRows.map((row, idx) => {
 												const status = normalizeLeaveStatus(row.appl_status || row.status);
-												const canAct = status === 'recommended';
+												// Server flag implementing the Laravel Dean_admin / Principal approval rules.
+												const canAct = Boolean(row.can_approve);
 
 												return (
 													<tr key={row.id} className="hover:bg-blue-50 transition-colors duration-150">

@@ -1,22 +1,38 @@
 const LeaveCalendar = require('../../models/leave_calendar.model');
+const LeaveRules = require('../../services/leaveRules.service');
+const { pool } = require('../../config/db');
 const { sendSuccess, sendError } = require('../../utils/response');
 
+const PRIVILEGED_ROLES = [
+  'establishment',
+  'super admin',
+  'super-admin',
+  'head of department',
+  'hod',
+  'registrar',
+  'principal',
+  'dean_admin',
+  'dean admin',
+];
+
+function isEstablishmentUser(user) {
+  return String(user?.role || '').trim().toLowerCase() === 'establishment';
+}
+
+function isPrivilegedUser(user) {
+  return PRIVILEGED_ROLES.includes(String(user?.role || '').trim().toLowerCase());
+}
+
+// Staff may only act on their own records; Establishment / approvers may act on anyone.
+async function isSelfOrPrivileged(user, targetUserOrStaffId) {
+  if (isPrivilegedUser(user)) return true;
+  const requesterStaffId = await LeaveCalendar.resolveStaffIdFromUserId(user?.id);
+  const targetStaffId = await LeaveCalendar.resolveStaffIdFromUserId(targetUserOrStaffId);
+  return Boolean(requesterStaffId) && Number(requesterStaffId) === Number(targetStaffId);
+}
+
 function computeNoOfDays(startDate, endDate, clType = 'Full') {
-  const start = new Date(startDate);
-  const end = new Date(endDate);
-
-  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end < start) {
-    return null;
-  }
-
-  const dayDiff = Math.floor((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
-  const clTypeNormalized = String(clType || 'Full').trim().toLowerCase();
-  const isFullDay = clTypeNormalized === 'full' || clTypeNormalized === 'full day';
-  if (dayDiff === 1 && !isFullDay) {
-    return 0.5;
-  }
-
-  return dayDiff;
+  return LeaveRules.computeNoOfDays(startDate, endDate, clType);
 }
 
 function normalizeClType(value) {
@@ -97,12 +113,14 @@ exports.validateApplication = async (req, res) => {
     const payload = normalizePayload(req.body || {});
     validateRequiredPayload(payload);
 
+    if (!(await isSelfOrPrivileged(req.user, payload.staffId))) {
+      return sendError(res, 'Forbidden', 403);
+    }
+
     const applicationId = req.body.application_id ? Number(req.body.application_id) : null;
-    const result = await LeaveCalendar.validateLeaveApplication({
-      staffId: payload.staffId,
-      startDate: payload.startDate,
-      endDate: payload.endDate,
-      applicationId
+    const result = await LeaveCalendar.validateLeaveApplication(payload, {
+      applicationId,
+      isEstablishment: isEstablishmentUser(req.user),
     });
 
     sendSuccess(res, result);
@@ -125,7 +143,7 @@ exports.createApplication = async (req, res) => {
       return sendError(res, 'Forbidden', 403);
     }
 
-    const row = await LeaveCalendar.createLeaveApplication(payload);
+    const row = await LeaveCalendar.createLeaveApplication(payload, { isEstablishment });
     sendSuccess(res, row, 201);
   } catch (err) {
     sendError(res, err.message || 'Failed to create leave application', err.statusCode || 500);
@@ -156,7 +174,7 @@ exports.updateApplication = async (req, res) => {
       return sendError(res, 'Forbidden', 403);
     }
 
-    const row = await LeaveCalendar.updateLeaveApplication(applicationId, payload);
+    const row = await LeaveCalendar.updateLeaveApplication(applicationId, payload, { isEstablishment });
     if (!row) return sendError(res, 'Leave application not found', 404);
 
     sendSuccess(res, row);
@@ -185,7 +203,7 @@ exports.cancelApplication = async (req, res) => {
       return sendError(res, 'Forbidden', 403);
     }
 
-    const row = await LeaveCalendar.cancelLeaveApplication(applicationId);
+    const row = await LeaveCalendar.cancelLeaveApplication(applicationId, { isEstablishment });
     if (!row) return sendError(res, 'Failed to cancel leave application', 500);
 
     sendSuccess(res, row);
@@ -198,11 +216,40 @@ exports.getApplicationsByStaff = async (req, res) => {
   try {
     const userId = Number(req.query.staff_id);
     if (!userId) return sendError(res, 'staff_id is required', 400);
+    if (!(await isSelfOrPrivileged(req.user, userId))) return sendError(res, 'Forbidden', 403);
 
     const data = await LeaveCalendar.getApplicationsByStaffUserId(userId);
     sendSuccess(res, data);
   } catch (err) {
     sendError(res, err.message || 'Failed to load leave applications', err.statusCode || 500);
+  }
+};
+
+// Leave types the applicant may choose (Laravel: vacational / non-vacational general leaves).
+exports.getEligibleLeaveTypes = async (req, res) => {
+  try {
+    const userId = Number(req.query.user_id || req.user?.id);
+    if (!userId) return sendError(res, 'user_id is required', 400);
+    if (!(await isSelfOrPrivileged(req.user, userId))) return sendError(res, 'Forbidden', 403);
+
+    const data = await LeaveCalendar.getEligibleLeaveTypesForUser(userId);
+    sendSuccess(res, data);
+  } catch (err) {
+    sendError(res, err.message || 'Failed to load leave types', err.statusCode || 500);
+  }
+};
+
+// Alternate / additional alternate / Deans lists for the leave form.
+exports.getAlternateOptions = async (req, res) => {
+  try {
+    const userId = Number(req.query.user_id || req.user?.id);
+    if (!userId) return sendError(res, 'user_id is required', 400);
+    if (!(await isSelfOrPrivileged(req.user, userId))) return sendError(res, 'Forbidden', 403);
+
+    const data = await LeaveCalendar.getLeaveAlternateOptions(userId);
+    sendSuccess(res, data);
+  } catch (err) {
+    sendError(res, err.message || 'Failed to load alternate staff', err.statusCode || 500);
   }
 };
 
@@ -226,6 +273,7 @@ exports.getYearwiseLeaveData = async (req, res) => {
   try {
     const userId = Number(req.query.user_id);
     if (!userId) return sendError(res, 'user_id is required', 400);
+    if (!(await isSelfOrPrivileged(req.user, userId))) return sendError(res, 'Forbidden', 403);
 
     const year = Number(req.query.year);
     if (!year) return sendError(res, 'year is required', 400);
@@ -309,6 +357,7 @@ exports.getLeavePDF = async (req, res) => {
     );
     const app = appResult.rows[0];
     if (!app) return sendError(res, 'Leave application not found', 404);
+    if (!(await isSelfOrPrivileged(req.user, app.staff_id))) return sendError(res, 'Forbidden', 403);
 
     const staffResult = await pool.query(
       `SELECT s.fname, s.mname, s.lname, s.user_id,
@@ -330,8 +379,13 @@ exports.getLeavePDF = async (req, res) => {
       `SELECT TRIM(CONCAT_WS(' ', s.fname, s.mname, s.lname)) AS additional_alternate_name FROM staff s WHERE s.id = $1 LIMIT 1`,
       [app.additional_alternate]
     );
+    // leave_staff_applications.recommender stores a users.id
     const recResult = await pool.query(
-      `SELECT TRIM(CONCAT_WS(' ', s.fname, s.mname, s.lname)) AS recommender_name FROM staff s WHERE s.id = $1 LIMIT 1`,
+      `SELECT COALESCE(NULLIF(TRIM(CONCAT_WS(' ', s.fname, s.mname, s.lname)), ''), u.email) AS recommender_name
+       FROM users u
+       LEFT JOIN staff s ON s.user_id = u.id
+       WHERE u.id = $1
+       LIMIT 1`,
       [app.recommender]
     );
 
@@ -343,14 +397,13 @@ exports.getLeavePDF = async (req, res) => {
       [app.staff_id, app.leave_id, new Date(app.start).getFullYear()]
     );
     const ent = entitlementResult.rows[0] || {};
-    const leavesCredit = Math.max(
-      (Number(ent.entitled_curr_year) || 0)
-      + (Number(ent.accumulated) || 0)
-      - (Number(ent.consumed_curr_year) || 0)
-      - (Number(ent.encashed_curr_year) || 0)
-      - (Number(ent.total_encashed) || 0),
-      0
-    );
+    // LeavePDFController: entitled + accumulated - consumed - total_encashed ('N/A' without entitlement)
+    const leavesCredit = entitlementResult.rows[0]
+      ? (Number(ent.entitled_curr_year) || 0)
+        + (Number(ent.accumulated) || 0)
+        - (Number(ent.consumed_curr_year) || 0)
+        - (Number(ent.total_encashed) || 0)
+      : 'N/A';
 
     const pdfData = {
       leave_id: app.id,

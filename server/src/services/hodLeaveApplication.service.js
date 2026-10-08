@@ -1,3 +1,4 @@
+const LeaveRules = require('./leaveRules.service');
 const { findDepartmentByHodUserId } = require('../models/hodDepartmentOverview.model');
 const { findByName } = require('../models/department.model');
 const { pool } = require('../config/db');
@@ -117,6 +118,7 @@ async function listLeaveApplicationsForHod(userOrId, query = {}) {
   }
 
   applications = await enrichApplicationRows(applications);
+  applications = await LeaveRules.annotateApplications(applications, 'hod');
 
   return {
     department,
@@ -203,6 +205,7 @@ async function bulkUpdateLeaveStatusForHod(userOrId, { action, ids }) {
 }
 
 module.exports = {
+  resolveDepartmentOrThrow,
   listLeaveApplicationsForHod,
   recommendLeaveForHod,
   rejectLeaveForHod,

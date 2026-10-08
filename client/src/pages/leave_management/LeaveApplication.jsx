@@ -441,16 +441,10 @@ export default function LeaveApplicationPage() {
 
   const sourceRows = useMemo(() => {
     if (activeMainTab === MAIN_TABS.ALL_LIST) return rows;
-    // For principal, Laravel shows only those pending/recommended rows that have
-    // an additional designation/alternate OR are >4 days and recommended.
+    // For principal, list the applications the Principal can act on
+    // (server flag: additional designation, or more than 4 days and recommended).
     if (isPrincipal) {
-      return rows.filter((row) => {
-        const status = normalizeLeaveStatus(row.appl_status || row.status);
-        if (!(status === 'pending' || status === 'recommended' || status === 'cancelled' || status === 'rejected')) return false;
-        const hasAdditional = Boolean(row.additional || row.additional_designation_names || row.additional_alternate || row.additional_alternate_staff || row.additional_alternate_staff);
-        const noOfDays = Number(row.no_of_days || 0);
-        return hasAdditional || (noOfDays > 4 && status === 'recommended');
-      });
+      return rows.filter((row) => Boolean(row.can_approve));
     }
 
     return rows.filter((row) => {
@@ -593,14 +587,8 @@ export default function LeaveApplicationPage() {
 
   const pendingIdsOnPage = useMemo(() => {
     return visibleRows
-      .filter((row) => {
-        const status = normalizeLeaveStatus(row.appl_status || row.status);
-        const hasAdditional = Boolean(row.additional || row.additional_alternate || row.additional_staff || row.additionalAlternate);
-        const noOfDays = Number(row.no_of_days || 0);
-        if (isDean) return status === 'recommended';
-        if (isPrincipal) return status === 'recommended' && (hasAdditional || noOfDays > 4);
-        return status === 'pending';
-      })
+      // Permission flags come from the server (Laravel approval rules).
+      .filter((row) => ((isDean || isPrincipal) ? Boolean(row.can_approve) : Boolean(row.can_reject)))
       .map((row) => Number(row.id));
   }, [visibleRows, isDean, isPrincipal]);
 
@@ -957,14 +945,17 @@ export default function LeaveApplicationPage() {
                           visibleRows.map((row, index) => {
                             const status = normalizeLeaveStatus(row.appl_status || row.status);
                             const isPending = status === 'pending';
-                            const hasAdditional = Boolean(row.additional || row.additional_alternate || row.additional_staff || row.additionalAlternate);
-                            const noOfDays = Number(row.no_of_days || 0);
-                            const canDeanAct = isPrincipal
-                              ? (status === 'recommended' && (hasAdditional || noOfDays > 4))
-                              : status === 'recommended';
-                            const canHodAct = status === 'pending';
+                            // Laravel: Dean acts on <5 day leaves of staff without additional
+                            // designation; the rest is forwarded to the Principal.
+                            const isForwardedToPrincipal = isDean && !row.can_approve
+                              && status !== 'approved' && status !== 'cancelled'
+                              && (Boolean(row.additional) || Number(row.no_of_days || 0) >= 5);
+                            const canDeanAct = Boolean(row.can_approve);
+                            const canHodRecommend = Boolean(row.can_recommend);
+                            const canHodReject = Boolean(row.can_reject);
+                            const canHodAct = canHodRecommend || canHodReject;
                             const isApprover = isDean || isPrincipal;
-                            const isActionable = isApprover ? canDeanAct : canHodAct;
+                            const isActionable = isApprover ? canDeanAct : canHodReject;
                             const isChecked = selectedIds.includes(Number(row.id));
                             return (
                               <tr key={row.id} className="border-b border-gray-100 hover:bg-gray-50">
@@ -1013,6 +1004,8 @@ export default function LeaveApplicationPage() {
                                             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M11.9997 10.5855L16.9495 5.63574L18.3637 7.04996L13.4139 11.9997L18.3637 16.9495L16.9495 18.3637L11.9997 13.4139L7.04996 18.3637L5.63574 16.9495L10.5855 11.9997L5.63574 7.04996L7.04996 5.63574L11.9997 10.5855Z"></path></svg>
                                           </button>
                                         </>
+                                      ) : isForwardedToPrincipal && !isPending ? (
+                                        <span className="text-xs text-slate-500">Forwarded to Principal</span>
                                       ) : isPending ? (
                                         <span className="text-xs text-slate-500">Waiting for Recommendation</span>
                                       ) : (
@@ -1020,6 +1013,7 @@ export default function LeaveApplicationPage() {
                                       )
                                     ) : canHodAct ? (
                                       <>
+                                        {canHodRecommend && (
                                         <button
                                           type="button"
                                           disabled={processing}
@@ -1029,6 +1023,8 @@ export default function LeaveApplicationPage() {
                                         >
                                           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M9.9997 15.1709L19.1921 5.97852L20.6063 7.39273L9.9997 17.9993L3.63574 11.6354L5.04996 10.2212L9.9997 15.1709Z" /></svg>
                                         </button>
+                                        )}
+                                        {canHodReject && (
                                         <button
                                           type="button"
                                           disabled={processing}
@@ -1038,6 +1034,7 @@ export default function LeaveApplicationPage() {
                                         >
                                           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M11.9997 10.5855L16.9495 5.63574L18.3637 7.04996L13.4139 11.9997L18.3637 16.9495L16.9495 18.3637L11.9997 13.4139L7.04996 18.3637L5.63574 16.9495L10.5855 11.9997L5.63574 7.04996L7.04996 5.63574L11.9997 10.5855Z" /></svg>
                                         </button>
+                                        )}
                                       </>
                                     ) : (
                                       <span className="text-xs text-slate-400">-</span>

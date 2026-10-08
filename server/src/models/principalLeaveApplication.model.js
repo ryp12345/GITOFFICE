@@ -1,4 +1,5 @@
 const { pool } = require('../config/db');
+const LeaveRules = require('../services/leaveRules.service');
 
 function parseOptionalInt(value) {
   if (value === undefined || value === null || value === '') return null;
@@ -83,97 +84,6 @@ async function getAllLeaveApplications({ month = null, year = null }) {
   return rows;
 }
 
-async function getApplicationById(client, applicationId) {
-  const appId = Number(applicationId);
-  if (!appId) return null;
-
-  const { rows } = await client.query(
-    `
-      SELECT
-        id,
-        staff_id,
-        leave_id,
-        appl_status,
-        no_of_days,
-        additional_alternate,
-        EXTRACT(YEAR FROM start::date)::int AS year,
-        -- whether the staff has any active additional designations
-        EXISTS(
-          SELECT 1 FROM designation_staff ds
-          JOIN designations d ON d.id = ds.designation_id
-          WHERE ds.staff_id = lsa.staff_id
-            AND LOWER(COALESCE(ds.status, 'active')) = 'active'
-            AND d.isadditional = 1
-          LIMIT 1
-        ) AS has_additional_designation
-      FROM leave_staff_applications lsa
-      WHERE lsa.id = $1
-      LIMIT 1
-    `,
-    [appId]
-  );
-
-  return rows[0] || null;
-}
-
-async function syncConsumedEntitlement(client, staffId, leaveId, year) {
-  const numericStaffId = Number(staffId);
-  const numericLeaveId = Number(leaveId);
-  const numericYear = Number(year);
-  if (!numericStaffId || !numericLeaveId || !numericYear) return;
-
-  const sumResult = await client.query(
-    `
-      SELECT COALESCE(SUM(no_of_days), 0) AS consumed
-      FROM leave_staff_applications
-      WHERE staff_id = $1
-        AND leave_id = $2
-        AND year = $3
-        AND LOWER(COALESCE(appl_status, 'pending')) NOT IN ('rejected', 'cancelled')
-    `,
-    [numericStaffId, numericLeaveId, numericYear]
-  );
-
-  const consumed = Number(sumResult.rows[0]?.consumed || 0);
-
-  const entitlement = await client.query(
-    `
-      SELECT id
-      FROM leave_staff_entitlements
-      WHERE staff_id = $1
-        AND leave_id = $2
-        AND year = $3
-      ORDER BY id DESC
-      LIMIT 1
-    `,
-    [numericStaffId, numericLeaveId, numericYear]
-  );
-
-  if (entitlement.rows.length > 0) {
-    await client.query(
-      `
-        UPDATE leave_staff_entitlements
-        SET consumed_curr_year = $1,
-            status = 'active',
-            updated_at = NOW()
-        WHERE id = $2
-      `,
-      [consumed, entitlement.rows[0].id]
-    );
-    return;
-  }
-
-  await client.query(
-    `
-      INSERT INTO leave_staff_entitlements
-        (year, staff_id, leave_id, entitled_curr_year, accumulated, consumed_curr_year, encashed_curr_year, total_encashed, wef, status, created_at, updated_at)
-      VALUES
-        ($1, $2, $3, 0, 0, $4, 0, 0, $5, 'active', NOW(), NOW())
-    `,
-    [numericYear, numericStaffId, numericLeaveId, consumed, `${numericYear}-01-01`]
-  );
-}
-
 async function updateApplicationStatusForPrincipal({ applicationId, status, approverUserId = null }) {
   const appId = Number(applicationId);
   const nextStatus = String(status || '').trim().toLowerCase();
@@ -188,51 +98,27 @@ async function updateApplicationStatusForPrincipal({ applicationId, status, appr
   try {
     await client.query('BEGIN');
 
-    const existing = await getApplicationById(client, appId);
-    if (!existing) {
+    const app = await LeaveRules.getApplicationForAction(client, appId);
+    if (!app) {
       const err = new Error('Leave application not found');
       err.statusCode = 404;
       throw err;
     }
 
-    if (String(existing.appl_status || '').toLowerCase() === 'cancelled') {
-      const err = new Error('Cancelled leave application cannot be updated');
-      err.statusCode = 409;
-      throw err;
-    }
-
-    // Principal-specific permission: only allow approve/reject when application
-    // status is 'recommended' AND (has additional alternate/designation OR no_of_days > 4)
-    // This mirrors the Laravel UI rule that shows checkboxes only when additional exists
-    // or when leave is >4 days and recommended.
-    const currStatus = String(existing.appl_status || '').toLowerCase();
-    const hasAdditionalAlt = existing.additional_alternate !== null && existing.additional_alternate !== undefined;
-    const hasAdditionalDesignation = Boolean(existing.has_additional_designation);
-    const noOfDays = Number(existing.no_of_days || 0);
-
-    if (!(currStatus === 'recommended' && (hasAdditionalAlt || hasAdditionalDesignation || noOfDays > 4))) {
-      const err = new Error('Principal is not authorized to update this application');
+    const additionalMap = await LeaveRules.getAdditionalDesignationMap([app.staff_id], client);
+    if (!LeaveRules.canPrincipalAct(app, additionalMap.get(Number(app.staff_id)) || null)) {
+      const err = new Error('Principal is not authorized to update this leave application');
       err.statusCode = 403;
       throw err;
     }
 
-    const approver = Number(approverUserId) || null;
-    const { rows } = await client.query(
-      `
-        UPDATE leave_staff_applications
-        SET appl_status = $1,
-            approver = CASE WHEN $1 = 'approved' THEN $2 ELSE approver END,
-            updated_at = NOW()
-        WHERE id = $3
-        RETURNING id, appl_status
-      `,
-      [nextStatus, approver, appId]
-    );
-
-    await syncConsumedEntitlement(client, Number(existing.staff_id), Number(existing.leave_id), Number(existing.year));
+    const row = await LeaveRules.transitionApplicationStatus(client, app, nextStatus, {
+      actorUserId: nextStatus === 'approved' ? approverUserId : null,
+      notifyStaff: true,
+    });
 
     await client.query('COMMIT');
-    return rows[0] || null;
+    return row;
   } catch (error) {
     await client.query('ROLLBACK');
     throw error;

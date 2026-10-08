@@ -59,10 +59,27 @@ const Leave = {
       data.applicable_to,
       leaveWef,
       leaveEndDate,
-      data.status,
+      // LeaveController::update — closing a leave type makes it inactive
+      leaveEndDate ? 'inactive' : data.status,
       id
     ];
     const result = await pool.query(q, values);
+
+    if (leaveEndDate) {
+      // ...and closes its active combinations and rules on the same date.
+      await pool.query(
+        `UPDATE combine_leaves SET status = 'inactive', closing_wef = $2, updated_at = NOW()
+         WHERE leave_id = $1 AND status = 'active'`,
+        [id, leaveEndDate]
+      );
+      await pool.query(
+        `UPDATE leave_rules
+         SET status = 'inactive', cf_closing_date = $2, enc_closing_date = $2, gap_closing_date = $2, updated_at = NOW()
+         WHERE leave_id = $1 AND status = 'active'`,
+        [id, leaveEndDate]
+      );
+    }
+
     return result.rows[0];
   },
   async delete(id) {

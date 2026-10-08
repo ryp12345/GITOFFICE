@@ -1,3 +1,4 @@
+const LeaveRules = require('./leaveRules.service');
 const deanLeaveApplicationModel = require('../models/deanLeaveApplication.model');
 
 function parseOptionalInt(value) {
@@ -10,7 +11,8 @@ async function listLeaveApplicationsForDean(query = {}) {
   const month = parseOptionalInt(query.month);
   const year = parseOptionalInt(query.year);
 
-  const applications = await deanLeaveApplicationModel.getAllLeaveApplications({ month, year });
+  const rows = await deanLeaveApplicationModel.getAllLeaveApplications({ month, year });
+  const applications = await LeaveRules.annotateApplications(rows, 'dean');
   return { applications };
 }
 

@@ -3,7 +3,7 @@ import Sidebar from '../../components/layout/Sidebar';
 import { useAuth } from '../../context/AuthContext';
 import { ROLE_NON_TEACHING, isRoleMatch } from '../../utils/role';
 import api from '../../api/axios';
-import { getLeaveEntitlements } from '../../api/leaveEntitlementApi';
+import { getMyLeaveEntitlements } from '../../api/leaveEntitlementApi';
 import { Chart, ArcElement, Tooltip, Legend } from 'chart.js';
 import React from 'react';
 
@@ -97,7 +97,7 @@ export default function StaffDashboard() {
         // fetch leave entitlements for current year
         try {
           const year = new Date().getFullYear();
-          const entRes = await getLeaveEntitlements({ year }, token);
+          const entRes = await getMyLeaveEntitlements({ year }, token);
           const payload = entRes?.data?.data || {};
           const rows = payload.data || [];
 

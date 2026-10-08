@@ -1,4 +1,5 @@
 const { pool } = require('../config/db');
+const LeaveRules = require('../services/leaveRules.service');
 
 function normalizeStatus(value) {
   return String(value || '').trim().toLowerCase();
@@ -183,417 +184,75 @@ async function getLeaveApplicationById(applicationId) {
   return rows[0] || null;
 }
 
-async function validateLeaveApplication({ staffId: userId, startDate, endDate, applicationId = null } = {}) {
-  const staffId = await resolveStaffIdFromUserId(userId);
+// Full Laravel validation (validateleave + the staff form checks). Establishment
+// applies on behalf of staff without validation, exactly like LeaveController::ESTB_Leave_store.
+async function runValidation(db, staffId, payload, { applicationId = null, isEstablishment = false, isNew = true } = {}) {
+  if (!payload.alternate) {
+    return { valid: false, message: 'You have not selected the leave type or Alternate arrangement.' };
+  }
+  if (isEstablishment) return { valid: true };
+
+  const requestCheck = await LeaveRules.validateStaffRequest(db, {
+    staffId,
+    leaveId: payload.leaveId,
+    startDate: payload.startDate,
+    endDate: payload.endDate,
+    clType: payload.clType,
+    alternate: payload.alternate,
+    isNew,
+  });
+  if (!requestCheck.valid) return requestCheck;
+
+  return LeaveRules.validateLeave(db, {
+    staffId,
+    leaveId: payload.leaveId,
+    startDate: payload.startDate,
+    endDate: payload.endDate,
+    noOfDays: payload.noOfDays,
+    clType: payload.clType,
+    applicationId,
+  });
+}
+
+function validationError(message) {
+  const err = new Error(message);
+  err.statusCode = 409;
+  return err;
+}
+
+async function validateLeaveApplication(payload, { applicationId = null, isEstablishment = false } = {}) {
+  const staffId = await resolveStaffIdFromUserId(payload.staffId);
   if (!staffId) {
     return { valid: false, message: 'Staff record not found for this user' };
   }
-
-  const params = [staffId, endDate, startDate];
-  let sql = `
-    SELECT id
-    FROM leave_staff_applications
-    WHERE staff_id = $1
-      AND LOWER(COALESCE(appl_status, 'pending')) NOT IN ('rejected', 'cancelled')
-      AND start::date <= $2::date
-      AND "end"::date >= $3::date
-  `;
-
-  if (applicationId) {
-    sql += ' AND id <> $4';
-    params.push(Number(applicationId));
-  }
-
-  sql += ' LIMIT 1';
-
-  const { rows } = await pool.query(sql, params);
-  if (rows.length > 0) {
-    return { valid: false, message: 'Overlaps with an existing leave application' };
-  }
-
-  return { valid: true };
+  return runValidation(pool, staffId, payload, {
+    applicationId,
+    isEstablishment,
+    isNew: !applicationId,
+  });
 }
 
-async function getLeaveRules(leaveId) {
-  const { rows } = await pool.query(
-    `SELECT * FROM leave_rules WHERE leave_id = $1 AND LOWER(TRIM(COALESCE(status, ''))) = 'active' ORDER BY id DESC LIMIT 1`,
-    [Number(leaveId)]
-  );
-  return rows[0] || null;
-}
-
-async function getLeaveById(leaveId) {
-  const { rows } = await pool.query(
-    `SELECT * FROM leaves WHERE id = $1 LIMIT 1`,
-    [Number(leaveId)]
-  );
-  return rows[0] || null;
-}
-
-async function getCombineLeaves(leaveId) {
-  const { rows } = await pool.query(
-    `SELECT cl.combined_id FROM combine_leaves cl WHERE cl.leave_id = $1 AND LOWER(TRIM(COALESCE(cl.status, ''))) = 'active'`,
-    [Number(leaveId)]
-  );
-  return rows.map((r) => Number(r.combined_id));
-}
-
-async function getHolidaysForDates(dateKeys) {
-  if (!Array.isArray(dateKeys) || dateKeys.length === 0) return [];
-  const { rows } = await pool.query(
-    `SELECT start, type, title FROM holidayrhs WHERE start = ANY($1::date[]) AND LOWER(TRIM(COALESCE(type, ''))) IN ('holiday', 'rh')`,
-    [dateKeys]
-  );
-  return rows;
-}
-
-function isFirstOrThirdSaturday(dateStr) {
-  const date = new Date(dateStr + 'T00:00:00');
-  if (isNaN(date.getTime()) || date.getDay() !== 6) return false;
-  const day = date.getDate();
-  return (day >= 1 && day <= 7) || (day >= 15 && day <= 21);
-}
-
-async function checkOverlappingLeave(client, staffId, startDate, endDate, excludeAppId = null) {
-  const params = [staffId, endDate, startDate];
-  let sql = `
-    SELECT la.id, l.shortname, la.start, la."end", la.no_of_days, la.cl_type, la.appl_status
-    FROM leave_staff_applications la
-    JOIN leaves l ON l.id = la.leave_id
-    WHERE la.staff_id = $1
-      AND LOWER(COALESCE(la.appl_status, 'pending')) NOT IN ('rejected', 'cancelled')
-      AND la.start::date <= $2::date
-      AND la."end"::date >= $3::date
-  `;
-  if (excludeAppId) {
-    sql += ' AND la.id <> $4';
-    params.push(Number(excludeAppId));
-  }
-  sql += ' LIMIT 1';
-  const { rows } = await client.query(sql, params);
-  return rows[0] || null;
-}
-
-async function findPreviousLeaveBefore(client, staffId, endDate) {
-  const { rows } = await client.query(
-    `
-    SELECT la.id, l.shortname, la.start, la."end", la.no_of_days, la.cl_type, la.appl_status, la.leave_id
-    FROM leave_staff_applications la
-    JOIN leaves l ON l.id = la.leave_id
-    WHERE la.staff_id = $1
-      AND la."end" = $2
-      AND LOWER(COALESCE(la.cl_type, 'full')) != 'morning'
-      AND LOWER(COALESCE(la.appl_status, 'pending')) NOT IN ('rejected', 'cancelled')
-      AND UPPER(TRIM(l.shortname)) NOT LIKE '%DL%'
-    LIMIT 1
-    `,
-    [staffId, endDate]
-  );
-  return rows[0] || null;
-}
-
-async function findNextLeaveAfter(client, staffId, startDate) {
-  const { rows } = await client.query(
-    `
-    SELECT la.id, l.shortname, la.start, la."end", la.no_of_days, la.cl_type, la.appl_status, la.leave_id
-    FROM leave_staff_applications la
-    JOIN leaves l ON l.id = la.leave_id
-    WHERE la.staff_id = $1
-      AND la.start = $2
-      AND LOWER(COALESCE(la.cl_type, 'full')) != 'afternoon'
-      AND LOWER(COALESCE(la.appl_status, 'pending')) NOT IN ('rejected', 'cancelled')
-      AND UPPER(TRIM(l.shortname)) NOT LIKE '%DL%'
-    LIMIT 1
-    `,
-    [staffId, startDate]
-  );
-  return rows[0] || null;
-}
-
-async function validateLeaveRules(client, staffId, leaveId, startDate, endDate, noOfDays, clType, applicationId = null) {
-  const leave = await getLeaveById(leaveId);
-  if (!leave) {
-    return { valid: false, message: 'Invalid leave type' };
-  }
-
-  const rules = await getLeaveRules(leaveId);
-  const combineLeaveIds = await getCombineLeaves(leaveId);
-  const shortname = String(leave.shortname || '').toUpperCase();
-
-  if (shortname.startsWith('DL') || shortname.toLowerCase().includes('lwp')) {
-    return { valid: true };
-  }
-
-  const start = new Date(startDate + 'T00:00:00');
-  const end = new Date(endDate + 'T00:00:00');
-
-  if (isNaN(start.getTime()) || isNaN(end.getTime()) || end < start) {
-    return { valid: false, message: 'Invalid date range' };
-  }
-
-  const entitlementResult = await client.query(
-    `
-    SELECT lse.entitled_curr_year, lse.accumulated, lse.consumed_curr_year, lse.encashed_curr_year, lse.total_encashed
-    FROM leave_staff_entitlements lse
-    WHERE lse.staff_id = $1 AND lse.leave_id = $2 AND lse.year = $3
-    ORDER BY lse.id DESC LIMIT 1
-    `,
-    [staffId, leaveId, start.getFullYear()]
-  );
-  const entitlement = entitlementResult.rows[0] || null;
-  if (entitlement) {
-    const entitled = Number(entitlement.entitled_curr_year || 0);
-    const accumulated = Number(entitlement.accumulated || 0);
-    const consumed = Number(entitlement.consumed_curr_year || 0);
-    const encashed = Number(entitlement.encashed_curr_year || 0) + Number(entitlement.total_encashed || 0);
-    const availableBalance = Math.max(entitled + accumulated - consumed - encashed, 0);
-
-    if (noOfDays > availableBalance) {
-      return { valid: false, message: `You do not have enough leave balance. Available: ${availableBalance}, requested: ${noOfDays}` };
-    }
-  }
-
-  const dayDiff = Math.floor((end.getTime() - start.getTime()) / 86400000) + 1;
-  const clNormalized = String(clType || 'Full').trim().toLowerCase();
-  const isFullDay = clNormalized === 'full' || clNormalized === 'full day';
-  const effectiveDays = (dayDiff === 1 && !isFullDay) ? 0.5 : dayDiff;
-
-  if (noOfDays !== effectiveDays) {
-    return { valid: false, message: `No of days mismatch. Expected ${effectiveDays} but got ${noOfDays}` };
-  }
-
-  if (leave.min_days != null && noOfDays < Number(leave.min_days)) {
-    return { valid: false, message: `Minimum ${leave.min_days} days required for this leave type` };
-  }
-
-  if (leave.max_days != null && noOfDays > Number(leave.max_days)) {
-    return { valid: false, message: `Maximum ${leave.max_days} days allowed for this leave type` };
-  }
-
-  if (rules && String(rules.gap || '').toLowerCase() === 'yes') {
-    const minGap = Number(rules.min_gap || 0);
-    if (minGap > 0) {
-      const similarLeave = await client.query(
-        `
-        SELECT id, start
-        FROM leave_staff_applications
-        WHERE staff_id = $1 AND leave_id = $2 AND start::date <= $3::date
-        ORDER BY ABS(EXTRACT(DAY FROM (start::date - $3::date))) ASC
-        LIMIT 1
-        `,
-        [staffId, leaveId, startDate]
-      );
-      if (similarLeave.rows[0]?.start) {
-        const lastStart = new Date(String(similarLeave.rows[0].start));
-        const thisStart = new Date(startDate + 'T00:00:00');
-        const diffDays = Math.abs(Math.floor((thisStart - lastStart) / 86400000));
-        if (diffDays > 0 && diffDays < minGap) {
-          return { valid: false, message: `You must wait at least ${minGap} days between similar leaves. Last leave was ${diffDays} days ago.` };
-        }
-      }
-    }
-  }
-
-  // Rule-5: Max time allowed in period (max times in specified period)
-  if (rules && rules.period && rules.max_time_allowed) {
-    const normalizedPeriod = String(rules.period || '').toLowerCase();
-    let periodStart = new Date(startDate + 'T00:00:00');
-    const periodStartCloned = new Date(periodStart);
-
-    if (normalizedPeriod.includes('entire service')) {
-      periodStart = new Date('2000-01-01');
-    } else if (normalizedPeriod.includes('five years')) {
-      periodStartCloned.setFullYear(periodStartCloned.getFullYear() - 5);
-    } else if (normalizedPeriod.includes('one year')) {
-      periodStartCloned.setFullYear(periodStartCloned.getFullYear() - 1);
-    } else if (normalizedPeriod.includes('six months')) {
-      periodStartCloned.setMonth(periodStartCloned.getMonth() - 6);
-    } else if (normalizedPeriod.includes('one month')) {
-      periodStartCloned.setMonth(periodStartCloned.getMonth() - 1);
-    } else {
-      periodStartCloned.setFullYear(periodStartCloned.getFullYear() - 1);
-    }
-
-    const countResult = await client.query(
-      `SELECT COUNT(*) AS cnt FROM leave_staff_applications WHERE staff_id = $1 AND leave_id = $2 AND LOWER(COALESCE(appl_status, 'pending')) NOT IN ('rejected', 'cancelled') AND start >= $3::date`,
-      [staffId, leaveId, periodStartCloned.toISOString().slice(0, 10)]
-    );
-
-    const count = Number(countResult.rows[0]?.cnt || 0);
-    if (count >= Number(rules.max_time_allowed)) {
-      return { valid: false, message: `You cannot take this leave more than ${rules.max_time_allowed} times in the specified period.` };
-    }
-  }
-
-  if (rules && Number(rules.prior_intimation_days || 0) > 0) {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const leaveStart = new Date(startDate + 'T00:00:00');
-    const requiredDate = new Date(today);
-    requiredDate.setDate(requiredDate.getDate() + Number(rules.prior_intimation_days));
-
-    if (leaveStart < requiredDate) {
-      return { valid: false, message: `Application must be submitted at least ${rules.prior_intimation_days} days before the leave start date` };
-    }
-  }
-
-  const overlap = await checkOverlappingLeave(client, staffId, startDate, endDate, applicationId);
-  if (overlap) {
-    return { valid: false, message: 'Overlaps with an existing leave application' };
-  }
-
-  const holidayDates = [];
-  const rhDates = [];
-  const holidayDateKeys = [];
-  let checkDate = new Date(startDate + 'T00:00:00');
-  checkDate.setDate(checkDate.getDate() - 1);
-
-  while (checkDate >= new Date('2000-01-01')) {
-    const dateKey = checkDate.toISOString().slice(0, 10);
-    const holidayRows = await client.query(
-      `SELECT type, title FROM holidayrhs WHERE start = $1 AND LOWER(TRIM(type)) IN ('holiday', 'rh')`,
-      [dateKey]
-    );
-    if (holidayRows.rows.length > 0) {
-      for (const h of holidayRows.rows) {
-        if (String(h.type).trim().toLowerCase() === 'holiday') {
-          holidayDates.push(dateKey);
-          holidayDateKeys.push(dateKey);
-        } else {
-          rhDates.push(dateKey);
-        }
-      }
-      checkDate.setDate(checkDate.getDate() - 1);
-      continue;
-    }
-
-    const dow = checkDate.getDay();
-    if (dow === 0) {
-      holidayDates.push(dateKey);
-      holidayDateKeys.push(dateKey);
-      checkDate.setDate(checkDate.getDate() - 1);
-      continue;
-    }
-
-    if (isFirstOrThirdSaturday(dateKey)) {
-      holidayDates.push(dateKey);
-      holidayDateKeys.push(dateKey);
-      checkDate.setDate(checkDate.getDate() - 1);
-      continue;
-    }
-
-    const prevLeave = await findPreviousLeaveBefore(client, staffId, dateKey);
-    if (prevLeave) {
-      if (String(prevLeave.shortname).toUpperCase() === 'RH') {
-        rhDates.push(dateKey);
-        checkDate.setDate(checkDate.getDate() - 1);
-        continue;
-      }
-
-      if (String(prevLeave.shortname).toUpperCase() !== 'EL' && String(prevLeave.shortname).toUpperCase() !== 'LWP') {
-        if (holidayDates.length > 0 && clNormalized !== 'afternoon') {
-          if (rhDates.length + holidayDates.length + noOfDays > 5 && prevLeave.no_of_days + noOfDays + holidayDates.length > 5) {
-            return { valid: false, message: 'Combined leave with holidays exceeds 5 days limit' };
-          }
-        }
-
-        if (prevLeave.leave_id !== leaveId) {
-          const allowed = await client.query(
-            `SELECT 1 FROM combine_leaves WHERE leave_id = $1 AND combined_id = $2 AND LOWER(TRIM(COALESCE(status, ''))) = 'active'`,
-            [leaveId, prevLeave.leave_id]
-          );
-          if (allowed.rows.length === 0) {
-            return { valid: false, message: 'This leave cannot be combined with the previous leave type' };
-          }
-        }
-      }
-    }
-    break;
-  }
-
-  checkDate = new Date(endDate + 'T00:00:00');
-  checkDate.setDate(checkDate.getDate() + 1);
-  let rhFoundPost = false;
-
-  while (checkDate <= new Date('2099-12-31')) {
-    const dateKey = checkDate.toISOString().slice(0, 10);
-    const holidayRows = await client.query(
-      `SELECT type, title FROM holidayrhs WHERE start = $1 AND LOWER(TRIM(type)) IN ('holiday', 'rh')`,
-      [dateKey]
-    );
-
-    if (holidayRows.rows.length > 0) {
-      for (const h of holidayRows.rows) {
-        if (String(h.type).trim().toLowerCase() === 'holiday') {
-          holidayDateKeys.push(dateKey);
-        } else {
-          rhDates.push(dateKey);
-          if (clNormalized === 'afternoon') rhFoundPost = true;
-        }
-      }
-      checkDate.setDate(checkDate.getDate() + 1);
-      continue;
-    }
-
-    if (isFirstOrThirdSaturday(dateKey)) {
-      holidayDateKeys.push(dateKey);
-      checkDate.setDate(checkDate.getDate() + 1);
-      continue;
-    }
-
-    const dow = checkDate.getDay();
-    if (dow === 0) {
-      holidayDateKeys.push(dateKey);
-      checkDate.setDate(checkDate.getDate() + 1);
-      continue;
-    }
-
-    const nextLeave = await findNextLeaveAfter(client, staffId, dateKey);
-    if (nextLeave) {
-      if (String(nextLeave.shortname).toUpperCase() === 'RH') {
-        if (clNormalized === 'afternoon') rhFoundPost = true;
-        checkDate.setDate(checkDate.getDate() + 1);
-        continue;
-      }
-
-      if (clNormalized === 'afternoon' && rhFoundPost) {
-        return { valid: false, message: 'Cannot apply afternoon leave as there is a regular leave after the RH/holiday chain' };
-      }
-
-      if (String(nextLeave.shortname).toUpperCase() !== 'EL' && String(nextLeave.shortname).toUpperCase() !== 'LWP') {
-        if (holidayDateKeys.length + noOfDays > 5 && nextLeave.no_of_days + noOfDays + holidayDateKeys.length > 5) {
-          return { valid: false, message: 'Combined leave with holidays exceeds 5 days limit' };
-        }
-      }
-
-      if (nextLeave.leave_id !== leaveId) {
-        const allowed = await client.query(
-          `SELECT 1 FROM combine_leaves WHERE leave_id = $1 AND combined_id = $2 AND LOWER(TRIM(COALESCE(status, ''))) = 'active'`,
-          [leaveId, nextLeave.leave_id]
-        );
-        if (allowed.rows.length === 0 && clNormalized !== 'morning') {
-          return { valid: false, message: 'This leave cannot be combined with the next leave type' };
-        }
-      }
-    }
-    break;
-  }
-
-  return { valid: true };
+async function getEligibleLeaveTypesForUser(userId) {
+  const staffId = await resolveStaffIdFromUserId(userId);
+  if (!staffId) return { vacation_type: null, leave_types: [] };
+  const { profile, leaveTypes } = await LeaveRules.getEligibleLeaveTypes(staffId);
+  return {
+    staff_id: staffId,
+    employee_type: profile.employeeType,
+    vacation_type: profile.vacationType,
+    earliest_applicable_date: LeaveRules.earliestApplicableDate(),
+    leave_types: leaveTypes,
+  };
 }
 
 async function insertDaywiseLeaves(client, applicationId, startDate, endDate, leaveId) {
-  const periodStart = new Date(startDate + 'T00:00:00');
-  const periodEnd = new Date(endDate + 'T00:00:00');
-
-  const cursor = new Date(periodStart);
-  while (cursor <= periodEnd) {
-    const dateStr = cursor.toISOString().slice(0, 10);
+  const start = LeaveRules.toDateKey(startDate);
+  const end = LeaveRules.toDateKey(endDate);
+  for (let day = start; day <= end; day = LeaveRules.addDays(day, 1)) {
     await client.query(
       `INSERT INTO daywise__leaves (leave_staff_applications_id, leave_id, start, created_at, updated_at) VALUES ($1, $2, $3::date, NOW(), NOW())`,
-      [applicationId, leaveId, dateStr]
+      [applicationId, leaveId, day]
     );
-    cursor.setDate(cursor.getDate() + 1);
   }
 }
 
@@ -604,139 +263,7 @@ async function deleteDaywiseLeaves(client, applicationId) {
   );
 }
 
-async function getRoutingInfoForLeave(staffId) {
-  const staffResult = await pool.query(
-    `SELECT s.id, s.user_id, s.fname, s.mname, s.lname FROM staff s WHERE s.id = $1 LIMIT 1`,
-    [staffId]
-  );
-  const staff = staffResult.rows[0];
-  if (!staff) return null;
-
-  const empTypeResult = await pool.query(
-    `SELECT employee_type FROM employee_types WHERE staff_id = $1 AND LOWER(TRIM(COALESCE(status, ''))) = 'active' ORDER BY id DESC LIMIT 1`,
-    [staffId]
-  );
-  const employeeType = empTypeResult.rows[0]?.employee_type || null;
-
-  const designationResult = await pool.query(
-    `
-    SELECT d.design_name, d.isadditional, d.isvacational
-    FROM designation_staff ds
-    JOIN designations d ON d.id = ds.designation_id
-    WHERE ds.staff_id = $1 AND LOWER(TRIM(COALESCE(ds.status, ''))) = 'active'
-    ORDER BY ds.id DESC
-    `,
-    [staffId]
-  );
-  const designations = designationResult.rows;
-
-  const hasAdditionalNonVacational = designations.some(
-    (d) => Number(d.isadditional) === 1 && String(d.isvacational || '').trim().toLowerCase().includes('non')
-  );
-
-  const assocResult = await pool.query(
-    `
-    SELECT LOWER(a.asso_name) AS asso_name
-    FROM association_staff ast
-    JOIN associations a ON a.id = ast.association_id
-    WHERE ast.staff_id = $1 AND LOWER(TRIM(COALESCE(ast.status, ''))) = 'active'
-    ORDER BY ast.id DESC LIMIT 1
-    `,
-    [staffId]
-  );
-  const associationName = assocResult.rows[0]?.asso_name || '';
-
-  const isTeachingConfirmed = employeeType === 'Teaching' && (
-    associationName.includes('confirmed') || associationName.includes('promotional probationary')
-  );
-
-  let vacationType = 'vacational';
-  if (employeeType === 'Non-Teaching' || employeeType === 'non-teaching') {
-    vacationType = 'non-vacational';
-  } else if (hasAdditionalNonVacational) {
-    vacationType = 'non-vacational';
-  } else if (associationName.includes('contractual') || associationName.includes('temporary (non teaching)') || associationName.includes('temporary non teaching')) {
-    vacationType = 'non-vacational';
-  } else if (isTeachingConfirmed) {
-    vacationType = 'vacational';
-  }
-
-  const isNonVacational = vacationType === 'non-vacational';
-  const needsHodRouting = isNonVacational;
-
-  const hodResult = await pool.query(
-    `
-    SELECT u.id AS user_id, u.role
-    FROM designation_staff ds
-    JOIN designations d ON d.id = ds.designation_id
-    JOIN staff s ON s.id = ds.staff_id
-    JOIN users u ON u.id = s.user_id
-    WHERE ds.dept_id = (
-      SELECT ds2.department_id
-      FROM department_staff ds2
-      WHERE ds2.staff_id = $1 AND LOWER(TRIM(COALESCE(ds2.status, ''))) = 'active'
-      ORDER BY ds2.id DESC LIMIT 1
-    )
-    AND LOWER(TRIM(COALESCE(ds.status, ''))) = 'active'
-    AND LOWER(TRIM(COALESCE(d.design_name, ''))) IN ('hod', 'registrar', 'controller of examination', 'dean mba', 'placement officer', 'vehicle maintenance in charge', 'it cell incharge')
-    ORDER BY ds.id DESC LIMIT 1
-    `,
-    [staffId]
-  );
-
-  let hodUserId = hodResult.rows[0]?.user_id || null;
-  let hodRole = hodResult.rows[0]?.role || null;
-
-  if (!hodUserId) {
-    const deanAdminResult = await pool.query(
-      `SELECT id AS user_id, role FROM users WHERE LOWER(TRIM(role)) = 'dean_admin' LIMIT 1`
-    );
-    hodUserId = deanAdminResult.rows[0]?.user_id || null;
-    hodRole = deanAdminResult.rows[0]?.role || null;
-  }
-
-  const deanAdminResult = await pool.query(
-    `SELECT id AS user_id FROM users WHERE LOWER(TRIM(role)) = 'dean_admin' LIMIT 1`
-  );
-  const deanAdminUserId = deanAdminResult.rows[0]?.user_id || null;
-
-  const principalResult = await pool.query(
-    `SELECT id AS user_id FROM users WHERE LOWER(TRIM(role)) = 'principal' LIMIT 1`
-  );
-  const principalUserId = principalResult.rows[0]?.user_id || null;
-
-  let recommenderUserId = hodUserId;
-  let approverUserId = deanAdminUserId;
-
-  if (needsHodRouting || hasAdditionalNonVacational) {
-    recommenderUserId = hodUserId;
-    approverUserId = hodUserId;
-  } else if (hodRole === 'registrar' || hodRole === 'office') {
-    recommenderUserId = hodUserId;
-    approverUserId = deanAdminUserId;
-  } else {
-    recommenderUserId = hodUserId;
-    approverUserId = deanAdminUserId;
-  }
-
-  return {
-    staff,
-    employeeType,
-    designations,
-    vacationType,
-    isNonVacational,
-    needsHodRouting,
-    hodUserId,
-    hodRole,
-    deanAdminUserId,
-    principalUserId,
-    recommenderUserId,
-    approverUserId,
-    associationName,
-  }
-}
-
-async function createLeaveApplication(payload) {
+async function createLeaveApplication(payload, { isEstablishment = false } = {}) {
   const staffId = await resolveStaffIdFromUserId(payload.staffId);
   if (!staffId) {
     const err = new Error('Staff record not found for this user');
@@ -744,38 +271,14 @@ async function createLeaveApplication(payload) {
     throw err;
   }
 
-  const year = Number(String(payload.endDate || payload.startDate || '').slice(0, 4));
-
-  const routing = await getRoutingInfoForLeave(staffId);
-
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
 
-    const validation = await validateLeaveRules(client, staffId, payload.leaveId, payload.startDate, payload.endDate, payload.noOfDays, payload.clType, null);
-    if (!validation.valid) {
-      await client.query('ROLLBACK');
-      const err = new Error(validation.message);
-      err.statusCode = 409;
-      throw err;
-    }
+    const validation = await runValidation(client, staffId, payload, { isEstablishment, isNew: true });
+    if (!validation.valid) throw validationError(validation.message);
 
-    const fromYear = new Date(payload.startDate + 'T00:00:00').getFullYear();
-    const toYear = new Date(payload.endDate + 'T00:00:00').getFullYear();
-    if (fromYear !== toYear) {
-      const endOfYear = new Date(fromYear, 11, 31);
-      const noOfDays1 = Math.floor((endOfYear - new Date(payload.startDate + 'T00:00:00')) / 86400000) + 1;
-      const startOfYear = new Date(toYear, 0, 1);
-      const noOfDays2 = Math.floor((new Date(payload.endDate + 'T00:00:00') - startOfYear) / 86400000) + 1;
-
-      const toYearValidation = await validateLeaveRules(client, staffId, payload.leaveId, payload.endDate, payload.endDate, noOfDays2, payload.clType, null);
-      if (!toYearValidation.valid) {
-        await client.query('ROLLBACK');
-        const err = new Error(toYearValidation.message);
-        err.statusCode = 409;
-        throw err;
-      }
-    }
+    const routing = await LeaveRules.resolveRouting(staffId, payload.noOfDays, client, { isEstablishment });
 
     const { rows } = await client.query(
       `
@@ -795,67 +298,26 @@ async function createLeaveApplication(payload) {
         payload.noOfDays,
         payload.reason,
         payload.clType || 'Full',
-        payload.alternate || null,
+        payload.alternate,
         payload.additionalAlternate || null,
-        year,
-        routing?.recommenderUserId || null,
-        routing?.approverUserId || null,
+        Number(String(payload.endDate).slice(0, 4)),
+        routing.recommenderUserId,
+        routing.approverUserId,
       ]
     );
 
     const applicationId = rows[0]?.id;
-    if (!applicationId) {
-      await client.query('ROLLBACK');
-      throw new Error('Failed to create leave application');
-    }
+    if (!applicationId) throw new Error('Failed to create leave application');
 
     await insertDaywiseLeaves(client, applicationId, payload.startDate, payload.endDate, payload.leaveId);
-
-    if (fromYear !== toYear) {
-      const endOfYear = new Date(fromYear, 11, 31);
-      const noOfDays1 = Math.floor((endOfYear - new Date(payload.startDate + 'T00:00:00')) / 86400000) + 1;
-
-      const fromEntitlement = await client.query(
-        `SELECT id, consumed_curr_year, entitled_curr_year, accumulated FROM leave_staff_entitlements WHERE staff_id = $1 AND leave_id = $2 AND year = $3 ORDER BY id DESC LIMIT 1`,
-        [staffId, payload.leaveId, fromYear]
-      );
-
-      if (fromEntitlement.rows.length > 0) {
-        const ent = fromEntitlement.rows[0];
-        await client.query(
-          `UPDATE leave_staff_entitlements SET consumed_curr_year = $1, updated_at = NOW() WHERE id = $2`,
-          [Number(ent.consumed_curr_year) + noOfDays1, ent.id]
-        );
-      } else {
-        await client.query(
-          `INSERT INTO leave_staff_entitlements (year, staff_id, leave_id, entitled_curr_year, accumulated, consumed_curr_year, encashed_curr_year, total_encashed, wef, status, created_at, updated_at) VALUES ($1, $2, $3, 0, 0, $4, 0, 0, $5, 'active', NOW(), NOW())`,
-          [fromYear, staffId, payload.leaveId, noOfDays1, `${fromYear}-01-01`]
-        );
-      }
-
-      const startOfYear = new Date(toYear, 0, 1);
-      const noOfDays2 = Math.floor((new Date(payload.endDate + 'T00:00:00') - startOfYear) / 86400000) + 1;
-
-      const toEntitlement = await client.query(
-        `SELECT id, consumed_curr_year, entitled_curr_year, accumulated FROM leave_staff_entitlements WHERE staff_id = $1 AND leave_id = $2 AND year = $3 ORDER BY id DESC LIMIT 1`,
-        [staffId, payload.leaveId, toYear]
-      );
-
-      if (toEntitlement.rows.length > 0) {
-        const ent = toEntitlement.rows[0];
-        await client.query(
-          `UPDATE leave_staff_entitlements SET consumed_curr_year = $1, updated_at = NOW() WHERE id = $2`,
-          [Number(ent.consumed_curr_year) + noOfDays2, ent.id]
-        );
-      } else {
-        await client.query(
-          `INSERT INTO leave_staff_entitlements (year, staff_id, leave_id, entitled_curr_year, accumulated, consumed_curr_year, encashed_curr_year, total_encashed, wef, status, created_at, updated_at) VALUES ($1, $2, $3, 0, 0, $4, 0, 0, $5, 'active', NOW(), NOW())`,
-          [toYear, staffId, payload.leaveId, noOfDays2, `${toYear}-01-01`]
-        );
-      }
-    } else {
-      await syncConsumedEntitlement(client, staffId, payload.leaveId, year);
-    }
+    await LeaveRules.adjustConsumed(client, {
+      staffId,
+      leaveId: payload.leaveId,
+      startDate: payload.startDate,
+      endDate: payload.endDate,
+      noOfDays: payload.noOfDays,
+      sign: 1,
+    });
 
     await insertNotificationsForApplication(client, applicationId, staffId, payload.alternate, payload.additionalAlternate, payload.startDate, payload.endDate, routing);
 
@@ -869,7 +331,27 @@ async function createLeaveApplication(payload) {
   }
 }
 
-async function updateLeaveApplication(applicationId, payload) {
+async function getApplicationSnapshot(client, applicationId) {
+  const { rows } = await client.query(
+    `
+    SELECT id, staff_id, leave_id, no_of_days, appl_status, alternate, additional_alternate,
+           TO_CHAR(start::date, 'YYYY-MM-DD') AS start_date,
+           TO_CHAR("end"::date, 'YYYY-MM-DD') AS end_date
+    FROM leave_staff_applications
+    WHERE id = $1
+    LIMIT 1
+    FOR UPDATE
+    `,
+    [applicationId]
+  );
+  return rows[0] || null;
+}
+
+function isCounted(status) {
+  return !['rejected', 'cancelled'].includes(normalizeStatus(status));
+}
+
+async function updateLeaveApplication(applicationId, payload, { isEstablishment = false } = {}) {
   const id = Number(applicationId);
   if (!id) return null;
 
@@ -877,38 +359,27 @@ async function updateLeaveApplication(applicationId, payload) {
   try {
     await client.query('BEGIN');
 
-    const beforeResult = await client.query(
-      `
-      SELECT staff_id, leave_id, EXTRACT(YEAR FROM start::date)::int AS start_year, EXTRACT(YEAR FROM "end"::date)::int AS end_year, alternate, additional_alternate
-      FROM leave_staff_applications
-      WHERE id = $1
-      LIMIT 1
-      `,
-      [id]
-    );
-    const before = beforeResult.rows[0] || null;
+    const before = await getApplicationSnapshot(client, id);
     if (!before) {
       await client.query('ROLLBACK');
       return null;
     }
 
-    const newStartYear = new Date(payload.startDate + 'T00:00:00').getFullYear();
-    const newEndYear = new Date(payload.endDate + 'T00:00:00').getFullYear();
-
-    const validation = await validateLeaveRules(client, Number(before.staff_id), payload.leaveId, payload.startDate, payload.endDate, payload.noOfDays, payload.clType, id);
-    if (!validation.valid) {
-      await client.query('ROLLBACK');
-      const err = new Error(validation.message);
-      err.statusCode = 409;
-      throw err;
+    // Staff can edit only while the application is pending (Laravel shows edit for pending only).
+    if (!isEstablishment && normalizeStatus(before.appl_status) !== 'pending') {
+      throw validationError('Only pending leave applications can be edited.');
     }
+
+    const staffId = Number(before.staff_id);
+    const validation = await runValidation(client, staffId, payload, { applicationId: id, isEstablishment, isNew: false });
+    if (!validation.valid) throw validationError(validation.message);
 
     const { rows } = await client.query(
       `
       UPDATE leave_staff_applications
       SET leave_id = $1,
-        start = $2::date,
-        "end" = $3::date,
+          start = $2::date,
+          "end" = $3::date,
           no_of_days = $4,
           reason = $5,
           cl_type = $6,
@@ -917,7 +388,7 @@ async function updateLeaveApplication(applicationId, payload) {
           year = $9,
           updated_at = NOW()
       WHERE id = $10
-      RETURNING id, staff_id, leave_id, EXTRACT(YEAR FROM "end"::date)::int AS year
+      RETURNING id, staff_id
       `,
       [
         payload.leaveId,
@@ -926,39 +397,39 @@ async function updateLeaveApplication(applicationId, payload) {
         payload.noOfDays,
         payload.reason,
         payload.clType || 'Full',
-        payload.alternate || null,
+        payload.alternate,
         payload.additionalAlternate || null,
-        Number(String(payload.endDate || payload.startDate || '').slice(0, 4)),
+        Number(String(payload.endDate).slice(0, 4)),
         id,
       ]
     );
 
-    const updated = rows[0] || null;
-    if (!updated) {
-      await client.query('ROLLBACK');
-      return null;
+    if (isCounted(before.appl_status)) {
+      await LeaveRules.adjustConsumed(client, {
+        staffId,
+        leaveId: before.leave_id,
+        startDate: before.start_date,
+        endDate: before.end_date,
+        noOfDays: before.no_of_days,
+        sign: -1,
+      });
+      await LeaveRules.adjustConsumed(client, {
+        staffId,
+        leaveId: payload.leaveId,
+        startDate: payload.startDate,
+        endDate: payload.endDate,
+        noOfDays: payload.noOfDays,
+        sign: 1,
+      });
     }
 
     await deleteDaywiseLeaves(client, id);
     await insertDaywiseLeaves(client, id, payload.startDate, payload.endDate, payload.leaveId);
 
-    const yearsToSync = new Set([
-      Number(before.start_year),
-      Number(before.end_year),
-      Number(updated.year),
-      newStartYear,
-      newEndYear,
-    ].filter((y) => Number.isFinite(y) && y > 0));
-
-    for (const y of yearsToSync) {
-      await syncConsumedEntitlement(client, Number(before.staff_id), Number(before.leave_id), y);
-    }
-
-    const routing = await getRoutingInfoForLeave(Number(updated.staff_id));
-    await updateNotificationsForUpdate(client, id, Number(before.staff_id), payload.startDate, payload.endDate, payload.alternate, payload.additionalAlternate, routing);
+    await updateNotificationsForUpdate(client, id, staffId, payload.startDate, payload.endDate, payload.alternate, payload.additionalAlternate);
 
     await client.query('COMMIT');
-    return { id: updated.id };
+    return { id: rows[0].id };
   } catch (error) {
     await client.query('ROLLBACK');
     throw error;
@@ -967,7 +438,7 @@ async function updateLeaveApplication(applicationId, payload) {
   }
 }
 
-async function cancelLeaveApplication(applicationId) {
+async function cancelLeaveApplication(applicationId, { isEstablishment = false } = {}) {
   const id = Number(applicationId);
   if (!id) return null;
 
@@ -975,78 +446,53 @@ async function cancelLeaveApplication(applicationId) {
   try {
     await client.query('BEGIN');
 
-    const beforeResult = await client.query(
-      `
-      SELECT staff_id, leave_id, EXTRACT(YEAR FROM start::date)::int AS start_year, EXTRACT(YEAR FROM "end"::date)::int AS end_year, TO_CHAR(start::date, 'YYYY-MM-DD') AS start_date, TO_CHAR("end"::date, 'YYYY-MM-DD') AS end_date, alternate, additional_alternate
-      FROM leave_staff_applications
-      WHERE id = $1
-      LIMIT 1
-      `,
-      [id]
-    );
-    const before = beforeResult.rows[0] || null;
+    const before = await getApplicationSnapshot(client, id);
     if (!before) {
       await client.query('ROLLBACK');
       return null;
     }
 
+    const status = normalizeStatus(before.appl_status);
+    if (status === 'cancelled') throw validationError('Leave application is already cancelled.');
+    // Staff can cancel only while the application is pending (Laravel shows cancel for pending only).
+    if (!isEstablishment && status !== 'pending') {
+      throw validationError('Only pending leave applications can be cancelled.');
+    }
+
     const { rows } = await client.query(
-      `
-      UPDATE leave_staff_applications
-      SET appl_status = 'cancelled', updated_at = NOW()
-      WHERE id = $1
-      RETURNING id
-      `,
+      `UPDATE leave_staff_applications SET appl_status = 'cancelled', updated_at = NOW() WHERE id = $1 RETURNING id`,
       [id]
     );
 
-    const yearsToSync = new Set([
-      Number(before.start_year),
-      Number(before.end_year),
-    ].filter((y) => Number.isFinite(y) && y > 0));
-
-    for (const y of yearsToSync) {
-      await syncConsumedEntitlement(client, Number(before.staff_id), Number(before.leave_id), y);
+    if (isCounted(status)) {
+      await LeaveRules.adjustConsumed(client, {
+        staffId: before.staff_id,
+        leaveId: before.leave_id,
+        startDate: before.start_date,
+        endDate: before.end_date,
+        noOfDays: before.no_of_days,
+        sign: -1,
+      });
     }
 
-    // send notifications about cancellation (requester + alternates)
-    try {
-      const staffRes = await client.query('SELECT user_id, fname, mname, lname FROM staff WHERE id = $1 LIMIT 1', [before.staff_id]);
-      const staffRow = staffRes.rows[0] || null;
-      const requesterUserId = staffRow ? staffRow.user_id : null;
-      const fullName = staffRow ? [staffRow.fname, staffRow.mname, staffRow.lname].filter(Boolean).join(' ') : 'Staff';
+    const staffRes = await client.query('SELECT user_id, fname, mname, lname FROM staff WHERE id = $1 LIMIT 1', [before.staff_id]);
+    const staffRow = staffRes.rows[0] || null;
+    const fullName = staffRow ? [staffRow.fname, staffRow.mname, staffRow.lname].filter(Boolean).join(' ') : 'Staff';
+    const period = `${before.start_date} to ${before.end_date}`;
 
-      if (requesterUserId) {
-        await insertNotificationWithClient(client, requesterUserId, 'Leave Application', 'Leave', 'Leave application cancelled.');
-      }
-
-      const period = before && before.start_date && before.end_date ? `${before.start_date} to ${before.end_date}` : '';
-      if (before.alternate) {
-        const altRes = await client.query('SELECT user_id FROM staff WHERE id = $1 LIMIT 1', [before.alternate]);
-        const altUserId = altRes.rows[0]?.user_id || null;
-        if (altUserId) {
-          const desc = period
-            ? `Leave application for ${fullName} (${period}) has been cancelled.`
-            : `Leave application for ${fullName} has been cancelled.`;
-          await insertNotificationWithClient(client, altUserId, 'Leave Assignment', 'Leave', desc);
-        }
-      }
-
-      if (before.additional_alternate) {
-        const addRes = await client.query('SELECT user_id FROM staff WHERE id = $1 LIMIT 1', [before.additional_alternate]);
-        const addUserId = addRes.rows[0]?.user_id || null;
-        if (addUserId) {
-          const desc = period
-            ? `Leave application for ${fullName} (${period}) has been cancelled.`
-            : `Leave application for ${fullName} has been cancelled.`;
-          await insertNotificationWithClient(client, addUserId, 'Leave Assignment', 'Leave', desc);
-        }
-      }
-    } catch (nfErr) {
-      // ignore notification errors
+    if (staffRow?.user_id) {
+      await insertNotificationWithClient(client, staffRow.user_id, 'Leave Application', 'Leave', 'Leave application cancelled.');
     }
+    for (const alternateId of [before.alternate, before.additional_alternate]) {
+      if (!alternateId) continue;
+      const altRes = await client.query('SELECT user_id FROM staff WHERE id = $1 LIMIT 1', [alternateId]);
+      const altUserId = altRes.rows[0]?.user_id || null;
+      if (altUserId) {
+        await insertNotificationWithClient(client, altUserId, 'Leave Assignment', 'Leave', `Leave application for ${fullName} (${period}) has been cancelled.`);
+      }
+    }
+
     await client.query('COMMIT');
-
     return rows[0] || null;
   } catch (error) {
     await client.query('ROLLBACK');
@@ -1054,64 +500,6 @@ async function cancelLeaveApplication(applicationId) {
   } finally {
     client.release();
   }
-}
-
-async function syncConsumedEntitlement(client, staffId, leaveId, year) {
-  const numericStaffId = Number(staffId);
-  const numericLeaveId = Number(leaveId);
-  const numericYear = Number(year);
-  if (!numericStaffId || !numericLeaveId || !numericYear) return;
-
-  const sumResult = await client.query(
-    `
-      SELECT COALESCE(SUM(no_of_days), 0) AS consumed
-      FROM leave_staff_applications
-      WHERE staff_id = $1
-        AND leave_id = $2
-        AND year = $3
-        AND LOWER(COALESCE(appl_status, 'pending')) NOT IN ('rejected', 'cancelled')
-    `,
-    [numericStaffId, numericLeaveId, numericYear]
-  );
-
-  const consumed = Number(sumResult.rows[0]?.consumed || 0);
-
-  const entitlement = await client.query(
-    `
-      SELECT id
-      FROM leave_staff_entitlements
-      WHERE staff_id = $1
-        AND leave_id = $2
-        AND year = $3
-      ORDER BY id DESC
-      LIMIT 1
-    `,
-    [numericStaffId, numericLeaveId, numericYear]
-  );
-
-  if (entitlement.rows.length > 0) {
-    await client.query(
-      `
-        UPDATE leave_staff_entitlements
-        SET consumed_curr_year = $1,
-            status = 'active',
-            updated_at = NOW()
-        WHERE id = $2
-      `,
-      [consumed, entitlement.rows[0].id]
-    );
-    return;
-  }
-
-  await client.query(
-    `
-      INSERT INTO leave_staff_entitlements
-        (year, staff_id, leave_id, entitled_curr_year, accumulated, consumed_curr_year, encashed_curr_year, total_encashed, wef, status, created_at, updated_at)
-      VALUES
-        ($1, $2, $3, 0, 0, $4, 0, 0, $5, 'active', NOW(), NOW())
-    `,
-    [numericYear, numericStaffId, numericLeaveId, consumed, `${numericYear}-01-01`]
-  );
 }
 
 async function getActiveAdditionalDesignationIdsForStaff(staffId) {
@@ -1239,6 +627,86 @@ async function getAlternateStaffOptions(userId, employeeTypeHint = null) {
   return Array.from(merged.values());
 }
 
+function groupByDepartment(rows) {
+  const groups = new Map();
+  for (const row of rows) {
+    const key = Number(row.department_id);
+    if (!groups.has(key)) {
+      groups.set(key, { department_id: key, dept_name: row.dept_name, staff: [] });
+    }
+    groups.get(key).staff.push({
+      id: Number(row.id),
+      user_id: row.user_id ? Number(row.user_id) : null,
+      name: [row.fname, row.mname, row.lname].filter(Boolean).join(' '),
+    });
+  }
+  return Array.from(groups.values());
+}
+
+// Alternate lists exactly as LeaveStaffApplicationsController::index builds them:
+//  - alternates: staff of the applicant's active departments with the same employee type
+//    (falls back to every department colleague when the first department has none),
+//  - additional_alternates: same employee type across the college,
+//  - deans: all Deans, offered to applicants holding a Dean/Principal designation.
+async function getLeaveAlternateOptions(userId) {
+  const staffId = await resolveStaffIdFromUserId(userId);
+  if (!staffId) return { alternates: [], additional_alternates: [], deans: [] };
+
+  const [employeeType, departmentIds, profile] = await Promise.all([
+    getActiveEmployeeTypeForStaff(staffId),
+    getActiveDepartmentIdsForStaff(staffId),
+    LeaveRules.getStaffLeaveProfile(staffId),
+  ]);
+
+  const staffQuery = (deptFilter, sameType) => pool.query(
+    `
+      SELECT DISTINCT s.id, s.user_id, s.fname, s.mname, s.lname, d.id AS department_id, d.dept_name
+      FROM staff s
+      JOIN department_staff ds ON ds.staff_id = s.id AND LOWER(COALESCE(ds.status, 'active')) = 'active'
+      JOIN departments d ON d.id = ds.department_id
+      WHERE s.id <> $1
+        ${deptFilter ? 'AND ds.department_id = ANY($2::bigint[])' : ''}
+        ${sameType ? `AND s.id IN (
+          SELECT et.staff_id FROM employee_types et
+          WHERE LOWER(COALESCE(et.status, 'active')) = 'active'
+            AND LOWER(TRIM(et.employee_type)) = LOWER(TRIM($${deptFilter ? 3 : 2}))
+        )` : ''}
+      ORDER BY d.dept_name ASC, s.fname ASC, s.mname ASC, s.lname ASC
+    `,
+    [staffId, ...(deptFilter ? [departmentIds] : []), ...(sameType ? [employeeType || ''] : [])]
+  );
+
+  let alternates = departmentIds.length ? groupByDepartment((await staffQuery(true, true)).rows) : [];
+  const firstDeptHasStaff = alternates.some((g) => g.department_id === departmentIds[0] && g.staff.length > 0);
+  if (departmentIds.length && !firstDeptHasStaff) {
+    alternates = groupByDepartment((await staffQuery(true, false)).rows);
+  }
+
+  const additionalAlternates = groupByDepartment((await staffQuery(false, true)).rows);
+
+  let deans = [];
+  if (profile.hasDeanOrPrincipalDesignation) {
+    const { rows } = await pool.query(
+      `
+        SELECT DISTINCT s.id, s.user_id, TRIM(CONCAT_WS(' ', s.fname, s.mname, s.lname)) AS name
+        FROM staff s
+        JOIN designation_staff ds ON ds.staff_id = s.id AND LOWER(COALESCE(ds.status, 'active')) = 'active'
+        JOIN designations d ON d.id = ds.designation_id
+        WHERE d.design_name ILIKE '%Dean%'
+        ORDER BY name ASC
+      `
+    );
+    deans = rows.map((r) => ({ id: Number(r.id), user_id: r.user_id ? Number(r.user_id) : null, name: r.name }));
+  }
+
+  return {
+    employee_type: employeeType,
+    alternates,
+    additional_alternates: additionalAlternates,
+    deans,
+  };
+}
+
 async function resolveUserIdFromStaffId(staffId) {
   const id = Number(staffId);
   if (!id) return null;
@@ -1352,14 +820,11 @@ module.exports = {
   updateLeaveApplication,
   cancelLeaveApplication,
   getAlternateStaffOptions,
+  getLeaveAlternateOptions,
+  getEligibleLeaveTypesForUser,
   normalizeStatus,
-  getLeaveRules,
-  getLeaveById,
-  getCombineLeaves,
-  getRoutingInfoForLeave,
   insertDaywiseLeaves,
   deleteDaywiseLeaves,
-  syncConsumedEntitlement,
   getActiveDepartmentIdsForStaff,
   getActiveEmployeeTypeForStaff,
   getActiveAdditionalDesignationIdsForStaff,

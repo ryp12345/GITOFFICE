@@ -1,3 +1,4 @@
+const LeaveRules = require('./leaveRules.service');
 const principalLeaveApplicationModel = require('../models/principalLeaveApplication.model');
 
 function parseOptionalInt(value) {
@@ -10,7 +11,8 @@ async function listLeaveApplicationsForPrincipal(query = {}) {
   const month = parseOptionalInt(query.month);
   const year = parseOptionalInt(query.year);
 
-  const applications = await principalLeaveApplicationModel.getAllLeaveApplications({ month, year });
+  const rows = await principalLeaveApplicationModel.getAllLeaveApplications({ month, year });
+  const applications = await LeaveRules.annotateApplications(rows, 'principal');
   return { applications };
 }
 
