@@ -109,6 +109,10 @@ app.use('/api/research', researchRoutes);
 const egovRoutes = require('./routes/egov.routes');
 app.use('/api/egov', egovRoutes);
 
+// Dean R&D portal: institution-wide dashboard and read-only reports
+const deanrndRoutes = require('./routes/deanrnd.routes');
+app.use('/api/deanrnd', deanrndRoutes);
+
 const teachingFastrackRoutes = require('./routes/teachingFastrack.routes');
 app.use('/api/teaching/fastrack', teachingFastrackRoutes);
 

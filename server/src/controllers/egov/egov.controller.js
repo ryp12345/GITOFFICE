@@ -1,4 +1,5 @@
 const egovModel = require('../../models/egov.model');
+const announcementsModel = require('../../models/announcements.model');
 const reportsModel = require('../../models/departmentActivityReports.model');
 
 // The reports summarised on the Laravel egov dashboard (EgovAdminController::dashboard).
@@ -35,8 +36,8 @@ async function getDashboard(req, res, next) {
     const department = await resolveDepartment(req);
     const [totals, events, notices] = await Promise.all([
       reportsModel.countDepartmentRecords(DASHBOARD_REPORTS, department.id),
-      egovModel.listEvents(),
-      egovModel.listNotices(),
+      announcementsModel.listEvents(),
+      announcementsModel.listNotices(),
     ]);
 
     res.json({ success: true, data: { department, totals, events, notices } });

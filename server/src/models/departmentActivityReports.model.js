@@ -220,26 +220,42 @@ function normalize(value) {
 //   department_staff.status = 'active', so the egov portal turns it on.
 // options.recordId: restrict the query to one record, used to prove a record belongs to the
 //   caller's department before it is validated.
+//
+// departmentId null: institution-wide, as on the Dean R&D pages (DeanRndController /
+// DeanrndResearchController ran the same joins without the department_id condition). Every row
+// also carries dept_shortname, the staff member's active department(s), which those pages show.
 async function selectDepartmentRows(report, departmentId, options = {}) {
   const ownerJoin = report.ownership
     ? `JOIN ${report.ownership.pivot} p ON p.${report.ownership.fk} = r.id
        JOIN staff s ON s.id = p.staff_id`
     : 'JOIN staff s ON s.id = r.staff_id';
 
+  const inDepartment = '($1::bigint IS NULL OR ds.department_id = $1::bigint)';
+  const isActive = "LOWER(COALESCE(ds.status, 'active')) = 'active'";
+
   const activeMembership = `EXISTS (
       SELECT 1 FROM department_staff ds
        WHERE ds.staff_id = s.id
-         AND ds.department_id = $1
-         AND LOWER(COALESCE(ds.status, 'active')) = 'active'
+         AND ${inDepartment}
+         AND ${isActive}
     )`;
 
   const anyMembership = `EXISTS (
       SELECT 1 FROM department_staff ds
        WHERE ds.staff_id = s.id
-         AND ds.department_id = $1
+         AND ${inDepartment}
     )`;
 
-  const params = [departmentId, report.employeeType];
+  const departmentNames = `(
+      SELECT STRING_AGG(DISTINCT d.dept_shortname, ', ')
+        FROM department_staff ds
+        JOIN departments d ON d.id = ds.department_id
+       WHERE ds.staff_id = s.id
+         AND ${inDepartment}
+         AND ${isActive}
+    )`;
+
+  const params = [departmentId ?? null, report.employeeType];
   let recordFilter = '';
   if (options.recordId !== undefined) {
     params.push(options.recordId);
@@ -255,7 +271,8 @@ async function selectDepartmentRows(report, departmentId, options = {}) {
             s.fname,
             s.mname,
             s.lname,
-            ${activeMembership} AS is_active_member
+            ${activeMembership} AS is_active_member,
+            ${departmentNames} AS dept_shortname
        FROM ${report.table} r
        ${ownerJoin}
       WHERE ${activeOnly ? activeMembership : anyMembership}
@@ -307,6 +324,7 @@ const VALIDATION_STATUSES = ['valid', 'invalid'];
 // record; here the record must be listed for the caller's department first.
 async function setValidationStatus(reportKey, departmentId, recordId, status, reason) {
   const report = getReport(reportKey);
+  if (departmentId == null) throw new Error('Validation is always scoped to one department');
 
   const owned = await selectDepartmentRows(report, departmentId, {
     activeMembersOnly: true,

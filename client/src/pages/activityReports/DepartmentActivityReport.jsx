@@ -84,9 +84,9 @@ function escapeHtml(value) {
 
 // Same output as the Laravel "Export to Excel" button: an HTML table saved as .xls, without
 // the Document column.
-function exportToExcel(config, rows) {
-  const header = ['S.No', ...config.columns.map((column) => column.label)];
-  const body = rows.map((row, index) => [String(index + 1), ...config.columns.map((column) => cellText(row, column))]);
+function exportToExcel(config, columns, rows) {
+  const header = ['S.No', ...columns.map((column) => column.label)];
+  const body = rows.map((row, index) => [String(index + 1), ...columns.map((column) => cellText(row, column))]);
 
   const cell = 'border:1px solid #000;padding:5px;';
   const html = `<table><thead><tr>${header.map((h) => `<th style="${cell}">${escapeHtml(h)}</th>`).join('')}</tr></thead><tbody>${body
@@ -114,13 +114,32 @@ function CountCard({ label, count }) {
   );
 }
 
+// Institution-wide portals (Dean R&D) list every department, so the Laravel pages added a
+// 'Dept Short Name' column right after the staff name.
+const DEPARTMENT_COLUMN = { key: 'dept_shortname', label: 'Dept Short Name' };
+
+function withDepartmentColumn(columns, showDepartment) {
+  if (!showDepartment) return columns;
+  const staffIndex = columns.findIndex((column) => column.type === 'staff');
+  const next = [...columns];
+  next.splice(staffIndex + 1, 0, DEPARTMENT_COLUMN);
+  return next;
+}
+
 // Shared page for the HOD (read-only) and e-Governance admin (read + validate) portals.
 //   loadReport(token, report)            - fetches { department, rows, counts }
 //   validation.submit(token, report, id, { validation_status, reason })
 //                                        - when given, each row gets a Validate action
+//   showDepartment                       - adds the Dept Short Name column
 // Routes mount one instance per report with key={report}, so filters start fresh per page.
-export default function DepartmentActivityReport({ report, loadReport = getHodActivityReport, validation = null }) {
+export default function DepartmentActivityReport({
+  report,
+  loadReport = getHodActivityReport,
+  validation = null,
+  showDepartment = false,
+}) {
   const config = DEPARTMENT_REPORTS[report];
+  const columns = useMemo(() => withDepartmentColumn(config.columns, showDepartment), [config, showDepartment]);
   const { token } = useAuth() || {};
 
   const [department, setDepartment] = useState(null);
@@ -182,9 +201,9 @@ export default function DepartmentActivityReport({ report, loadReport = getHodAc
     return rows.filter((row) => {
       if (!matchesDateFilter(row, config.dateFilter, appliedRange.from, appliedRange.to)) return false;
       if (!query) return true;
-      return config.columns.some((column) => cellText(row, column).toLowerCase().includes(query));
+      return columns.some((column) => cellText(row, column).toLowerCase().includes(query));
     });
-  }, [rows, search, appliedRange, config]);
+  }, [rows, search, appliedRange, config, columns]);
 
   useEffect(() => {
     setPage(1);
@@ -232,7 +251,7 @@ export default function DepartmentActivityReport({ report, loadReport = getHodAc
     return cellText(row, column);
   };
 
-  const columnCount = config.columns.length + 2;
+  const columnCount = columns.length + 2;
   const heading = department?.dept_name ? `${department.dept_name} — ${config.title}` : config.title;
 
   return (
@@ -315,7 +334,7 @@ export default function DepartmentActivityReport({ report, loadReport = getHodAc
                   </div>
                   <button
                     type="button"
-                    onClick={() => exportToExcel(config, filteredRows)}
+                    onClick={() => exportToExcel(config, columns, filteredRows)}
                     disabled={filteredRows.length === 0}
                     className="rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-50"
                   >
@@ -340,7 +359,7 @@ export default function DepartmentActivityReport({ report, loadReport = getHodAc
                   <thead className="bg-blue-600">
                     <tr>
                       <th className={TH_CLASS}>S.No</th>
-                      {config.columns.map((column) => (
+                      {columns.map((column) => (
                         <th key={column.key} className={`${TH_CLASS} whitespace-nowrap`}>
                           {column.label}
                         </th>
@@ -367,7 +386,7 @@ export default function DepartmentActivityReport({ report, loadReport = getHodAc
                         return (
                           <tr key={`${row.id}-${row.owner_staff_id}`} style={{ backgroundColor: VALIDATION_ROW_COLORS[row.validation_status] }}>
                             <td className="px-6 py-4 text-sm text-slate-900">{start + index + 1}</td>
-                            {config.columns.map((column) => (
+                            {columns.map((column) => (
                               <td
                                 key={column.key}
                                 className={`px-6 py-4 text-sm text-slate-900 ${column.wrap ? 'min-w-[12rem] max-w-xs whitespace-normal' : 'whitespace-nowrap'}`}

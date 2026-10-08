@@ -22,6 +22,8 @@ import HODCoordinatorViewPage from '../pages/hod/HODCoordinatorView';
 import DepartmentActivityReport from '../pages/activityReports/DepartmentActivityReport';
 import EgovDashboard from '../pages/egov/Dashboard';
 import { getEgovReport, validateEgovRecord } from '../api/egovApi';
+import DeanRndDashboard from '../pages/deanrnd/Dashboard';
+import { getDeanRndReport } from '../api/deanrndApi';
 import LeaveApplicationPage from '../pages/leave_management/LeaveApplication';
 import LeaveListPage from '../pages/leave_management/LeaveList';
 import SidebarHOD from '../components/layout/SidebarHOD';
@@ -92,8 +94,8 @@ import FastrackExpensesPage from '../pages/exam-section/FastrackExpenses';
 import FastrackInsightsPage from '../pages/exam-section/FastrackInsights';
 import CoeprogramPage from '../pages/exam-section/Coeprogram';
 
-// Professional Activity and Research menus shared by the HOD (/hod...) and e-Governance admin
-// (/egov-admin...) portals, as [path below the portal prefix, server report key].
+// Professional Activity and Research menus shared by the HOD (/hod...), e-Governance admin
+// (/egov-admin...) and Dean R&D (/dean-rnd...) portals, as [path below the portal prefix, server report key].
 const DEPARTMENT_REPORT_ROUTES = [
   ['/teaching/professional-activities/attended', 'pa-attended-teaching'],
   ['/teaching/professional-activities/conducted', 'pa-conducted-teaching'],
@@ -252,6 +254,21 @@ export default function AppRoutes() {
                   loadReport={getEgovReport}
                   validation={EGOV_VALIDATION}
                 />
+              }
+            />
+          ))}
+        </Route>
+        <Route element={<RoleRoute role="Deanrnd" />}>
+          <Route path="/dean-rnd" element={<DeanRndDashboard />} />
+          <Route path="/dean-rnd/staff" element={<StaffPage readOnly viewBasePath="/dean-rnd/staff" />} />
+          <Route path="/dean-rnd/staff/:id" element={<StaffViewPage readOnly listPath="/dean-rnd/staff" />} />
+          {/* Institution-wide, read-only: every department, with its short name per row */}
+          {DEPARTMENT_REPORT_ROUTES.map(([path, report]) => (
+            <Route
+              key={path}
+              path={`/dean-rnd${path}`}
+              element={
+                <DepartmentActivityReport key={report} report={report} loadReport={getDeanRndReport} showDepartment />
               }
             />
           ))}
