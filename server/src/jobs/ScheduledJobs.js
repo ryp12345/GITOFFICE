@@ -158,19 +158,19 @@ async function yearly_leave_entitlements(context = {}) {
             let accumulated = pre.accumulated || 0;
             if (rule && String(rule.carry_forwardable || '').toLowerCase() === 'yes') {
               accumulated = (pre.accumulated || 0) + (pre.entitled_curr_year || 0) - (pre.consumed_curr_year || 0) - (pre.encashed_curr_year || 0);
-              if (accumulated < 0) accumulated = 0;
               if (accumulated >= (rule.max_cf || 0)) accumulated = rule.max_cf;
             } else {
               if ((pre.consumed_curr_year || 0) > (pre.entitled_curr_year || 0)) {
                 accumulated = (pre.accumulated || 0) + (pre.entitled_curr_year || 0) - (pre.consumed_curr_year || 0);
-                if (accumulated < 0) accumulated = 0;
               } else {
                 accumulated = pre.accumulated || 0;
               }
             }
+            // Laravel carries total_encashed forward for vacational EL
+            const total_encashable = (pre.total_encashed || 0) + (pre.encashed_curr_year || 0);
             await ensureEntitlement(year, st.id, l.id,
-              'INSERT INTO leave_staff_entitlements (year, staff_id, leave_id, entitled_curr_year, accumulated, wef, status, created_at, updated_at) VALUES ($1,$2,$3,$4,$5,$6,\'active\', NOW(), NOW())',
-              [year, st.id, l.id, max_entitlement, accumulated, `${year}-01-01`] );
+              'INSERT INTO leave_staff_entitlements (year, staff_id, leave_id, entitled_curr_year, accumulated, total_encashed, wef, status, created_at, updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,\'active\', NOW(), NOW())',
+              [year, st.id, l.id, max_entitlement, accumulated, total_encashable, `${year}-01-01`] );
           }
         }
         // CL handling
@@ -187,12 +187,10 @@ async function yearly_leave_entitlements(context = {}) {
             let accumulated = pre.accumulated || 0;
             if (rule && String(rule.carry_forwardable || '').toLowerCase() === 'yes') {
               accumulated = (pre.accumulated || 0) + (pre.entitled_curr_year || 0) - (pre.consumed_curr_year || 0);
-              if (accumulated < 0) accumulated = 0;
               if (accumulated >= (rule.max_cf || 0)) accumulated = rule.max_cf;
             } else {
               if ((pre.consumed_curr_year || 0) > (pre.entitled_curr_year || 0)) {
                 accumulated = (pre.accumulated || 0) + (pre.entitled_curr_year || 0) - (pre.consumed_curr_year || 0);
-                if (accumulated < 0) accumulated = 0;
               } else {
                 accumulated = pre.accumulated || 0;
               }
@@ -249,12 +247,10 @@ async function yearly_leave_entitlements(context = {}) {
           let accumulated = pre.accumulated || 0;
           if (rule && String(rule.carry_forwardable || '').toLowerCase() === 'yes') {
             accumulated = (pre.accumulated || 0) + (pre.entitled_curr_year || 0) - (pre.consumed_curr_year || 0) - (pre.encashed_curr_year || 0);
-            if (accumulated < 0) accumulated = 0;
             if (accumulated > (rule.max_cf || 0)) accumulated = rule.max_cf;
           } else {
             if ((pre.consumed_curr_year || 0) > (pre.entitled_curr_year || 0)) {
               accumulated = (pre.accumulated || 0) - ((pre.entitled_curr_year || 0) - (pre.consumed_curr_year || 0));
-              if (accumulated < 0) accumulated = 0;
             } else {
               accumulated = pre.accumulated || 0;
             }
@@ -336,12 +332,10 @@ async function yearly_leave_entitlements(context = {}) {
           let accumulated = pre.accumulated || 0;
           if (rule && String(rule.carry_forwardable || '').toLowerCase() === 'yes') {
             accumulated = (pre.accumulated || 0) + (pre.entitled_curr_year || 0) - (pre.consumed_curr_year || 0) - (pre.encashed_curr_year || 0);
-            if (accumulated < 0) accumulated = 0;
             if (accumulated > (rule.max_cf || 0)) accumulated = rule.max_cf;
           } else {
             if ((pre.consumed_curr_year || 0) > (pre.entitled_curr_year || 0)) {
               accumulated = (pre.accumulated || 0) - ((pre.entitled_curr_year || 0) - (pre.consumed_curr_year || 0));
-              if (accumulated < 0) accumulated = 0;
             } else {
               accumulated = pre.accumulated || 0;
             }
@@ -428,6 +422,7 @@ async function monthly_leave_entitlements() {
           FROM leave_rules lr
           WHERE lr.leave_id = l.id
             AND LOWER(lr.status) = 'active'
+            AND lr.max_time_allowed IS NULL -- Laravel: whereHas('general_leaves')
         )`;
 
     const [{ rows: staffRows }, { rows: leaves }] = await Promise.all([
@@ -518,18 +513,11 @@ async function monthly_leave_entitlements() {
   }
 }
 
-async function upsertMonthlyClEntitlement(staffId, leaveObjOrId, leaveIdFromArgs, yearArg, monthArg, grantArg) {
+// ScheduledJobs::upsertMonthlyClEntitlement(staffId, leave, year, month, grant)
+async function upsertMonthlyClEntitlement(staffId, leaveObjOrId, yearArg, monthArg, grantArg) {
   let leaveObj = leaveObjOrId;
   let year = yearArg;
   let grant = grantArg;
-
-  if (arguments.length === 5) {
-    year = leaveIdFromArgs;
-    grant = monthArg;
-  } else if (arguments.length >= 6) {
-    year = yearArg;
-    grant = grantArg;
-  }
 
   if (!leaveObj || typeof leaveObj !== 'object') {
     try {
@@ -542,28 +530,40 @@ async function upsertMonthlyClEntitlement(staffId, leaveObjOrId, leaveIdFromArgs
 
   year = Number(year) || getIstNowParts().year;
   grant = Number(grant) || 0;
+  const month = Number(monthArg) || getIstNowParts().month;
 
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    const { rows: entRows } = await client.query('SELECT * FROM leave_staff_entitlements WHERE year=$1 AND staff_id=$2 AND leave_id=$3 LIMIT 1', [year, staffId, leaveObj.id]);
-    let entitlement = entRows && entRows[0];
-    const leaveMax = safeNumber(leaveObj.max_entitlement, 0);
-    const grantToApply = Math.min(Math.max(grant, 0), leaveMax);
+    const { rows: entRows } = await client.query('SELECT * FROM leave_staff_entitlements WHERE year=$1 AND staff_id=$2 AND leave_id=$3 ORDER BY id LIMIT 1', [year, staffId, leaveObj.id]);
+    const entitlement = entRows && entRows[0];
 
-    if (!entitlement) {
-      await client.query(`INSERT INTO leave_staff_entitlements (year, staff_id, leave_id, entitled_curr_year, wef, status, created_at, updated_at)
-        VALUES ($1,$2,$3,$4,$5,'active', NOW(), NOW())`, [year, staffId, leaveObj.id, grantToApply, `${year}-01-01`]);
+    // Laravel: each month's grant is recorded in monthly_grant_log and granted only once.
+    const monthlyGrantLog = normalizeMonthlyGrantLog(entitlement && entitlement.monthly_grant_log);
+    const monthKey = MONTH_KEYS[month - 1] || 'jan';
+    if ((monthlyGrantLog[monthKey] || 0) > 0) {
       await client.query('COMMIT');
       return;
     }
 
-    const currentEntitled = safeNumber(entitlement.entitled_curr_year, 0);
-    const remainingEntitlement = Math.max(leaveMax - currentEntitled, 0);
-    const actualGrant = Math.min(grantToApply, remainingEntitlement);
+    const currentEntitled = entitlement ? safeNumber(entitlement.entitled_curr_year, 0) : 0;
+    const remainingEntitlement = Math.max(Math.trunc(safeNumber(leaveObj.max_entitlement, 0)) - Math.trunc(currentEntitled), 0);
+    const grantToApply = Math.min(Math.max(grant, 0), remainingEntitlement);
+    monthlyGrantLog[monthKey] = grantToApply;
 
-    if (actualGrant > 0) {
-      await client.query('UPDATE leave_staff_entitlements SET entitled_curr_year=$1, updated_at=NOW() WHERE id=$2', [currentEntitled + actualGrant, entitlement.id]);
+    if (!entitlement) {
+      await client.query(
+        `INSERT INTO leave_staff_entitlements
+           (year, staff_id, leave_id, entitled_curr_year, accumulated, consumed_curr_year, encashed_curr_year, total_encashed,
+            monthly_grant_log, wef, status, created_at, updated_at)
+         VALUES ($1,$2,$3,$4,0,0,0,0,$5,$6,'active', NOW(), NOW())`,
+        [year, staffId, leaveObj.id, grantToApply, JSON.stringify(monthlyGrantLog), `${year}-01-01`]
+      );
+    } else {
+      await client.query(
+        'UPDATE leave_staff_entitlements SET entitled_curr_year=$1, monthly_grant_log=$2, updated_at=NOW() WHERE id=$3',
+        [currentEntitled + grantToApply, JSON.stringify(monthlyGrantLog), entitlement.id]
+      );
     }
 
     await client.query('COMMIT');
@@ -573,6 +573,21 @@ async function upsertMonthlyClEntitlement(staffId, leaveObjOrId, leaveIdFromArgs
   } finally {
     client.release();
   }
+}
+
+const MONTH_KEYS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+
+// ScheduledJobs::normalizeMonthlyGrantLog — always returns all 12 month keys as integers.
+function normalizeMonthlyGrantLog(value) {
+  let log = value;
+  if (typeof log === 'string' && log !== '') {
+    try { log = JSON.parse(log); } catch (_) { log = {}; }
+  }
+  const normalized = {};
+  for (const key of MONTH_KEYS) {
+    normalized[key] = log && typeof log === 'object' ? Math.trunc(safeNumber(log[key], 0)) : 0;
+  }
+  return normalized;
 }
 
 async function check_dorCL(staffId, leaveObj) {
@@ -644,10 +659,11 @@ async function daily_Non_Vacational_EL() {
         if (sMonth === month && sDay === day) {
           const { rows: staffRows } = await client.query('SELECT date_of_superanuation FROM staff WHERE id = $1 LIMIT 1', [eRow.staff_id]);
           const staff = staffRows && staffRows[0];
-          if (!staff || !staff.date_of_superanuation) continue;
+          if (!staff) continue;
 
-          const retirementDate = parseDateOnly(staff.date_of_superanuation);
-          const retirementYear = retirementDate.getUTCFullYear();
+          // No date of superannuation → not retiring this year → full EL.
+          const retirementDate = staff.date_of_superanuation ? parseDateOnly(staff.date_of_superanuation) : null;
+          const retirementYear = retirementDate ? retirementDate.getUTCFullYear() : null;
 
           if (retirementYear === year && retirementDate > sDate) {
             const diffDays = daysBetweenDateOnly(sDate, retirementDate);
@@ -767,95 +783,156 @@ async function halfyearlyEL() {
   }
 }
 
-async function sendMissingPunchesEmail() {
-  console.log('Running job: sendMissingPunchesEmail');
+// Mail transport using the same .env keys as Laravel (MAIL_HOST, MAIL_PORT, MAIL_USERNAME,
+// MAIL_PASSWORD, MAIL_ENCRYPTION, MAIL_FROM_ADDRESS, MAIL_FROM_NAME); MAIL_USER / MAIL_PASS /
+// MAIL_FROM are still accepted for backwards compatibility.
+function createMailTransport() {
   const nodemailer = require('nodemailer');
+  const user = process.env.MAIL_USERNAME || process.env.MAIL_USER;
+  const pass = process.env.MAIL_PASSWORD || process.env.MAIL_PASS;
+  const port = Number(process.env.MAIL_PORT) || 25;
+  return nodemailer.createTransport({
+    host: process.env.MAIL_HOST || 'localhost',
+    port,
+    secure: String(process.env.MAIL_ENCRYPTION || '').toLowerCase() === 'ssl' || port === 465,
+    auth: user ? { user, pass } : undefined,
+  });
+}
+
+function mailFrom() {
+  const address = process.env.MAIL_FROM_ADDRESS || process.env.MAIL_FROM || 'no-reply@git.edu';
+  const name = process.env.MAIL_FROM_NAME;
+  return name ? `"${String(name).replace(/"/g, '')}" <${address}>` : address;
+}
+
+function escapeHtml(value) {
+  return String(value ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+// resources/views/emails/missingLogEntry.blade.php
+function missingLogEntryHtml(fullName, date) {
+  const [y, m, d] = String(date).split('-');
+  return `<!DOCTYPE html>
+<html>
+<head>
+    <title>Missing Log Entry Notification</title>
+</head>
+<body>
+    <p>Dear ${escapeHtml(fullName)},</p>
+    <p>We have noticed that there is no Biometric log entry for you on ${d}-${m}-${y}. Please make sure to log your biometric entry Or apply leave if not applied.</p>
+    <p>Thank you.</p>
+</body>
+</html>`;
+}
+
+// resources/views/emails/EmailDean.blade.php
+function emailDeanHtml(staffRows) {
+  const rows = staffRows.map((st, i) => `
+        <tr>
+            <td>${i + 1}</td>
+            <td>${escapeHtml(st.dept_shortname)}</td>
+            <td>${escapeHtml(st.full_name)}</td>
+        </tr>`).join('');
+  return `<!DOCTYPE html>
+<html>
+<head>
+    <title>Missing Log Entry Notification</title>
+</head>
+<body>
+    <p>Dear Sir,</p>
+
+    <p>The following is the list of employees whose punch is missing for today.</p>
+    <table border="1" cellpadding="0" cellspacing="1">
+        <tr>
+            <td>Sl.No</td>
+            <td>Department</td>
+            <td>Name</td>
+        </tr>${rows}
+    </table>
+    <p>This is for your information</p>
+    <p>Thank you.</p>
+
+</body>
+</html>`;
+}
+
+// ScheduledJobs::sendMissingPunchesEmail
+async function sendMissingPunchesEmail(context = {}) {
+  console.log('Running job: sendMissingPunchesEmail');
+  const initiatedBy = context.fromApi ? (context.userId || 'api') : 'cli';
+  let run = null;
+  try { run = await jobRunService.startRun('sendMissingPunchesEmail', { initiatedBy }); } catch (e) { console.warn('Could not record job run start:', e && e.message); }
+
   const nowParts = getIstNowParts();
   const date = nowParts.date;
-  const month = nowParts.month;
-  const year = nowParts.year;
+  const deviceTable = `DeviceLogs_${nowParts.month}_${nowParts.year}`;
+  // Laravel currently sends both mails to this fixed address (not to each staff member).
+  const recipient = process.env.MISSING_PUNCH_MAIL_TO || process.env.DEAN_EMAIL || 'vcpatil@git.edu';
 
   try {
-    // Fetch device logs from secondary biometric DB (Laravel uses mysql2 connection).
-    const deviceTable = `DeviceLogs_${month}_${year}`;
-    let loggedEmployeeCodes = [];
+    // Employee codes that punched today, from the biometric DB (Laravel connection 'mysql2').
+    // If that DB cannot be read the job fails: continuing would report every employee as missing.
+    const mysqlPool = mysql.createPool(SECONDARY_DB);
+    let loggedEmployeeCodes;
     try {
-      const mysqlPool = mysql.createPool(SECONDARY_DB);
-      const conn = await mysqlPool.getConnection();
-      try {
-        const [logRows] = await conn.query(
-          `SELECT EmployeeCode FROM \`${deviceTable}\` WHERE LogDate_Date = ?`,
-          [date]
-        );
-        loggedEmployeeCodes = (logRows || []).map((r) => String(r.EmployeeCode));
-      } finally {
-        try { conn.release(); } catch (_) {}
-        await mysqlPool.end();
-      }
-    } catch (e) {
-      // Backward-compatible fallback in case secondary DB is not configured.
-      console.warn('Could not query secondary biometric logs DB, falling back to primary DB:', e && e.message);
-      try {
-        const { rows: logRows } = await pool.query(`SELECT EmployeeCode FROM \`${deviceTable}\` WHERE LogDate_Date = $1`, [date]);
-        loggedEmployeeCodes = (logRows || []).map((r) => String(r.employeecode || r.EmployeeCode || r.employeeCode));
-      } catch (inner) {
-        console.warn('Could not query device logs table from primary DB fallback:', inner && inner.message);
-      }
+      const [logRows] = await mysqlPool.query(
+        `SELECT EmployeeCode FROM \`${deviceTable}\` WHERE LogDate_Date = ?`,
+        [date]
+      );
+      loggedEmployeeCodes = new Set((logRows || []).map((r) => String(r.EmployeeCode)));
+    } finally {
+      await mysqlPool.end();
     }
 
-    const missingSql = `SELECT DISTINCT staff.id, departments.dept_shortname, staff.EmployeeCode, users.email, CONCAT(staff.fname, ' ', COALESCE(staff.mname, ''), ' ', staff.lname) AS full_name
-      FROM staff
-      JOIN department_staff ON department_staff.staff_id = staff.id
-      JOIN departments ON departments.id = department_staff.department_id
-      JOIN users ON users.id = staff.user_id
-      WHERE department_staff.status = 'active'
-      ORDER BY department_staff.department_id, staff.fname`;
+    // Active department staff, without a punch today and not on leave today.
+    const { rows: missing } = await pool.query(
+      `SELECT DISTINCT staff.id, departments.dept_shortname, staff.employeecode AS "EmployeeCode", users.email,
+              CONCAT(staff.fname, ' ', COALESCE(staff.mname, ''), ' ', staff.lname) AS full_name,
+              department_staff.department_id, staff.fname
+       FROM staff
+       JOIN department_staff ON department_staff.staff_id = staff.id
+       JOIN departments ON departments.id = department_staff.department_id
+       JOIN users ON users.id = staff.user_id
+       WHERE department_staff.status = 'active'
+         AND NOT (staff.employeecode::text = ANY($2::text[]))
+         AND staff.id NOT IN (
+           SELECT staff_id FROM leave_staff_applications
+           WHERE start <= $1::date AND "end" >= $1::date
+             AND appl_status <> 'rejected' AND appl_status <> 'cancelled'
+         )
+       ORDER BY department_staff.department_id, staff.fname`,
+      [date, Array.from(loggedEmployeeCodes)]
+    );
 
-    const { rows: allStaff } = await pool.query(missingSql);
-    const missing = [];
-    for (const s of allStaff) {
-      const empCode = String(s.employeecode || s.EmployeeCode || s.employeeCode || '');
-      if (loggedEmployeeCodes.includes(empCode)) continue;
-      const { rows: leaveRows } = await pool.query('SELECT 1 FROM leave_staff_applications WHERE start <= $1 AND "end" >= $1 AND appl_status NOT IN (\'rejected\', \'cancelled\') AND staff_id = $2 LIMIT 1', [date, s.id]);
-      if (leaveRows && leaveRows.length > 0) continue;
-      missing.push(s);
-    }
-
-    if (missing.length === 0) {
-      console.log('No missing punches found');
-    }
-
-    const transporter = nodemailer.createTransport({
-      host: process.env.MAIL_HOST || 'localhost',
-      port: Number(process.env.MAIL_PORT) || 25,
-      secure: false,
-      auth: process.env.MAIL_USER ? { user: process.env.MAIL_USER, pass: process.env.MAIL_PASS } : undefined,
-    });
-
-    const deanEmail = process.env.DEAN_EMAIL || 'vcpatil@git.edu';
-
+    const transporter = createMailTransport();
+    let sent = 0;
     for (const st of missing) {
       if (!st.email) {
-        console.warn('Missing email for staff member:', st.full_name);
+        console.warn(`Missing email for staff member: ${st.full_name}`);
         continue;
       }
-      const mailOptions = {
-        from: process.env.MAIL_FROM || 'no-reply@git.edu',
-        to: deanEmail,
-        subject: `Missing biometric punch for ${date}`,
-        text: `Dear ${st.full_name || 'Staff'},\n\nWe could not find your biometric punch for ${date}. Please verify.`,
-      };
-      try { await transporter.sendMail(mailOptions); } catch (e) { console.warn('Failed sending mail to', st.email, e && e.message); }
+      await transporter.sendMail({
+        from: mailFrom(),
+        to: recipient,
+        subject: `Missing Log Entry for the date ${date}`,
+        html: missingLogEntryHtml(st.full_name, date),
+      });
+      sent += 1;
     }
 
-    try {
-      await transporter.sendMail({ from: process.env.MAIL_FROM || 'no-reply@git.edu', to: deanEmail, subject: `Missing punches summary ${date}`, text: `Missing records count: ${missing.length}` });
-    } catch (e) { console.warn('Failed sending dean summary', e && e.message); }
+    await transporter.sendMail({
+      from: mailFrom(),
+      to: recipient,
+      subject: 'Missing biometric records of today.',
+      html: emailDeanHtml(missing),
+    });
 
-    console.log('sendMissingPunchesEmail completed; mails attempted:', missing.length);
-    return { sent: missing.length };
+    if (run) { try { await jobRunService.finishRun(run.id, 'success', { missing: missing.length, sent }); } catch (e) { console.warn('Could not record job success:', e && e.message); } }
+    console.log('sendMissingPunchesEmail completed; missing:', missing.length, 'mails sent:', sent);
+    return { missing: missing.length, sent };
   } catch (err) {
     console.error('sendMissingPunchesEmail failed:', err && err.stack ? err.stack : err);
+    if (run) { try { await jobRunService.finishRun(run.id, 'failed', { error: err && err.message }); } catch (e) { console.warn('Could not record job failure:', e && e.message); } }
     throw err;
   }
 }

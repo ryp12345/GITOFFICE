@@ -1,8 +1,14 @@
 const jobs = require('../jobs/ScheduledJobs');
+const { SCHEDULES, TZ } = require('../jobs/schedules');
 const jobRunService = require('../services/jobRunService');
 
+// Job names plus their Laravel Kernel schedule (cron expression, Asia/Kolkata).
 async function listJobs(_req, res) {
-  res.json({ jobs: Object.keys(jobs) });
+  res.json({
+    jobs: Object.keys(jobs),
+    timezone: TZ,
+    schedules: SCHEDULES,
+  });
 }
 
 async function runJob(req, res, next) {
