@@ -1,34 +1,24 @@
-import React, { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
+import { useNotify } from '../../notifications/NotificationProvider';
 
-export default function Notification({ show, message, type = 'success', onClose, autoCloseMs = 4000 }) {
+// Deprecated compatibility shim: forwards to the global notification system.
+// New code should call useNotify() directly; migrate pages and delete this file.
+export default function Notification({ show, message, type = 'info', onClose }) {
+  const { notify } = useNotify();
+  const firedFor = useRef(null); // guards against StrictMode's double effect run
+
   useEffect(() => {
-    if (!show || typeof onClose !== 'function' || autoCloseMs <= 0) return undefined;
+    if (!show || !message) {
+      firedFor.current = null;
+      return;
+    }
+    const key = `${type}:${message}`;
+    if (firedFor.current === key) return;
+    firedFor.current = key;
+    notify(message, { type: type || 'info' });
+    // Reset the page's local state so its next setNotification fires again
+    if (typeof onClose === 'function') onClose();
+  }, [show, message, type]); // eslint-disable-line react-hooks/exhaustive-deps
 
-    const timeoutId = setTimeout(() => {
-      onClose();
-    }, autoCloseMs);
-
-    return () => clearTimeout(timeoutId);
-  }, [show, onClose, autoCloseMs]);
-
-  if (!show) return null;
-
-  const base = 'fixed top-6 right-6 z-50 max-w-sm px-4 py-3 rounded shadow-lg flex items-start space-x-3';
-  const styles = {
-    success: `${base} bg-green-50 border border-green-200 text-green-800`,
-    error: `${base} bg-red-50 border border-red-200 text-red-800`,
-    info: `${base} bg-blue-50 border border-blue-200 text-blue-800`,
-  };
-
-  return (
-    <div className={styles[type] || styles.info} role="status">
-      <div className="flex-1">
-        <div className="font-medium">{type === 'error' ? 'Error' : type === 'success' ? 'Success' : 'Info'}</div>
-        <div className="text-sm">{message}</div>
-      </div>
-      {onClose && (
-        <button onClick={onClose} className="text-sm font-semibold ml-3 text-slate-600 hover:text-slate-800">Close</button>
-      )}
-    </div>
-  );
+  return null;
 }

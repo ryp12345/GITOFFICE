@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import Notification from '../../components/common/Notification';
+import { useNotify } from '../../notifications/NotificationProvider';
 import Header from '../../components/layout/Header';
 import Sidebar from '../../components/layout/Sidebar';
 import { useLocation } from 'react-router-dom';
@@ -32,15 +32,12 @@ export default function CasteCategoriesPage() {
   const [editingId, setEditingId] = useState(null);
   const [form, setForm] = useState(initialForm);
   const [error, setError] = useState('');
-  const [notification, setNotification] = useState({ show: false, message: '', type: '' });
   const [loading, setLoading] = useState(false);
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 10;
+  const notify = useNotify();
 
-  const showNotification = (message, type = 'success') => {
-    setNotification({ show: true, message, type });
-    setTimeout(() => setNotification({ show: false, message: '', type: '' }), 4000);
-  };
+  const showNotification = (message, type = 'success') => notify.notify(message, { type });
 
   const load = async () => {
     setLoading(true);
@@ -184,12 +181,6 @@ export default function CasteCategoriesPage() {
                 Back to Religions
               </Link>
             </div>
-            <Notification
-              show={notification.show}
-              message={notification.message}
-              type={notification.type}
-              onClose={() => setNotification({ show: false, message: '', type: '' })}
-            />
             <div className="mb-12 text-center">
               <h1 className="mb-2 text-4xl font-extrabold text-gray-900">Caste Categories</h1>
               <p className="text-lg text-gray-600">Create, update and manage caste categories</p>

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 
-import Notification from '../../components/common/Notification';
+import { useNotify } from '../../notifications/NotificationProvider';
 import Header from '../../components/layout/Header';
 import Sidebar from '../../components/layout/Sidebar';
 import { useAuth } from '../../context/AuthContext';
@@ -148,7 +148,7 @@ export default function DepartmentActivityReport({
   const [counts, setCounts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [reloadKey, setReloadKey] = useState(0);
-  const [notification, setNotification] = useState({ show: false, message: '', type: 'info' });
+  const notify = useNotify();
 
   const [search, setSearch] = useState('');
   const [fromInput, setFromInput] = useState('');
@@ -175,11 +175,7 @@ export default function DepartmentActivityReport({
       })
       .catch((error) => {
         if (!active) return;
-        setNotification({
-          show: true,
-          message: error?.response?.data?.message || `Failed to load ${config.title.toLowerCase()}.`,
-          type: 'error',
-        });
+        notify.error(error?.response?.data?.message || `Failed to load ${config.title.toLowerCase()}.`);
       })
       .finally(() => {
         if (active) setLoading(false);
@@ -188,11 +184,11 @@ export default function DepartmentActivityReport({
     return () => {
       active = false;
     };
-  }, [token, report, config.title, loadReport, reloadKey]);
+  }, [token, report, config.title, loadReport, reloadKey, notify]);
 
   const handleValidated = (message) => {
     setValidatingRow(null);
-    setNotification({ show: true, message, type: 'success' });
+    notify.success(message);
     setReloadKey((current) => current + 1);
   };
 
@@ -217,7 +213,7 @@ export default function DepartmentActivityReport({
   const applyDateFilter = (event) => {
     event.preventDefault();
     if (fromInput && toInput && fromInput > toInput) {
-      setNotification({ show: true, message: 'From date must be on or before To date.', type: 'error' });
+      notify.error('From date must be on or before To date.');
       return;
     }
     setAppliedRange({ from: fromInput, to: toInput });
@@ -262,13 +258,6 @@ export default function DepartmentActivityReport({
         <Sidebar />
         <main className="flex-1 overflow-auto p-6">
           <div className="mx-auto max-w-7xl space-y-6">
-            <Notification
-              show={notification.show}
-              message={notification.message}
-              type={notification.type}
-              onClose={() => setNotification({ show: false, message: '', type: 'info' })}
-            />
-
             <div>
               <p className="text-sm font-medium text-blue-700">{config.group}</p>
               <h1 className="text-3xl font-bold text-slate-900">{heading}</h1>

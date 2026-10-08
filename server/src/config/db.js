@@ -34,4 +34,10 @@ function buildPoolConfig() {
 
 const pool = new Pool(buildPoolConfig());
 
+// Without this listener, an idle client losing its connection (DB restart, network blip)
+// emits an unhandled 'error' event and crashes the whole server process.
+pool.on('error', (err) => {
+	console.error('[db] idle client error:', err && err.message ? err.message : err);
+});
+
 module.exports = { pool };

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import Notification from '../../components/common/Notification';
+import { useNotify } from '../../notifications/NotificationProvider';
 import Header from '../../components/layout/Header';
 import Sidebar from '../../components/layout/Sidebar';
 import { useAuth } from '../../context/AuthContext';
@@ -25,15 +25,12 @@ export default function ReligionsPage() {
   const [editingId, setEditingId] = useState(null);
   const [form, setForm] = useState(initialForm);
   const [error, setError] = useState('');
-  const [notification, setNotification] = useState({ show: false, message: '', type: '' });
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 10;
+  const notify = useNotify();
 
-  const showNotification = (message, type = 'success') => {
-    setNotification({ show: true, message, type });
-    setTimeout(() => setNotification({ show: false, message: '', type: '' }), 4000);
-  };
+  const showNotification = (message, type = 'success') => notify.notify(message, { type });
 
   const load = async () => {
     if (!token) {
@@ -160,13 +157,6 @@ export default function ReligionsPage() {
         <Sidebar />
         <main className="flex-1 overflow-auto p-6">
           <div className="max-w-7xl mx-auto">
-            <Notification
-              show={notification.show}
-              message={notification.message}
-              type={notification.type}
-              onClose={() => setNotification({ show: false, message: '', type: '' })}
-            />
-
             <div className="mb-12 text-center">
               <h1 className="mb-2 text-4xl font-extrabold text-gray-900">Religions</h1>
               <p className="text-lg text-gray-600">Create, update and manage religions</p>

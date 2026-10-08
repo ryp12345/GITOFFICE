@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { toast } from '../notifications/notifier';
 
 const configuredApiUrl = import.meta.env.VITE_API_URL?.trim();
 const runtimeHost = typeof window !== 'undefined' ? window.location.hostname : 'localhost';
@@ -24,6 +25,14 @@ const clearSessionAndRedirect = () => {
   }
 };
 
+// Opt-in per request: api.get(url, { notifyError: true }) or { notifyError: 'Fallback message' }
+const notifyRequestError = (error) => {
+  const opt = error.config?.notifyError;
+  if (!opt) return;
+  const fallback = typeof opt === 'string' ? opt : 'Something went wrong. Please try again.';
+  toast.error(error.response?.data?.message || fallback);
+};
+
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('token');
   if (token) {
@@ -39,6 +48,7 @@ api.interceptors.response.use(
     const status = error.response?.status;
 
     if (!originalRequest || status !== 401 || originalRequest._retry) {
+      if (status !== 401) notifyRequestError(error);
       return Promise.reject(error);
     }
 
