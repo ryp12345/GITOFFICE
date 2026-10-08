@@ -75,7 +75,14 @@ export default function SidebarHOD() {
       submenu: FASTRACK_SUBMENU,
     },
     { name: 'Coordinator Management', path: '/hod/coordinator-management', icon: '🗂️' },
-    { name: 'Faculty Recruitment', path: '/Faculty Recruitment', icon: '🎓' },
+    {
+      name: 'Faculty Recruitment',
+      icon: '🎓',
+      submenu: [
+        { name: 'Associate Professor Applications', path: '/hod/faculty-recruitment/associate-professor' },
+        { name: 'Professor Applications', path: '/hod/faculty-recruitment/professor' },
+      ],
+    },
   ];
 
   return <NestedMenuSidebar links={links} />;

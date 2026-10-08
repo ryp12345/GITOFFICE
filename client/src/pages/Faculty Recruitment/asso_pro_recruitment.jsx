@@ -283,7 +283,14 @@ function renderEligibilityStatus(row) {
   return row.eligibility_status || '';
 }
 
-export default function AssoProRecruitmentPage() {
+// readOnly: the Principal's view (PrincipalController in Laravel) - every department's
+// applications, no Add / Edit / Delete / Export, plus a Department column. The HOD route
+// renders the page with its defaults.
+export default function AssoProRecruitmentPage({
+  readOnly = false,
+  SidebarComponent = SidebarHOD,
+  loadApplications = getAssociateProfessorApplications,
+}) {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -306,7 +313,7 @@ export default function AssoProRecruitmentPage() {
   const loadRows = async () => {
     setLoading(true);
     try {
-      const response = await getAssociateProfessorApplications();
+      const response = await loadApplications();
       setRows(response?.data?.data?.rows || []);
     } catch (error) {
       setNotification({ show: true, message: error?.response?.data?.message || 'Failed to load applications', type: 'error' });
@@ -333,6 +340,7 @@ export default function AssoProRecruitmentPage() {
     const q = search.trim().toLowerCase();
     if (!q) return sorted;
     return sorted.filter((r) =>
+      String(r.dept_shortname || '').toLowerCase().includes(q) ||
       [r.application_no, r.applicant_name, r.email, r.ug_branches, r.eligibility_status]
         .filter(Boolean)
         .some((v) => String(v).toLowerCase().includes(q))
@@ -454,14 +462,14 @@ export default function AssoProRecruitmentPage() {
     <div className="min-h-screen bg-slate-100 flex flex-col">
       <Header />
       <div className="flex flex-1 min-h-0">
-        <SidebarHOD />
+        <SidebarComponent />
         <main className="flex-1 overflow-auto p-6">
           <div className="max-w-7xl mx-auto">
             <Notification show={notification.show} message={notification.message} type={notification.type} onClose={() => setNotification({ show: false, message: '', type: '' })} />
 
             <div className="mb-12 text-center">
               <h1 className="mb-2 text-4xl font-extrabold text-gray-900">Associate Professor Applications</h1>
-              <p className="text-lg text-gray-600">Create, update and manage faculty recruitment applications</p>
+              <p className="text-lg text-gray-600">{readOnly ? 'Faculty recruitment applications across all departments' : 'Create, update and manage faculty recruitment applications'}</p>
             </div>
 
 
@@ -477,10 +485,12 @@ export default function AssoProRecruitmentPage() {
                 <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search applications..." className="w-full py-2 pl-10 pr-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500" />
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-400 absolute left-3 top-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
               </div>
-              <div className="flex gap-2 w-full sm:w-auto">
+              {!readOnly && (
+                <div className="flex gap-2 w-full sm:w-auto">
                 <button onClick={openAdd} className="flex items-center justify-center w-full px-6 py-3 font-medium text-white transition-all duration-300 transform rounded-lg shadow-lg bg-blue-600 hover:bg-blue-700 hover:-translate-y-1 hover:scale-105 sm:w-auto" type="button">Add Application</button>
                 <button onClick={handleExport} className="flex items-center justify-center w-full px-6 py-3 font-medium text-white transition-all duration-300 transform rounded-lg shadow-lg bg-green-700 hover:bg-green-800 hover:-translate-y-1 hover:scale-105 sm:w-auto" type="button">Export to Excel</button>
               </div>
+              )}
             </div>
             <div className="mb-10 overflow-hidden bg-white shadow-xl rounded-xl">
               <div className="overflow-x-auto">
@@ -488,6 +498,7 @@ export default function AssoProRecruitmentPage() {
                   <thead className="bg-blue-600">
                     <tr>
                       <th className="px-3 py-4 text-left text-xs font-medium text-white uppercase tracking-wider">S.No</th>
+                      {readOnly && <th className="px-3 py-4 text-left text-xs font-medium text-white uppercase tracking-wider">Department</th>}
                       <th className="px-3 py-4 text-left text-xs font-medium text-white uppercase tracking-wider">Application No</th>
                       <th className="px-3 py-4 text-left text-xs font-medium text-white uppercase tracking-wider">Email</th>
                       <th className="px-3 py-4 text-left text-xs font-medium text-white uppercase tracking-wider">UG Branches</th>
@@ -500,24 +511,35 @@ export default function AssoProRecruitmentPage() {
                       <th className="px-3 py-4 text-left text-xs font-medium text-white uppercase tracking-wider">PhD University</th>
                       <th className="px-3 py-4 text-left text-xs font-medium text-white uppercase tracking-wider">PhD Date</th>
                       <th className="px-3 py-4 text-left text-xs font-medium text-white uppercase tracking-wider">PhD Recognized</th>
+                      <th className="px-3 py-4 text-left text-xs font-medium text-white uppercase tracking-wider">UG Class</th>
+                      <th className="px-3 py-4 text-left text-xs font-medium text-white uppercase tracking-wider">PG Class</th>
                       <th className="px-3 py-4 text-left text-xs font-medium text-white uppercase tracking-wider">UG/PG Remarks</th>
                       <th className="px-3 py-4 text-left text-xs font-medium text-white uppercase tracking-wider">PhD Remarks</th>
-                      <th className="px-3 py-4 text-left text-xs font-medium text-white uppercase tracking-wider">Exp Remarks</th>
+                      <th className="px-3 py-4 text-left text-xs font-medium text-white uppercase tracking-wider">Post PhD Exp</th>
+                      <th className="px-3 py-4 text-left text-xs font-medium text-white uppercase tracking-wider">Teaching Exp</th>
+                      <th className="px-3 py-4 text-left text-xs font-medium text-white uppercase tracking-wider">Research Exp</th>
+                      <th className="px-3 py-4 text-left text-xs font-medium text-white uppercase tracking-wider">Industry Exp</th>
+                      <th className="px-3 py-4 text-left text-xs font-medium text-white uppercase tracking-wider">Total Exp (Yrs)</th>
+                      <th className="px-3 py-4 text-left text-xs font-medium text-white uppercase tracking-wider">Experience Remarks</th>
+                      <th className="px-3 py-4 text-left text-xs font-medium text-white uppercase tracking-wider">Papers (SCI / UGC / SCOPUS)</th>
+                      <th className="px-3 py-4 text-left text-xs font-medium text-white uppercase tracking-wider">Total Research Papers</th>
                       <th className="px-3 py-4 text-left text-xs font-medium text-white uppercase tracking-wider">Research Remarks</th>
+                      <th className="px-3 py-4 text-left text-xs font-medium text-white uppercase tracking-wider">Publication Count</th>
                       <th className="px-3 py-4 text-left text-xs font-medium text-white uppercase tracking-wider">Eligibility</th>
                       <th className="px-3 py-4 text-left text-xs font-medium text-white uppercase tracking-wider">Remarks</th>
-                      <th className="px-3 py-4 text-center text-xs font-medium text-white uppercase tracking-wider">Actions</th>
+                      {!readOnly && <th className="px-3 py-4 text-center text-xs font-medium text-white uppercase tracking-wider">Actions</th>}
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
                     {loading ? (
-                      <tr><td colSpan="20" className="px-6 py-12 text-center text-gray-500">Loading...</td></tr>
+                      <tr><td colSpan="32" className="px-6 py-12 text-center text-gray-500">Loading...</td></tr>
                     ) : filtered.length === 0 ? (
-                      <tr><td colSpan="20" className="px-6 py-12 text-center text-gray-500">No applications found</td></tr>
+                      <tr><td colSpan="32" className="px-6 py-12 text-center text-gray-500">No applications found</td></tr>
                     ) : (
                       paginated.map((row, idx) => (
                         <tr key={row.id} className={`${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'} hover:bg-blue-50 transition-colors duration-150`}>
                           <td className="px-3 py-2 text-sm font-medium text-gray-900">{(page - 1) * PAGE_SIZE + idx + 1}</td>
+                          {readOnly && <td className="px-3 py-2" title={row.dept_name || ''}>{row.dept_shortname || '-'}</td>}
                           <td className="px-3 py-2">{row.application_no}</td>
                           <td className="px-3 py-2">{row.email}</td>
                           <td className="px-3 py-2">{row.ug_branches}</td>
@@ -530,12 +552,23 @@ export default function AssoProRecruitmentPage() {
                           <td className="px-3 py-2">{row.phd_university}</td>
                           <td className="px-3 py-2">{formatDateDMY(row.phd_date)}</td>
                           <td className="px-3 py-2">{row.phd_reputed_university === true ? 'Yes' : row.phd_reputed_university === false ? 'No' : ''}</td>
+                          <td className="px-3 py-2">{row.ug_class}</td>
+                          <td className="px-3 py-2">{row.pg_class}</td>
                           <td className="px-3 py-2">{renderUgPgRemarks(row)}</td>
                           <td className="px-3 py-2">{renderPhdRemarks(row)}</td>
+                          <td className="px-3 py-2">{row.post_phd_experience}</td>
+                          <td className="px-3 py-2">{row.experience_teaching}</td>
+                          <td className="px-3 py-2">{row.experience_research}</td>
+                          <td className="px-3 py-2">{row.experience_industry}</td>
+                          <td className="px-3 py-2">{row.experience_years}</td>
                           <td className="px-3 py-2">{renderExperienceRemarks(row)}</td>
+                          <td className="px-3 py-2">{[row.papers_in_sci ? `SCI: ${row.papers_in_sci}` : '', row.papers_in_ugc ? `UGC: ${row.papers_in_ugc}` : '', row.papers_in_aicte ? `AICTE: ${row.papers_in_aicte}` : ''].filter(Boolean).join(', ')}</td>
+                          <td className="px-3 py-2">{row.research_papers_count}</td>
                           <td className="px-3 py-2">{renderResearchRemarks(row)}</td>
+                          <td className="px-3 py-2">{row.publication}</td>
                           <td className="px-3 py-2">{renderEligibilityStatus(row)}</td>
                           <td className="px-3 py-2">{row.remarks}</td>
+                          {!readOnly && (
                           <td className="px-3 py-2 whitespace-nowrap text-center">
                             <div className="flex items-center justify-center space-x-2">
                               <button onClick={() => openEdit(row)} className="p-2 text-white transition-colors duration-200 bg-blue-600 rounded-lg hover:bg-blue-700" title="Edit Application" type="button">
@@ -546,6 +579,7 @@ export default function AssoProRecruitmentPage() {
                               </button>
                             </div>
                           </td>
+                          )}
                         </tr>
                       ))
                     )}

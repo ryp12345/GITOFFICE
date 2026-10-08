@@ -1,4 +1,13 @@
 const { pool } = require('../config/db');
+const { normalizeDateColumns } = require('../utils/pgDate');
+
+// DATE columns go out as YYYY-MM-DD. As JS Dates they serialise in UTC, so on an IST server the
+// edit form (which reads the first ten characters) showed and re-saved the previous day.
+const DATE_COLUMNS = ['date_of_birth', 'advertisement_instance', 'phd_date', 'from_date_asso_prof', 'to_date_asso_prof'];
+
+function serializeRow(row) {
+  return normalizeDateColumns(row, DATE_COLUMNS);
+}
 
 const selectColumns = `
   id,
@@ -53,7 +62,24 @@ async function findAllByDepartmentId(departmentId) {
     [departmentId]
   );
 
-  return rows;
+  return rows.map(serializeRow);
+}
+
+// Every department's applications, newest first, for the Principal's read-only Faculty
+// Recruitment page (PrincipalController::Professor_Application used ::all()). The department
+// is joined in because the list spans departments.
+async function findAllWithDepartment() {
+  const columns = selectColumns
+    .split(',')
+    .map((column) => `a.${column.trim()}`)
+    .join(', ');
+  const { rows } = await pool.query(
+    `SELECT ${columns}, d.dept_name, d.dept_shortname
+     FROM professor_applications a
+     LEFT JOIN departments d ON d.id = a.department_id
+     ORDER BY a.created_at DESC, a.id DESC`
+  );
+  return rows.map(serializeRow);
 }
 
 async function findByIdAndDepartmentId(id, departmentId) {
@@ -65,7 +91,7 @@ async function findByIdAndDepartmentId(id, departmentId) {
     [id, departmentId]
   );
 
-  return rows[0] || null;
+  return rows[0] ? serializeRow(rows[0]) : null;
 }
 
 async function create(payload) {
@@ -151,8 +177,18 @@ async function create(payload) {
     ]
   );
 
-  return rows[0];
+  return serializeRow(rows[0]);
 }
+
+// The service payload also carries derived values that have no column (eligibility_reason),
+// so only columns listed in selectColumns are written. Laravel guarded the same way with
+// Schema::hasColumn(); writing the extra key made every edit fail.
+const UPDATABLE_COLUMNS = new Set(
+  selectColumns
+    .split(',')
+    .map((column) => column.trim())
+    .filter((column) => column && !['id', 'department_id', 'created_at', 'updated_at'].includes(column))
+);
 
 async function updateByIdAndDepartmentId(id, departmentId, payload) {
   const fields = [];
@@ -160,7 +196,7 @@ async function updateByIdAndDepartmentId(id, departmentId, payload) {
   let index = 1;
 
   Object.entries(payload).forEach(([key, value]) => {
-    if (value === undefined || key === 'id' || key === 'department_id') {
+    if (value === undefined || !UPDATABLE_COLUMNS.has(key)) {
       return;
     }
 
@@ -180,7 +216,7 @@ async function updateByIdAndDepartmentId(id, departmentId, payload) {
     values
   );
 
-  return rows[0] || null;
+  return rows[0] ? serializeRow(rows[0]) : null;
 }
 
 async function removeByIdAndDepartmentId(id, departmentId) {
@@ -195,6 +231,7 @@ async function removeByIdAndDepartmentId(id, departmentId) {
 
 module.exports = {
   findAllByDepartmentId,
+  findAllWithDepartment,
   findByIdAndDepartmentId,
   create,
   updateByIdAndDepartmentId,

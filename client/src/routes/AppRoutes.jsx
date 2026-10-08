@@ -80,6 +80,7 @@ import ForgotPassword from '../pages/auth/ForgotPassword';
 import ResetPassword from '../pages/auth/ResetPassword';
 import AssoProRecruitmentPage from '../pages/Faculty Recruitment/asso_pro_recruitment';
 import ProRecruitmentPage from '../pages/Faculty Recruitment/pro_recruitment';
+import { getPrincipalAssociateProfessorApplications, getPrincipalProfessorApplications } from '../api/principalApi';
 import RegistrarDashboard from '../pages/Registrar/Dashboard';
 import SidebarRegistrar from '../components/layout/SidebarRegistrar';
 import SidebarExamSection from '../components/layout/SidebarExamSection';
@@ -229,8 +230,12 @@ export default function AppRoutes() {
               element={<DepartmentActivityReport key={report} report={report} />}
             />
           ))}
-          <Route path="/Faculty Recruitment/asso_pro_recruitment" element={<AssoProRecruitmentPage />} />
-          <Route path="/Faculty Recruitment/pro_recruitment" element={<ProRecruitmentPage />} />
+          {/* Faculty Recruitment: the HOD manages their own department's applications */}
+          <Route path="/hod/faculty-recruitment/associate-professor" element={<AssoProRecruitmentPage />} />
+          <Route path="/hod/faculty-recruitment/professor" element={<ProRecruitmentPage />} />
+          {/* Earlier URLs, kept so existing links and bookmarks still open the pages */}
+          <Route path="/Faculty Recruitment/asso_pro_recruitment" element={<Navigate to="/hod/faculty-recruitment/associate-professor" replace />} />
+          <Route path="/Faculty Recruitment/pro_recruitment" element={<Navigate to="/hod/faculty-recruitment/professor" replace />} />
 
 
 
@@ -298,6 +303,27 @@ export default function AppRoutes() {
           <Route path="/principal/leave-management/holiday-rh" element={<HolidayRHListPage />} />
           <Route path="/principal/staff" element={<StaffPage readOnly SidebarComponent={PrincipalDeansidebar} viewBasePath="/principal/staff" />} />
           <Route path="/principal/staff/:id" element={<StaffViewPage readOnly SidebarComponent={PrincipalDeansidebar} listPath="/principal/staff" />} />
+          {/* Faculty Recruitment: every department's applications, read-only (HODs manage them) */}
+          <Route
+            path="/principal/faculty-recruitment/associate-professor"
+            element={
+              <AssoProRecruitmentPage
+                readOnly
+                SidebarComponent={PrincipalDeansidebar}
+                loadApplications={getPrincipalAssociateProfessorApplications}
+              />
+            }
+          />
+          <Route
+            path="/principal/faculty-recruitment/professor"
+            element={
+              <ProRecruitmentPage
+                readOnly
+                SidebarComponent={PrincipalDeansidebar}
+                loadApplications={getPrincipalProfessorApplications}
+              />
+            }
+          />
         </Route>
         <Route element={<RoleRoute role="Dean_admin" />}>
           <Route path="/dean_admin" element={<PrincipalDeanDashboard />} />
@@ -311,6 +337,27 @@ export default function AppRoutes() {
           <Route path="/dean_admin/leave-management/holiday-rh" element={<HolidayRHListPage />} />
           <Route path="/dean_admin/staff" element={<StaffPage readOnly SidebarComponent={PrincipalDeansidebar} viewBasePath="/dean_admin/staff" />} />
           <Route path="/dean_admin/staff/:id" element={<StaffViewPage readOnly SidebarComponent={PrincipalDeansidebar} listPath="/dean_admin/staff" />} />
+          {/* Faculty Recruitment: same read-only, all-department view as the Principal's */}
+          <Route
+            path="/dean_admin/faculty-recruitment/associate-professor"
+            element={
+              <AssoProRecruitmentPage
+                readOnly
+                SidebarComponent={PrincipalDeansidebar}
+                loadApplications={getPrincipalAssociateProfessorApplications}
+              />
+            }
+          />
+          <Route
+            path="/dean_admin/faculty-recruitment/professor"
+            element={
+              <ProRecruitmentPage
+                readOnly
+                SidebarComponent={PrincipalDeansidebar}
+                loadApplications={getPrincipalProfessorApplications}
+              />
+            }
+          />
         </Route>
         <Route element={<RoleRoute role="Teaching" />}>
           <Route path="/teaching" element={<StaffDashboard />} />

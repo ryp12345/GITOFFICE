@@ -22,3 +22,12 @@ export const rejectPrincipalLeaveApplication = async (token, applicationId) => {
     headers: tokenHeaders(token),
   });
 };
+
+// Faculty Recruitment (read-only, every department). Same { rows } payload as the HOD lists.
+export const getPrincipalAssociateProfessorApplications = async () => {
+  return axios.get('/principal/faculty-recruitment/associate-professor-applications');
+};
+
+export const getPrincipalProfessorApplications = async () => {
+  return axios.get('/principal/faculty-recruitment/professor-applications');
+};

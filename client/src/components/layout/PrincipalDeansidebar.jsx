@@ -40,6 +40,14 @@ export default function PrincipalDeansidebar() {
         { name: 'Monthly Data', path: `${roleBasePath}/biometric/monthly` },
         { name: 'Muster', path: `${roleBasePath}/biometric/muster` }
       ]
+    },
+    {
+      name: 'Faculty Recruitment',
+      icon: '🎓',
+      submenu: [
+        { name: 'Associate Professor Applications', path: `${roleBasePath}/faculty-recruitment/associate-professor` },
+        { name: 'Professor Applications', path: `${roleBasePath}/faculty-recruitment/professor` }
+      ]
     }
   ];
 
