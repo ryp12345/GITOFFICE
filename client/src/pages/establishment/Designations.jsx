@@ -5,6 +5,7 @@ import Header from '../../components/layout/Header';
 import Sidebar from '../../components/layout/Sidebar';
 import { useAuth } from '../../context/AuthContext';
 import { getDesignations, createDesignation, updateDesignation, deleteDesignation } from '../../api/designationApi';
+import { getErrorMessage } from '../../utils/errors';
 
 const initialForm = {
   design_name: '',
@@ -38,7 +39,7 @@ export default function DesignationsPage() {
       setRows(Array.isArray(data) ? data : []);
     } catch (e) {
       setRows([]);
-      const msg = e.response?.data?.message || e.response?.data?.error || e.message || 'Failed to fetch designations';
+      const msg = getErrorMessage(e, 'Failed to fetch designations');
       showNotification(msg, 'error');
     }
     setLoading(false);
@@ -99,7 +100,7 @@ export default function DesignationsPage() {
       onClose();
       load();
     } catch (e) {
-      const msg = e.response?.data?.message || e.message || 'Failed to save';
+      const msg = getErrorMessage(e, 'Failed to save');
       setError(msg);
       showNotification(msg, 'error');
     }
@@ -112,7 +113,7 @@ export default function DesignationsPage() {
       load();
       showNotification('Designation deleted successfully!', 'success');
     } catch (e) {
-      const msg = e.response?.data?.message || e.message || 'Failed to delete designation';
+      const msg = getErrorMessage(e, 'Failed to delete designation');
       showNotification(msg, 'error');
     }
   };

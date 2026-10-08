@@ -11,6 +11,7 @@ import { useAuth } from '../../context/AuthContext';
 import Header from '../../components/layout/Header';
 import StaffSidebar from '../../components/layout/StaffSidebar';
 import api from '../../api/axios';
+import { getErrorMessage } from '../../utils/errors';
 
 const initialForm = {
   qualification_id: '',
@@ -277,7 +278,7 @@ export default function QualificationPage() {
       await refreshStaffQualifications();
       onClose();
     } catch (err) {
-      const msg = err?.response?.data?.message || 'Failed to save qualification';
+      const msg = getErrorMessage(err, 'Failed to save qualification');
       setError(msg);
       showNotification(msg, 'error');
     } finally {
@@ -295,7 +296,7 @@ export default function QualificationPage() {
       await refreshStaffQualifications();
       showNotification('Qualification deleted successfully!', 'success');
     } catch (err) {
-      const msg = err?.response?.data?.message || 'Failed to delete qualification';
+      const msg = getErrorMessage(err, 'Failed to delete qualification');
       setError(msg);
       showNotification(msg, 'error');
     }

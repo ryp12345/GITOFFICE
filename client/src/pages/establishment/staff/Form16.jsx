@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import api from '../../../api/axios';
+import { getErrorMessage } from '../../../utils/errors';
 
 function normalizeRows(payload) {
   const rows = Array.isArray(payload)
@@ -169,7 +170,7 @@ export default function Form16({ staff, setNotification }) {
       setYear(new Date().getFullYear());
       await loadForm16Files();
     } catch (uploadErr) {
-      const message = uploadErr?.response?.data?.message || 'Failed to upload Form 16. Please try again.';
+      const message = getErrorMessage(uploadErr, 'Failed to upload Form 16. Please try again.');
       setError(message);
       if (typeof setNotification === 'function') {
         setNotification({ show: true, message, type: 'error' });
@@ -195,7 +196,7 @@ export default function Form16({ staff, setNotification }) {
       }
       await loadForm16Files();
     } catch (deleteErr) {
-      const message = deleteErr?.response?.data?.message || 'Failed to delete Form 16 file.';
+      const message = getErrorMessage(deleteErr, 'Failed to delete Form 16 file.');
       setError(message);
       if (typeof setNotification === 'function') {
         setNotification({ show: true, message, type: 'error' });

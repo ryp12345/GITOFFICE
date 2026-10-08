@@ -5,6 +5,7 @@ import {
   getStaffLaptopLoans,
   updateStaffLaptopLoan,
 } from '../../../api/staffLaptopLoanApi';
+import { getErrorMessage } from '../../../utils/errors';
 
 function toInputDate(value) {
   if (!value) return '';
@@ -156,7 +157,7 @@ export default function LaptopLoan({ staff, setNotification, onLaptopLoanUpdated
       if (typeof onLaptopLoanUpdated === 'function') await onLaptopLoanUpdated();
       closeModal();
     } catch (err) {
-      setError(err?.response?.data?.message || 'Failed to save laptop loan');
+      setError(getErrorMessage(err, 'Failed to save laptop loan'));
     } finally {
       setSaving(false);
     }
@@ -173,7 +174,7 @@ export default function LaptopLoan({ staff, setNotification, onLaptopLoanUpdated
       await fetchData();
       if (typeof onLaptopLoanUpdated === 'function') await onLaptopLoanUpdated();
     } catch (err) {
-      setError(err?.response?.data?.message || 'Failed to delete laptop loan');
+      setError(getErrorMessage(err, 'Failed to delete laptop loan'));
     }
   };
 

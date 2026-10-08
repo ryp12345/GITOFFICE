@@ -59,7 +59,7 @@ export default function HODCoordinatorViewPage() {
       setFormData({ staff_id: '', start_date: '' });
       load();
     } catch (err) {
-      const msg = err?.response?.data?.message || err.message || 'Failed to add staff';
+      const msg = getErrorMessage(err, 'Failed to add staff');
       showNotification(msg, 'error');
     }
   };
@@ -87,7 +87,7 @@ export default function HODCoordinatorViewPage() {
       setEditFormData({ staff_id: '', start_date: '', end_date: '' });
       load();
     } catch (err) {
-      const msg = err?.response?.data?.message || err.message || 'Failed to update staff';
+      const msg = getErrorMessage(err, 'Failed to update staff');
       showNotification(msg, 'error');
     }
   };

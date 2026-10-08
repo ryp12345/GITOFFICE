@@ -11,6 +11,7 @@ import {
 } from '../../api/ticketApi';
 
 import { useAuth } from '../../context/AuthContext';
+import { getErrorMessage } from '../../utils/errors';
 
 // ========== Helper Functions ==========
 function getStatusConfig(status) {
@@ -471,7 +472,7 @@ export default function TicketDetails({ listPath, canUpdateStatus }) {
           }))
       );
     } catch (error) {
-      showNotification(error?.response?.data?.message || 'Failed to load ticket details.', 'error');
+      showNotification(getErrorMessage(error, 'Failed to load ticket details.'), 'error');
     } finally {
       setLoading(false);
     }
@@ -488,7 +489,7 @@ export default function TicketDetails({ listPath, canUpdateStatus }) {
       showNotification('Reply added successfully! 🎉');
       await loadDetails();
     } catch (error) {
-      showNotification(error?.response?.data?.message || 'Failed to add reply.', 'error');
+      showNotification(getErrorMessage(error, 'Failed to add reply.'), 'error');
     } finally {
       setBusyAction('');
     }
@@ -501,7 +502,7 @@ export default function TicketDetails({ listPath, canUpdateStatus }) {
       showNotification(`Ticket status updated to ${newStatus}! ✨`);
       await loadDetails();
     } catch (error) {
-      showNotification(error?.response?.data?.message || 'Failed to update status.', 'error');
+      showNotification(getErrorMessage(error, 'Failed to update status.'), 'error');
     } finally {
       setBusyAction('');
     }

@@ -5,6 +5,7 @@ import Header from '../../../components/layout/Header';
 import Sidebar from '../../../components/layout/Sidebar';
 import { useAuth } from '../../../context/AuthContext';
 import axios from '../../../api/axios';
+import { getErrorMessage } from '../../../utils/errors';
 
 const initialForm = {
   longname: '',
@@ -154,7 +155,7 @@ export default function LeavesPage() {
       onClose();
       load();
     } catch (e) {
-      const msg = e.response?.data?.message || e.message || 'Failed to save';
+      const msg = getErrorMessage(e, 'Failed to save');
       setError(msg);
       showNotification(msg, 'error');
     }
@@ -167,7 +168,7 @@ export default function LeavesPage() {
       load();
       showNotification('Leave deleted successfully!', 'success');
     } catch (e) {
-      const msg = e.response?.data?.message || e.message || 'Failed to delete leave';
+      const msg = getErrorMessage(e, 'Failed to delete leave');
       showNotification(msg, 'error');
     }
   };

@@ -11,6 +11,7 @@ import { getDesignations } from '../../api/designationApi';
 import { getReligions } from '../../api/religionApi';
 import { getCasteCategories } from '../../api/casteCategoryApi';
 import api from '../../api/axios';
+import { getErrorMessage } from '../../utils/errors';
 
 const initialForm = {
   fname: '',
@@ -482,7 +483,7 @@ export default function StaffPage({
         showNotification('Staff added successfully', 'success');
         closeModal();
       } catch (err) {
-        const msg = err?.response?.data?.message || err.message || 'Failed to create staff';
+        const msg = getErrorMessage(err, 'Failed to create staff');
         setError(msg);
       } finally {
         setLoading(false);
@@ -530,7 +531,7 @@ export default function StaffPage({
       setRows((previous) => previous.filter((row) => String(row.id) !== String(rowId)));
       showNotification('Staff deleted successfully', 'success');
     } catch (err) {
-      const msg = err?.response?.data?.message || err?.response?.data?.error || err.message || 'Failed to delete staff';
+      const msg = getErrorMessage(err, 'Failed to delete staff');
       showNotification(msg, 'error');
     } finally {
       setLoading(false);

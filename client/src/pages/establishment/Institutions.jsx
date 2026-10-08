@@ -9,6 +9,7 @@ import {
   updateInstitution,
   deleteInstitution,
 } from '../../api/institutionApi';
+import { getErrorMessage } from '../../utils/errors';
 
 const initialForm = {
   name: '',
@@ -44,7 +45,7 @@ export default function InstitutionsPage() {
       setRows(Array.isArray(data) ? data : []);
     } catch (e) {
       setRows([]);
-      const msg = e.response?.data?.message || e.response?.data?.error || e.message || 'Failed to fetch institutions';
+      const msg = getErrorMessage(e, 'Failed to fetch institutions');
       showNotification(msg, 'error');
     }
     setLoading(false);
@@ -106,7 +107,7 @@ export default function InstitutionsPage() {
       onClose();
       load();
     } catch (e) {
-      const msg = e.response?.data?.message || e.response?.data?.error || e.message || 'Failed to save institution';
+      const msg = getErrorMessage(e, 'Failed to save institution');
       setError(msg);
       showNotification(msg, 'error');
     }
@@ -120,7 +121,7 @@ export default function InstitutionsPage() {
       showNotification('Institution deleted successfully!', 'success');
       load();
     } catch (e) {
-      const msg = e.response?.data?.message || e.response?.data?.error || e.message || 'Failed to delete institution';
+      const msg = getErrorMessage(e, 'Failed to delete institution');
       showNotification(msg, 'error');
     }
   };

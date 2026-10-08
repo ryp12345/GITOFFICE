@@ -13,6 +13,7 @@ import {
   updateStaffDesignationRow,
   updateStaffPayscaleRow,
 } from '../../../api/staffDesignationPayscaleApi';
+import { getErrorMessage } from '../../../utils/errors';
 
 function toInputDate(value) {
   if (!value) return '';
@@ -196,7 +197,7 @@ export default function Designation({ staff, setNotification, onDesignationUpdat
         setDesignationOptions([]);
       }
     } catch (e) {
-      setError(e?.response?.data?.message || 'Failed to load designation and payscale data');
+      setError(getErrorMessage(e, 'Failed to load designation and payscale data'));
     } finally {
       setLoading(false);
     }
@@ -297,7 +298,7 @@ export default function Designation({ staff, setNotification, onDesignationUpdat
       setMainForm(mainFormDefaults);
       await afterMutation();
     } catch (err) {
-      setError(err?.response?.data?.message || 'Failed to change designation and payscale');
+      setError(getErrorMessage(err, 'Failed to change designation and payscale'));
     } finally {
       setSaving(false);
     }
@@ -325,7 +326,7 @@ export default function Designation({ staff, setNotification, onDesignationUpdat
       setEditingDesignation(null);
       await afterMutation();
     } catch (err) {
-      setError(err?.response?.data?.message || 'Failed to update designation row');
+      setError(getErrorMessage(err, 'Failed to update designation row'));
     } finally {
       setSaving(false);
     }
@@ -355,7 +356,7 @@ export default function Designation({ staff, setNotification, onDesignationUpdat
       notify('Designation row deleted successfully');
       await afterMutation();
     } catch (err) {
-      setError(err?.response?.data?.message || 'Failed to delete designation row');
+      setError(getErrorMessage(err, 'Failed to delete designation row'));
     }
   };
 
@@ -389,7 +390,7 @@ export default function Designation({ staff, setNotification, onDesignationUpdat
       setEditingPayscale(null);
       await afterMutation();
     } catch (err) {
-      setError(err?.response?.data?.message || 'Failed to update payscale row');
+      setError(getErrorMessage(err, 'Failed to update payscale row'));
     } finally {
       setSaving(false);
     }
@@ -407,7 +408,7 @@ export default function Designation({ staff, setNotification, onDesignationUpdat
       notify('Payscale row deleted successfully');
       await afterMutation();
     } catch (err) {
-      setError(err?.response?.data?.message || 'Failed to delete payscale row');
+      setError(getErrorMessage(err, 'Failed to delete payscale row'));
     }
   };
 
@@ -449,7 +450,7 @@ export default function Designation({ staff, setNotification, onDesignationUpdat
       setAdditionalForm(additionalDefaults);
       await afterMutation();
     } catch (err) {
-      setError(err?.response?.data?.message || 'Failed to save additional designation');
+      setError(getErrorMessage(err, 'Failed to save additional designation'));
     } finally {
       setSaving(false);
     }
@@ -463,7 +464,7 @@ export default function Designation({ staff, setNotification, onDesignationUpdat
       notify('Additional designation deleted successfully');
       await afterMutation();
     } catch (err) {
-      setError(err?.response?.data?.message || 'Failed to delete additional designation');
+      setError(getErrorMessage(err, 'Failed to delete additional designation'));
     }
   };
 

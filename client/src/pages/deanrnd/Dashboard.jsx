@@ -7,6 +7,7 @@ import Notification from '../../components/common/Notification';
 import { CountValue, EventsPanel, NoticesPanel, OverviewChart, statTone } from '../../components/dashboard/ActivityDashboardWidgets';
 import { useAuth } from '../../context/AuthContext';
 import { getDeanRndDashboard } from '../../api/deanrndApi';
+import { getErrorMessage } from '../../utils/errors';
 
 // Mirrors resources/views/Deanrnd/dashboard.blade.php: the five institution-wide summary
 // cards, Upcoming Events and Notice Board, the record totals per menu, and the PhD
@@ -136,7 +137,7 @@ export default function DeanRndDashboard() {
         if (!active) return;
         setNotification({
           show: true,
-          message: error?.response?.data?.message || 'Failed to load the dashboard.',
+          message: getErrorMessage(error, 'Failed to load the dashboard.'),
           type: 'error',
         });
       })

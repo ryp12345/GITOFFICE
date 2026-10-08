@@ -4,6 +4,7 @@ import Header from '../../components/layout/Header';
 import Sidebar from '../../components/layout/Sidebar';
 import { useAuth } from '../../context/AuthContext';
 import { getMyStaff } from '../../api/hodApi';
+import { getErrorMessage } from '../../utils/errors';
 
 const getStaffName = (row) => {
   const parts = [row?.fname, row?.mname, row?.lname].filter(Boolean);
@@ -143,7 +144,7 @@ export default function HODMyStaffPage() {
         setNonTeachingStaff([]);
         setNotification({
           show: true,
-          message: error?.response?.data?.message || 'Failed to load my staff details.',
+          message: getErrorMessage(error, 'Failed to load my staff details.'),
           type: 'error',
         });
       } finally {

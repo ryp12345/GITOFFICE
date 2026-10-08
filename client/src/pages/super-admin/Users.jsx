@@ -6,6 +6,7 @@ import Sidebar from '../../components/layout/Sidebar';
 import { impersonateUser, getUsers, resetUserPassword } from '../../api/userApi';
 import { useAuth } from '../../context/AuthContext';
 import { getDashboardPathByRole } from '../../utils/role';
+import { getErrorMessage } from '../../utils/errors';
 
 const PAGE_SIZE = 10;
 const USER_TABS = [
@@ -113,7 +114,7 @@ export default function SuperAdminUsersPage() {
       setSession(session);
       navigate(getDashboardPathByRole(session?.user?.role), { replace: true });
     } catch (error) {
-      const message = error?.response?.data?.message || 'Failed to impersonate user.';
+      const message = getErrorMessage(error, 'Failed to impersonate user.');
       showNotification(message, 'error');
     } finally {
       setActionLoading({ type: '', userId: null });
@@ -133,7 +134,7 @@ export default function SuperAdminUsersPage() {
       const message = response?.data?.message || 'Password reset successfully.';
       showNotification(message, 'success');
     } catch (error) {
-      const message = error?.response?.data?.message || 'Failed to reset password.';
+      const message = getErrorMessage(error, 'Failed to reset password.');
       showNotification(message, 'error');
     } finally {
       setActionLoading({ type: '', userId: null });

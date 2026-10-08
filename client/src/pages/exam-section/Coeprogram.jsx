@@ -3,6 +3,7 @@ import Notification from '../../components/common/Notification';
 import Header from '../../components/layout/Header';
 import SidebarExamSection from '../../components/layout/SidebarExamSection';
 import { getCoeprograms, getCoeprogramDepartments, createCoeprogram, updateCoeprogram, deleteCoeprogram } from '../../api/examSectionApi';
+import { getErrorMessage } from '../../utils/errors';
 
 const initialForm = {
   program_name: '',
@@ -37,7 +38,7 @@ export default function CoeprogramPage() {
       setRows(Array.isArray(listData) ? listData : []);
       setDepartments(Array.isArray(deptData) ? deptData : []);
     } catch (e) {
-      const msg = e.response?.data?.message || e.message || 'Failed to fetch programs';
+      const msg = getErrorMessage(e, 'Failed to fetch programs');
       showNotification(msg, 'error');
     }
     setLoading(false);
@@ -100,7 +101,7 @@ export default function CoeprogramPage() {
       onClose();
       load();
     } catch (e) {
-      const msg = e.response?.data?.message || e.message || 'Failed to save';
+      const msg = getErrorMessage(e, 'Failed to save');
       setError(msg);
       showNotification(msg, 'error');
     }
@@ -113,7 +114,7 @@ export default function CoeprogramPage() {
       load();
       showNotification('Program Deleted successfully', 'success');
     } catch (e) {
-      const msg = e.response?.data?.message || e.message || 'Failed to delete program';
+      const msg = getErrorMessage(e, 'Failed to delete program');
       showNotification(msg, 'error');
     }
   };

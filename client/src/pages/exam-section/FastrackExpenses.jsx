@@ -3,6 +3,7 @@ import Notification from '../../components/common/Notification';
 import Header from '../../components/layout/Header';
 import SidebarExamSection from '../../components/layout/SidebarExamSection';
 import { getExpenses, getExpensesByAcademicYear, createExpense, updateExpense, deleteExpense, getExpenseMasters } from '../../api/examSectionApi';
+import { getErrorMessage } from '../../utils/errors';
 
 const YEARS = [];
 const currentYear = new Date().getFullYear();
@@ -40,7 +41,7 @@ export default function FastrackExpensesPage() {
       const data = res?.data?.data || res?.data || [];
       setExpenses(Array.isArray(data) ? data : []);
     } catch (e) {
-      showNotification(e.response?.data?.message || e.message || 'Failed to load expenses', 'error');
+      showNotification(getErrorMessage(e, 'Failed to load expenses'), 'error');
     }
     setLoading(false);
   };
@@ -51,7 +52,7 @@ export default function FastrackExpensesPage() {
       const data = res?.data?.data || res?.data || [];
       setExpenseMasters(Array.isArray(data) ? data : []);
     } catch (e) {
-      showNotification(e.response?.data?.message || e.message || 'Failed to load expense titles', 'error');
+      showNotification(getErrorMessage(e, 'Failed to load expense titles'), 'error');
     }
   };
 
@@ -96,7 +97,7 @@ export default function FastrackExpensesPage() {
       setAddRows([{ ft_expense_master_id: '', expense_amount: '' }]);
       loadExpenses(academicYear);
     } catch (e) {
-      showNotification(e.response?.data?.message || e.message || 'Failed to add expenses', 'error');
+      showNotification(getErrorMessage(e, 'Failed to add expenses'), 'error');
     }
   };
 
@@ -127,7 +128,7 @@ export default function FastrackExpensesPage() {
       setEditingId(null);
       loadExpenses(academicYear);
     } catch (e) {
-      showNotification(e.response?.data?.message || e.message || 'Failed to update expense', 'error');
+      showNotification(getErrorMessage(e, 'Failed to update expense'), 'error');
     }
   };
 
@@ -138,7 +139,7 @@ export default function FastrackExpensesPage() {
       showNotification('Fastrack Expense deleted successfully', 'success');
       loadExpenses(academicYear);
     } catch (e) {
-      showNotification(e.response?.data?.message || e.message || 'Failed to delete expense', 'error');
+      showNotification(getErrorMessage(e, 'Failed to delete expense'), 'error');
     }
   };
 

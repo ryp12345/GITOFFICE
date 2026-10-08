@@ -20,6 +20,7 @@ import {
   staffName as getStaffName,
   usePagedRows,
 } from '../../components/fastrack/fastrackUi';
+import { getErrorMessage } from '../../utils/errors';
 
 const LOCKED_STATUSES = ['Pending', 'Approved', 'Verified'];
 const EMPTY_FORM = { staff_ids: [], instructor_foreman_id: '', peon_attender_id: '', ft_course_type_id: '' };
@@ -68,7 +69,7 @@ export default function FastrackCoordinatorMgtPage() {
       setRows(Array.isArray(coursesData) ? coursesData : []);
     } else {
       setRows([]);
-      showNotification(coursesRes.reason?.response?.data?.message || 'Failed to load courses', 'error');
+      showNotification(coursesRes.getErrorMessage(reason, 'Failed to load courses'), 'error');
     }
 
     if (staffRes.status === 'fulfilled') {
@@ -99,7 +100,7 @@ export default function FastrackCoordinatorMgtPage() {
       setPage(1);
       if (data.length === 0) showNotification('No records found.', 'error');
     } catch (e) {
-      showNotification(e?.response?.data?.message || 'Something went wrong! Please try again.', 'error');
+      showNotification(getErrorMessage(e, 'Something went wrong! Please try again.'), 'error');
     }
     setLoading(false);
   };
@@ -163,7 +164,7 @@ export default function FastrackCoordinatorMgtPage() {
       closeModal();
       load();
     } catch (err) {
-      const msg = err?.response?.data?.message || err.message || 'Failed to Assign Staff to Course';
+      const msg = getErrorMessage(err, 'Failed to Assign Staff to Course');
       setError(msg);
       showNotification(msg, 'error');
     }

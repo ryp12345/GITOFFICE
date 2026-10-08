@@ -18,6 +18,7 @@ import {
 } from '../staff/research/researchShared';
 import { DEPARTMENT_REPORTS } from './reportConfig';
 import { statTone } from '../../components/dashboard/ActivityDashboardWidgets';
+import { getErrorMessage } from '../../utils/errors';
 
 const PAGE_SIZES = [10, 25, 50, 100];
 
@@ -175,7 +176,7 @@ export default function DepartmentActivityReport({
       })
       .catch((error) => {
         if (!active) return;
-        notify.error(error?.response?.data?.message || `Failed to load ${config.title.toLowerCase()}.`);
+        notify.error(getErrorMessage(error, `Failed to load ${config.title.toLowerCase()}.`));
       })
       .finally(() => {
         if (active) setLoading(false);
@@ -515,8 +516,7 @@ function ValidationModal({ title, row, onClose, onSubmit, onDone }) {
       const fieldErrors = requestError?.response?.data?.errors;
       setError(
         (fieldErrors && Object.values(fieldErrors)[0]) ||
-          requestError?.response?.data?.message ||
-          'Failed to update the validation status.'
+          getErrorMessage(requestError, 'Failed to update the validation status.')
       );
       setSaving(false);
     }

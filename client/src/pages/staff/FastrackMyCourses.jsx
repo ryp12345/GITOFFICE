@@ -17,6 +17,7 @@ import {
   usePagedRows,
   formatLocalDate,
 } from '../../components/fastrack/fastrackUi';
+import { getErrorMessage } from '../../utils/errors';
 
 const MAX_FILE_SIZE = 500 * 1024;
 const emptyForm = { classes_conducted: '', labs_conducted: '' };
@@ -49,7 +50,7 @@ export default function FastrackMyCoursesPage() {
       const res = await getMyFastrackCourses();
       setRows(Array.isArray(res?.data) ? res.data : []);
     } catch (e) {
-      showNotification(e?.response?.data?.message || e.message || 'Failed to load courses', 'error');
+      showNotification(getErrorMessage(e, 'Failed to load courses'), 'error');
     }
     setLoading(false);
   };
@@ -108,7 +109,7 @@ export default function FastrackMyCoursesPage() {
       closeEdit();
       load();
     } catch (err) {
-      const msg = err?.response?.data?.message || err.message || 'Operation failed.';
+      const msg = getErrorMessage(err, 'Operation failed.');
       setError(msg);
       showNotification(msg, 'error');
     }

@@ -72,7 +72,7 @@ export default function PersonalInfo({ staff, setNotification }) {
       }
       setTimeout(() => window.location.reload(), 1200);
     } catch (err) {
-      const errorMsg = err?.response?.data?.message || err?.message || 'Failed to update staff.';
+      const errorMsg = getErrorMessage(err, 'Failed to update staff.');
       setEditError(errorMsg);
       console.error('Update error:', err);
     } finally {

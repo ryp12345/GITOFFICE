@@ -5,6 +5,7 @@ import Header from '../../components/layout/Header';
 import SidebarExamSection from '../../components/layout/SidebarExamSection';
 import { getInstances, getInstanceLookup, getInstanceById, createInstance, updateInstance, deleteInstance } from '../../api/examSectionApi';
 import { toLocalDateInput } from '../../components/fastrack/fastrackUi';
+import { getErrorMessage } from '../../utils/errors';
 
 const emptyForm = {
   ft_instance_name: '',
@@ -51,7 +52,7 @@ export default function FastrackInstancePage() {
       setSchemes(Array.isArray(lookupData.schemes) ? lookupData.schemes : []);
       setPrograms(Array.isArray(lookupData.programs) ? lookupData.programs : []);
     } catch (e) {
-      const msg = e.response?.data?.message || e.message || 'Failed to fetch data';
+      const msg = getErrorMessage(e, 'Failed to fetch data');
       showNotification(msg, 'error');
     }
     setLoading(false);
@@ -97,7 +98,7 @@ export default function FastrackInstancePage() {
       });
       setIsModalOpen(true);
     } catch (e) {
-      const msg = e.response?.data?.message || e.message || 'Failed to load instance details';
+      const msg = getErrorMessage(e, 'Failed to load instance details');
       showNotification(msg, 'error');
     }
   };
@@ -165,7 +166,7 @@ export default function FastrackInstancePage() {
       onClose();
       load();
     } catch (e) {
-      const msg = e.response?.data?.message || e.message || 'Failed to save';
+      const msg = getErrorMessage(e, 'Failed to save');
       setError(msg);
       showNotification(msg, 'error');
     }
@@ -178,7 +179,7 @@ export default function FastrackInstancePage() {
       load();
       showNotification('Fastrack Instance Deleted successfully', 'success');
     } catch (e) {
-      const msg = e.response?.data?.message || e.message || 'Failed to delete';
+      const msg = getErrorMessage(e, 'Failed to delete');
       showNotification(msg, 'error');
     }
   };

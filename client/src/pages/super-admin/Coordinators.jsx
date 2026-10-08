@@ -9,6 +9,7 @@ import {
   getCoordinators,
   updateCoordinator,
 } from '../../api/coordinatorApi';
+import { getErrorMessage } from '../../utils/errors';
 
 const initialForm = {
   name: '',
@@ -40,7 +41,7 @@ export default function SuperAdminCoordinatorsPage() {
       setRows(Array.isArray(data) ? data : []);
     } catch (err) {
       setRows([]);
-      const msg = err?.response?.data?.message || err?.message || 'Failed to load coordinators.';
+      const msg = getErrorMessage(err, 'Failed to load coordinators.');
       showNotification(msg, 'error');
     }
   };
@@ -107,7 +108,7 @@ export default function SuperAdminCoordinatorsPage() {
       onClose();
       load();
     } catch (err) {
-      const msg = err?.response?.data?.message || err?.message || 'Failed to save coordinator';
+      const msg = getErrorMessage(err, 'Failed to save coordinator');
       setError(msg);
       showNotification(msg, 'error');
     }
@@ -120,7 +121,7 @@ export default function SuperAdminCoordinatorsPage() {
       showNotification('Coordinator deleted successfully!', 'success');
       load();
     } catch (err) {
-      const msg = err?.response?.data?.message || err?.message || 'Failed to delete coordinator';
+      const msg = getErrorMessage(err, 'Failed to delete coordinator');
       showNotification(msg, 'error');
     }
   };

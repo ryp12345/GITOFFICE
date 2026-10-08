@@ -8,6 +8,7 @@ import {
   getStaffLics,
   updateStaffLic,
 } from '../../../api/staffLicApi';
+import { getErrorMessage } from '../../../utils/errors';
 
 const MONTHS = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -148,7 +149,7 @@ export default function LicManagement({ staff, setNotification, onLicUpdated }) 
       if (typeof onLicUpdated === 'function') await onLicUpdated();
       closeModal();
     } catch (err) {
-      setModalError(err?.response?.data?.message || 'Failed to save LIC policy');
+      setModalError(getErrorMessage(err, 'Failed to save LIC policy'));
     } finally {
       setSaving(false);
     }
@@ -165,7 +166,7 @@ export default function LicManagement({ staff, setNotification, onLicUpdated }) 
       await fetchRows();
       if (typeof onLicUpdated === 'function') await onLicUpdated();
     } catch (err) {
-      setError(err?.response?.data?.message || 'Failed to delete LIC policy');
+      setError(getErrorMessage(err, 'Failed to delete LIC policy'));
     }
   };
 
@@ -234,7 +235,7 @@ export default function LicManagement({ staff, setNotification, onLicUpdated }) 
       await refreshTransactions(transModalLicId);
       closeTransModal();
     } catch (err) {
-      setTransModalError(err?.response?.data?.message || 'Failed to add transaction');
+      setTransModalError(getErrorMessage(err, 'Failed to add transaction'));
     } finally {
       setSavingTrans(false);
     }
@@ -248,7 +249,7 @@ export default function LicManagement({ staff, setNotification, onLicUpdated }) 
         setNotification({ show: true, message: 'Transaction deleted', type: 'success' });
       await refreshTransactions(licId);
     } catch (err) {
-      setError(err?.response?.data?.message || 'Failed to delete transaction');
+      setError(getErrorMessage(err, 'Failed to delete transaction'));
     }
   };
 

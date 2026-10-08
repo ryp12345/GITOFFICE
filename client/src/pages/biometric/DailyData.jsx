@@ -6,6 +6,7 @@ import Chart from 'chart.js/auto';
 import { getMyStaff } from '../../api/hodApi';
 import { useAuth } from '../../context/AuthContext';
 import { isRoleMatch, ROLE_HOD, ROLE_TEACHING, ROLE_NON_TEACHING } from '../../utils/role';
+import { getErrorMessage } from '../../utils/errors';
 
 export default function DailyDataPage() {
   const [attendance, setAttendance] = useState([]);
@@ -226,7 +227,7 @@ export default function DailyDataPage() {
       } catch (err) {
         console.error('Failed to load HOD staff for DailyData:', err);
         setHodEmployeeCodes(new Set());
-        setStaffFetchError(err?.response?.data?.message || err.message || 'Failed to fetch HOD staff');
+        setStaffFetchError(getErrorMessage(err, 'Failed to fetch HOD staff'));
       }
     }
     fetchHodStaff();

@@ -5,6 +5,7 @@ import {
   getStaffAnnualIncrements,
   updateStaffAnnualIncrement,
 } from '../../../api/staffAnnualIncrementApi';
+import { getErrorMessage } from '../../../utils/errors';
 
 function toInputDate(value) {
   if (!value) return '';
@@ -149,7 +150,7 @@ export default function AnnualIncrement({ staff, setNotification, onAnnualIncrem
       }
       closeModal();
     } catch (err) {
-      setError(err?.response?.data?.message || 'Failed to save annual increment');
+      setError(getErrorMessage(err, 'Failed to save annual increment'));
     } finally {
       setSaving(false);
     }
@@ -169,7 +170,7 @@ export default function AnnualIncrement({ staff, setNotification, onAnnualIncrem
         await onAnnualIncrementUpdated();
       }
     } catch (err) {
-      setError(err?.response?.data?.message || 'Failed to delete annual increment');
+      setError(getErrorMessage(err, 'Failed to delete annual increment'));
     }
   };
 

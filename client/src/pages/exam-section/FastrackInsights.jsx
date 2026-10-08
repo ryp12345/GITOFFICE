@@ -3,6 +3,7 @@ import Notification from '../../components/common/Notification';
 import Header from '../../components/layout/Header';
 import SidebarExamSection from '../../components/layout/SidebarExamSection';
 import { getInsights, exportInsights } from '../../api/examSectionApi';
+import { getErrorMessage } from '../../utils/errors';
 
 export default function FastrackInsightsPage() {
   const [insights, setInsights] = useState([]);
@@ -32,7 +33,7 @@ export default function FastrackInsightsPage() {
       window.URL.revokeObjectURL(url);
       showNotification('Export started successfully', 'success');
     } catch (e) {
-      showNotification(e.response?.data?.message || e.message || 'Failed to export', 'error');
+      showNotification(getErrorMessage(e, 'Failed to export'), 'error');
     }
   };
 
@@ -43,7 +44,7 @@ export default function FastrackInsightsPage() {
       const data = res?.data?.data || res?.data || [];
       setInsights(Array.isArray(data) ? data : []);
     } catch (e) {
-      showNotification(e.response?.data?.message || e.message || 'Failed to load insights', 'error');
+      showNotification(getErrorMessage(e, 'Failed to load insights'), 'error');
     }
     setLoading(false);
   };

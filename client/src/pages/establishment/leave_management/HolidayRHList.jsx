@@ -29,6 +29,7 @@ import {
   getHolidayRHList,
   updateHolidayRH,
 } from '../../../api/holidayrhApi';
+import { getErrorMessage } from '../../../utils/errors';
 
 const initialForm = {
   year: new Date().getFullYear(),
@@ -148,7 +149,7 @@ export default function HolidayRHListPage({ SidebarComponent = Sidebar }) {
       onClose();
       load();
     } catch (e1) {
-      const msg = e1.response?.data?.message || e1.message || 'Failed to save Holiday/RH';
+      const msg = getErrorMessage(e1, 'Failed to save Holiday/RH');
       setError(msg);
       showNotification(msg, 'error');
     }
@@ -161,7 +162,7 @@ export default function HolidayRHListPage({ SidebarComponent = Sidebar }) {
       showNotification('Holiday/RH deleted successfully', 'success');
       load();
     } catch (e1) {
-      showNotification(e1.response?.data?.message || e1.message || 'Failed to delete Holiday/RH', 'error');
+      showNotification(getErrorMessage(e1, 'Failed to delete Holiday/RH'), 'error');
     }
   };
 

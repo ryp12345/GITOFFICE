@@ -19,6 +19,7 @@ import {
   usePagedRows,
   formatLocalDate,
 } from '../../components/fastrack/fastrackUi';
+import { getErrorMessage } from '../../utils/errors';
 
 const emptyJustify = { classes_conducted: '', labs_conducted: '', ft_justification: '' };
 
@@ -62,7 +63,7 @@ export default function HODFastrackCoursesPage() {
       setRows(Array.isArray(coursesRes.value?.data) ? coursesRes.value.data : []);
     } else {
       setRows([]);
-      showNotification(coursesRes.reason?.response?.data?.message || 'Failed to load courses', 'error');
+      showNotification(coursesRes.getErrorMessage(reason, 'Failed to load courses'), 'error');
     }
     if (lookupRes.status === 'fulfilled') {
       setInstances(lookupRes.value?.data?.instances || []);
@@ -87,7 +88,7 @@ export default function HODFastrackCoursesPage() {
       setPage(1);
       if (data.length === 0) showNotification('No records found.', 'error');
     } catch (e) {
-      showNotification(e?.response?.data?.message || 'Something went wrong! Please try again.', 'error');
+      showNotification(getErrorMessage(e, 'Something went wrong! Please try again.'), 'error');
     }
     setLoading(false);
   };
@@ -119,7 +120,7 @@ export default function HODFastrackCoursesPage() {
       showNotification('Staff records approved successfully.', 'success');
       load();
     } catch (err) {
-      showNotification(err?.response?.data?.message || 'An error occurred while processing.', 'error');
+      showNotification(getErrorMessage(err, 'An error occurred while processing.'), 'error');
     }
     setSubmitting(false);
   };
@@ -159,7 +160,7 @@ export default function HODFastrackCoursesPage() {
       closeJustify();
       load();
     } catch (err) {
-      showNotification(err?.response?.data?.message || 'Failed to process', 'error');
+      showNotification(getErrorMessage(err, 'Failed to process'), 'error');
     }
   };
 

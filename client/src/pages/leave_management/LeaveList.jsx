@@ -8,6 +8,7 @@ import {
 	approveDeanLeaveApplication,
 	rejectDeanLeaveApplication,
 } from '../../api/deanApi';
+import { getErrorMessage } from '../../utils/errors';
 
 function normalizeLeaveStatus(status) {
 	return String(status || '').trim().toLowerCase();
@@ -76,7 +77,7 @@ export default function LeaveListPage() {
 			setRows(applications);
 		} catch (error) {
 			setRows([]);
-			notify(error?.response?.data?.message || 'Failed to load leave list.', 'error');
+			notify(getErrorMessage(error, 'Failed to load leave list.'), 'error');
 		} finally {
 			setLoading(false);
 		}
@@ -128,7 +129,7 @@ export default function LeaveListPage() {
 			notify('Leave approved successfully.');
 			await loadRows();
 		} catch (error) {
-			notify(error?.response?.data?.message || 'Failed to approve leave.', 'error');
+			notify(getErrorMessage(error, 'Failed to approve leave.'), 'error');
 		} finally {
 			setProcessing(false);
 		}
@@ -144,7 +145,7 @@ export default function LeaveListPage() {
 			notify('Leave rejected successfully.');
 			await loadRows();
 		} catch (error) {
-			notify(error?.response?.data?.message || 'Failed to reject leave.', 'error');
+			notify(getErrorMessage(error, 'Failed to reject leave.'), 'error');
 		} finally {
 			setProcessing(false);
 		}

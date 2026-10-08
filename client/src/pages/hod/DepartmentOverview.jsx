@@ -4,6 +4,7 @@ import Header from '../../components/layout/Header';
 import Sidebar from '../../components/layout/Sidebar';
 import { useAuth } from '../../context/AuthContext';
 import { getDepartmentOverview } from '../../api/hodApi';
+import { getErrorMessage } from '../../utils/errors';
 
 const formatDate = (value) => {
   if (!value) return '--till Date--';
@@ -110,7 +111,7 @@ export default function HODDepartmentOverviewPage() {
         setRows([]);
         setNotification({
           show: true,
-          message: error?.response?.data?.message || 'Failed to load department overview.',
+          message: getErrorMessage(error, 'Failed to load department overview.'),
           type: 'error',
         });
       } finally {

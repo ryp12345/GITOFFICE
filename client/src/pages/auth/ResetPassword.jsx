@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { resetPasswordRequest } from '../../api/auth.api';
+import { getErrorMessage } from '../../utils/errors';
 
 export default function ResetPassword() {
   const navigate = useNavigate();
@@ -57,7 +58,7 @@ export default function ResetPassword() {
         navigate('/login', { replace: true });
       }, 1200);
     } catch (requestError) {
-      setError(requestError?.response?.data?.message || 'Could not reset password. Please request a new link.');
+      setError(getErrorMessage(requestError, 'Could not reset password. Please request a new link.'));
     } finally {
       setIsSubmitting(false);
     }

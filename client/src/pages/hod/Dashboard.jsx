@@ -5,6 +5,7 @@ import Notification from '../../components/common/Notification';
 import { useAuth } from '../../context/AuthContext';
 import { getMyStaff } from '../../api/hodApi';
 import Chart from 'chart.js/auto';
+import { getErrorMessage } from '../../utils/errors';
 
 export default function Dashboard() {
   const { token } = useAuth() || {};
@@ -25,7 +26,7 @@ export default function Dashboard() {
         setTeachingStaff(Array.isArray(payload.teachingStaff) ? payload.teachingStaff : []);
         setNonTeachingStaff(Array.isArray(payload.nonTeachingStaff) ? payload.nonTeachingStaff : []);
       } catch (err) {
-        setNotification({ show: true, message: err?.response?.data?.message || 'Failed to load staff counts', type: 'error' });
+        setNotification({ show: true, message: getErrorMessage(err, 'Failed to load staff counts'), type: 'error' });
         setDepartment(null);
         setTeachingStaff([]);
         setNonTeachingStaff([]);

@@ -5,6 +5,7 @@ import Header from '../../components/layout/Header';
 import Sidebar from '../../components/layout/Sidebar';
 import { useAuth } from '../../context/AuthContext';
 import { getDepartments, createDepartment, updateDepartment, deleteDepartment } from '../../api/departmentApi';
+import { getErrorMessage } from '../../utils/errors';
 
 const initialForm = {
   dept_name: '',
@@ -116,7 +117,7 @@ export default function DepartmentsPage() {
       onClose();
       load();
     } catch (e) {
-      const msg = e.response?.data?.message || e.message || 'Failed to save';
+      const msg = getErrorMessage(e, 'Failed to save');
       setError(msg);
       showNotification(msg, 'error');
     }
@@ -129,7 +130,7 @@ export default function DepartmentsPage() {
       load();
       showNotification('Department deleted successfully!', 'success');
     } catch (e) {
-      const msg = e.response?.data?.message || e.message || 'Failed to delete department';
+      const msg = getErrorMessage(e, 'Failed to delete department');
       showNotification(msg, 'error');
     }
   };

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { getDashboardPathByRole } from '../../utils/role';
+import { getErrorMessage } from '../../utils/errors';
 
 export default function Register() {
   const navigate = useNavigate();
@@ -30,7 +31,7 @@ export default function Register() {
       const nextUser = await register({ name, email, password });
       navigate(getDashboardPathByRole(nextUser?.role), { replace: true });
     } catch (requestError) {
-      setError(requestError?.response?.data?.message || 'Registration failed. Please try again.');
+      setError(getErrorMessage(requestError, 'Registration failed. Please try again.'));
     } finally {
       setIsSubmitting(false);
     }

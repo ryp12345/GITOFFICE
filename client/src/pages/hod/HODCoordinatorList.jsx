@@ -4,6 +4,7 @@ import Notification from '../../components/common/Notification';
 import Header from '../../components/layout/Header';
 import SidebarHOD from '../../components/layout/SidebarHOD';
 import { getHodCoordinators } from '../../api/examSectionApi';
+import { getErrorMessage } from '../../utils/errors';
 
 export default function HODCoordinatorListPage() {
   const [coordinators, setCoordinators] = useState([]);
@@ -22,7 +23,7 @@ export default function HODCoordinatorListPage() {
       const data = res?.data?.data || res?.data || [];
       setCoordinators(Array.isArray(data) ? data : []);
     } catch (e) {
-      const msg = e?.response?.data?.message || e.message || 'Failed to load coordinators';
+      const msg = getErrorMessage(e, 'Failed to load coordinators');
       showNotification(msg, 'error');
     }
     setLoading(false);

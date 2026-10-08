@@ -27,6 +27,7 @@ import {
   rowBackground,
   toInputDate,
 } from './researchShared';
+import { getErrorMessage } from '../../../utils/errors';
 
 const MAX_DOCUMENT_BYTES = 500 * 1024;
 
@@ -172,7 +173,7 @@ export default function ResearchModule({ resource, title, subtitle, modulePath, 
       setError('');
     } catch (err) {
       if (requestId !== latestRequest.current) return;
-      setError(err?.response?.data?.message || `Failed to load ${config.plural.toLowerCase()}`);
+      setError(getErrorMessage(err, `Failed to load ${config.plural.toLowerCase()}`));
     } finally {
       if (requestId === latestRequest.current) setLoading(false);
     }
@@ -344,7 +345,7 @@ export default function ResearchModule({ resource, title, subtitle, modulePath, 
       showNotification(`${config.singular} deleted successfully`);
       await refreshRecords();
     } catch (err) {
-      const message = err?.response?.data?.message || 'Error in Database transaction';
+      const message = getErrorMessage(err, 'Error in Database transaction');
       setError(message);
       showNotification(message, 'error');
     }

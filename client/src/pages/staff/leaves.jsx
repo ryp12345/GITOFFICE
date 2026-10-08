@@ -8,6 +8,7 @@ import { ROLE_NON_TEACHING, ROLE_ESTABLISHMENT, isRoleMatch } from '../../utils/
 import axios from '../../api/axios';
 import { getLeaveEntitlements } from '../../api/leaveEntitlementApi';
 import { getHolidayRHList } from '../../api/holidayrhApi';
+import { getErrorMessage } from '../../utils/errors';
 
 // Leave statistics component: fetches /api/leave-entitlements and
 // renders a small table similar to the Blade view
@@ -593,7 +594,7 @@ export default function StaffLeavesPage() {
         setHolidays(rows);
       } catch (err) {
         setHolidays([]);
-        setHolidayLoadError(err?.response?.data?.message || 'Failed to load Holiday/RH data');
+        setHolidayLoadError(getErrorMessage(err, 'Failed to load Holiday/RH data'));
       }
     };
 
@@ -1386,7 +1387,7 @@ export default function StaffLeavesPage() {
         setIsViewModalOpen(false);
         loadApplications();
       } catch (err) {
-        const msg = err.response?.data?.message || 'Failed to submit application. Please try again.';
+        const msg = getErrorMessage(err, 'Failed to submit application. Please try again.');
         setFormError(msg);
       }
       setSubmitting(false);
@@ -1623,7 +1624,7 @@ export default function StaffLeavesPage() {
       setIsViewModalOpen(false);
       loadApplications();
     } catch (err) {
-      const msg = err.response?.data?.message || 'Failed to submit application. Please try again.';
+      const msg = getErrorMessage(err, 'Failed to submit application. Please try again.');
       setFormError(msg);
     }
     setSubmitting(false);
@@ -1668,7 +1669,7 @@ export default function StaffLeavesPage() {
       setViewApplication(null);
       loadApplications();
     } catch (err) {
-      notify(err.response?.data?.message || 'Failed to cancel application.', 'error');
+      notify(getErrorMessage(err, 'Failed to cancel application.'), 'error');
     }
   };
 

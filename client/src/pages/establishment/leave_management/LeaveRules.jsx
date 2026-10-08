@@ -5,6 +5,7 @@ import Header from '../../../components/layout/Header';
 import Sidebar from '../../../components/layout/Sidebar';
 import Notification from '../../../components/common/Notification';
 import axios from '../../../api/axios';
+import { getErrorMessage } from '../../../utils/errors';
 
 const initialForm = {
   leave_id: '',
@@ -199,8 +200,8 @@ export default function LeaveRulesPage() {
       fetchRules();
       fetchCombinationRules();
     } catch (e) {
-      setError(e.response?.data?.message || e.message || 'Failed to save');
-      setNotification({ show: true, message: e.response?.data?.message || e.message || 'Failed to save', type: 'error' });
+      setError(getErrorMessage(e, 'Failed to save'));
+      setNotification({ show: true, message: getErrorMessage(e, 'Failed to save'), type: 'error' });
     }
   };
 
@@ -265,7 +266,7 @@ export default function LeaveRulesPage() {
       fetchRules();
       setNotification({ show: true, message: 'Leave rule deleted successfully!', type: 'success' });
     } catch (e) {
-      setNotification({ show: true, message: e.response?.data?.message || e.message || 'Failed to delete', type: 'error' });
+      setNotification({ show: true, message: getErrorMessage(e, 'Failed to delete'), type: 'error' });
     }
   };
 

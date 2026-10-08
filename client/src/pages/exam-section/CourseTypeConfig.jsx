@@ -5,6 +5,7 @@ import Header from '../../components/layout/Header';
 import SidebarExamSection from '../../components/layout/SidebarExamSection';
 import { useAuth } from '../../context/AuthContext';
 import { getCourseTypes, createCourseType, updateCourseType, deleteCourseType } from '../../api/examSectionApi';
+import { getErrorMessage } from '../../utils/errors';
 
 const initialForm = {
   course_type: '',
@@ -34,7 +35,7 @@ export default function CourseTypeConfigPage() {
       setRows(Array.isArray(data) ? data : []);
     } catch (e) {
       setRows([]);
-      const msg = e.response?.data?.message || e.response?.data?.error || e.message || 'Failed to fetch course types';
+      const msg = getErrorMessage(e, 'Failed to fetch course types');
       showNotification(msg, 'error');
     }
     setLoading(false);
@@ -87,7 +88,7 @@ export default function CourseTypeConfigPage() {
       onClose();
       load();
     } catch (e) {
-      const msg = e.response?.data?.message || e.message || 'Failed to save';
+      const msg = getErrorMessage(e, 'Failed to save');
       setError(msg);
       showNotification(msg, 'error');
     }
@@ -100,7 +101,7 @@ export default function CourseTypeConfigPage() {
       load();
       showNotification('Fastrack Course Deleted successfully', 'success');
     } catch (e) {
-      const msg = e.response?.data?.message || e.message || 'Failed to delete course type';
+      const msg = getErrorMessage(e, 'Failed to delete course type');
       showNotification(msg, 'error');
     }
   };

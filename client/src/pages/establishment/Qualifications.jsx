@@ -9,6 +9,7 @@ import {
   updateQualification,
   deleteQualification,
 } from '../../api/qualificationApi';
+import { getErrorMessage } from '../../utils/errors';
 
 const initialForm = {
   qual_name: '',
@@ -114,7 +115,7 @@ export default function QualificationsPage() {
       onClose();
       load();
     } catch (e1) {
-      const msg = e1.response?.data?.message || e1.message || 'Failed to save qualification';
+      const msg = getErrorMessage(e1, 'Failed to save qualification');
       setError(msg);
       showNotification(msg, 'error');
     }
@@ -128,7 +129,7 @@ export default function QualificationsPage() {
       showNotification('Qualification deleted successfully!', 'success');
       load();
     } catch (e1) {
-      const msg = e1.response?.data?.message || e1.message || 'Failed to delete qualification';
+      const msg = getErrorMessage(e1, 'Failed to delete qualification');
       showNotification(msg, 'error');
     }
   };

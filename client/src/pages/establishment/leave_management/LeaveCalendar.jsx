@@ -5,6 +5,7 @@ import Sidebar from '../../../components/layout/Sidebar';
 import { useAuth } from '../../../context/AuthContext';
 import axios from '../../../api/axios';
 import { getHolidayRHList } from '../../../api/holidayrhApi';
+import { getErrorMessage } from '../../../utils/errors';
 
 const MONTHS = [
   'January','February','March','April','May','June',
@@ -388,7 +389,7 @@ export default function EstablishmentLeaveCalendarPage() {
       setEditingApplicationId(null);
       loadEvents(calYear, calMonth + 1);
     } catch (err) {
-      setNotification({ show: true, message: err?.response?.data?.message || 'Failed to apply leave', type: 'error' });
+      setNotification({ show: true, message: getErrorMessage(err, 'Failed to apply leave'), type: 'error' });
     } finally { setSubmitting(false); }
   };
 
@@ -598,7 +599,7 @@ export default function EstablishmentLeaveCalendarPage() {
       // reload events
       loadEvents(calYear, calMonth + 1);
     } catch (err) {
-      setNotification({ show: true, message: err?.response?.data?.message || 'Failed to cancel application', type: 'error' });
+      setNotification({ show: true, message: getErrorMessage(err, 'Failed to cancel application'), type: 'error' });
     }
   };
 

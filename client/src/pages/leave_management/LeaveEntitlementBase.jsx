@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import Header from '../../components/layout/Header';
 import Notification from '../../components/common/Notification';
+import { getErrorMessage } from '../../utils/errors';
 
 const startYear = 2024;
 const PAGE_SIZE = 10;
@@ -84,7 +85,7 @@ export default function LeaveEntitlementBase({
       setLeaveTypesTaken(dedupeLeaveTypes(data.leave_types_taken));
       if (data.default_year) setYear(Number(data.default_year));
     } catch (err) {
-      showNotification(err.response?.data?.message || err.message || 'Failed to load entitlement metadata');
+      showNotification(getErrorMessage(err, 'Failed to load entitlement metadata'));
     }
   };
 
@@ -102,7 +103,7 @@ export default function LeaveEntitlementBase({
       if (!departments.length && Array.isArray(payload.departments)) setDepartments(payload.departments);
     } catch (err) {
       setRows([]);
-      showNotification(err.response?.data?.message || err.message || 'Failed to load leave entitlements');
+      showNotification(getErrorMessage(err, 'Failed to load leave entitlements'));
     }
     setLoading(false);
   };

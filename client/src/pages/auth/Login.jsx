@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { getDashboardPathByRole } from '../../utils/role';
+import { getErrorMessage } from '../../utils/errors';
 
 export default function Login() {
   const navigate = useNavigate();
@@ -48,7 +49,7 @@ export default function Login() {
       const nextUser = await login({ email: email.trim(), password });
       navigate(getDashboardPathByRole(nextUser?.role), { replace: true });
     } catch (requestError) {
-      setError(requestError?.response?.data?.message || 'Invalid email or password');
+      setError(getErrorMessage(requestError, 'Invalid email or password'));
     } finally {
       setIsSubmitting(false);
     }
@@ -61,7 +62,8 @@ export default function Login() {
           <div className="flex items-center justify-center mb-4">
             <img src="/git_logo.jpg" alt="Git logo" className="h-24 w-24 rounded-xl object-contain ring-1 ring-slate-200" />
           </div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900">GITOFFICE</h1>
+          {/* <h1 className="text-2xl font-bold tracking-tight text-slate-900">GITOFFICE</h1> */}
+          <h3 className="br text-lg sm:text-2xl font-bold text-slate-900">KLS Gogte Institute of Technology</h3>
         </div>
         {error ? (
           <div className="mb-5 p-3 bg-red-50 border border-red-300 rounded-lg">

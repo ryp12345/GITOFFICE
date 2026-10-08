@@ -5,6 +5,7 @@ import {
   deleteStaffDepartment,
   updateStaffDepartment,
 } from '../../../api/staffDepartmentApi';
+import { getErrorMessage } from '../../../utils/errors';
 
 function toInputDate(value) {
   if (!value) return '';
@@ -158,7 +159,7 @@ export default function Department({ staff, setNotification, onDepartmentUpdated
       if (typeof onDepartmentUpdated === 'function') await onDepartmentUpdated();
       closeModal();
     } catch (err) {
-      setError(err?.response?.data?.message || 'Failed to save department');
+      setError(getErrorMessage(err, 'Failed to save department'));
     } finally {
       setSaving(false);
     }
@@ -181,7 +182,7 @@ export default function Department({ staff, setNotification, onDepartmentUpdated
       if (typeof setNotification === 'function') setNotification({ show: true, message: 'Department deleted successfully', type: 'success' });
       if (typeof onDepartmentUpdated === 'function') await onDepartmentUpdated();
     } catch (err) {
-      setError(err?.response?.data?.message || 'Failed to delete department');
+      setError(getErrorMessage(err, 'Failed to delete department'));
     }
   };
 

@@ -15,6 +15,7 @@ import {
   usePagedRows,
   formatLocalDate,
 } from '../../components/fastrack/fastrackUi';
+import { getErrorMessage } from '../../utils/errors';
 
 
 // Laravel only offers verification once some staff has reported classes or labs
@@ -50,7 +51,7 @@ export default function FastrackVerificationPage() {
       setRows(Array.isArray(res?.data) ? res.data : []);
       setSelectedCourseIds([]);
     } catch (e) {
-      showNotification(e?.response?.data?.message || e.message || 'Failed to load courses', 'error');
+      showNotification(getErrorMessage(e, 'Failed to load courses'), 'error');
     }
     setLoading(false);
   };
@@ -78,7 +79,7 @@ export default function FastrackVerificationPage() {
       showNotification('Staff Fastrack Records Verified Successfully.', 'success');
       load();
     } catch (err) {
-      showNotification(`Error verifying: ${err?.response?.data?.message || err.message}`, 'error');
+      showNotification(`Error verifying: ${getErrorMessage(err)}`, 'error');
     }
     setSubmitting(false);
   };

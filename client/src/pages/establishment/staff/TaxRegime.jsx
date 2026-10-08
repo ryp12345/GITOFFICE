@@ -6,6 +6,7 @@ import {
   getTaxRegimeOptions,
   updateStaffTaxRegime,
 } from '../../../api/staffTaxRegimeApi';
+import { getErrorMessage } from '../../../utils/errors';
 
 function getDefaultFinancialYear() {
   const now = new Date();
@@ -159,7 +160,7 @@ export default function TaxRegime({ staff, setNotification, onTaxRegimeUpdated }
       if (typeof onTaxRegimeUpdated === 'function') await onTaxRegimeUpdated();
       closeModal();
     } catch (err) {
-      setError(err?.response?.data?.message || 'Failed to save tax regime');
+      setError(getErrorMessage(err, 'Failed to save tax regime'));
     } finally {
       setSaving(false);
     }

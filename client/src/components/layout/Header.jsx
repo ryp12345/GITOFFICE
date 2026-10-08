@@ -5,6 +5,7 @@ import { useAuth } from '../../context/AuthContext';
 import { getDashboardPathByRole, isRoleMatch, ROLE_SUPER_ADMIN } from '../../utils/role';
 import api from '../../api/axios';
 import { toast } from '../../notifications/notifier';
+import { getErrorMessage } from '../../utils/errors';
 
 export default function Header() {
   const navigate = useNavigate();
@@ -113,7 +114,7 @@ export default function Header() {
       setIsProfileOpen(false);
       navigate(getDashboardPathByRole(session?.user?.role), { replace: true });
     } catch (error) {
-      const message = error?.response?.data?.message || 'Failed to stop impersonation.';
+      const message = getErrorMessage(error, 'Failed to stop impersonation.');
       toast.error(message);
     } finally {
       setIsStoppingImpersonation(false);
@@ -126,7 +127,7 @@ export default function Header() {
 
         <div className="flex items-center gap-3">
           <img src="/git_logo.jpg" alt="Git logo" className="h-8 w-8 sm:h-10 sm:w-10 rounded-md object-contain" />
-          <h1 className="br text-lg sm:text-2xl font-bold text-slate-900">KLS-GIT</h1>
+          <h1 className="br text-lg sm:text-2xl font-bold text-slate-900">KLS Gogte Institute of Technology</h1>
         </div>
 
         <div className="flex items-center justify-end space-x-3 relative">

@@ -5,6 +5,7 @@ import Header from '../../components/layout/Header';
 import SidebarExamSection from '../../components/layout/SidebarExamSection';
 import { useAuth } from '../../context/AuthContext';
 import { getSchemes, createScheme, updateScheme, deleteScheme } from '../../api/examSectionApi';
+import { getErrorMessage } from '../../utils/errors';
 
 const initialForm = {
   scheme_name: '',
@@ -34,7 +35,7 @@ export default function SchemeConfigPage() {
       setRows(Array.isArray(data) ? data : []);
     } catch (e) {
       setRows([]);
-      const msg = e.response?.data?.message || e.response?.data?.error || e.message || 'Failed to fetch schemes';
+      const msg = getErrorMessage(e, 'Failed to fetch schemes');
       showNotification(msg, 'error');
     }
     setLoading(false);
@@ -87,7 +88,7 @@ export default function SchemeConfigPage() {
       onClose();
       load();
     } catch (e) {
-      const msg = e.response?.data?.message || e.message || 'Failed to save';
+      const msg = getErrorMessage(e, 'Failed to save');
       setError(msg);
       showNotification(msg, 'error');
     }
@@ -100,7 +101,7 @@ export default function SchemeConfigPage() {
       load();
       showNotification('Scheme Deleted Successfully', 'success');
     } catch (e) {
-      const msg = e.response?.data?.message || e.message || 'Failed to delete scheme';
+      const msg = getErrorMessage(e, 'Failed to delete scheme');
       showNotification(msg, 'error');
     }
   };

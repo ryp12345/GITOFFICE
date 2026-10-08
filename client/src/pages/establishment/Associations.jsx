@@ -4,6 +4,7 @@ import Header from '../../components/layout/Header';
 import Sidebar from '../../components/layout/Sidebar';
 import { useAuth } from '../../context/AuthContext';
 import { getAssociations, createAssociation, updateAssociation, deleteAssociation } from '../../api/associationApi';
+import { getErrorMessage } from '../../utils/errors';
 
 const initialForm = {
   associationName: '',
@@ -90,7 +91,7 @@ export default function AssociationsPage() {
       onClose();
       load();
     } catch (e) {
-      const msg = e.response?.data?.message || e.message || 'Failed to save';
+      const msg = getErrorMessage(e, 'Failed to save');
       setError(msg);
       showNotification(msg, 'error');
     }
@@ -103,7 +104,7 @@ export default function AssociationsPage() {
       load();
       showNotification('Association deleted successfully!', 'success');
     } catch (e) {
-      const msg = e.response?.data?.message || e.message || 'Failed to delete association';
+      const msg = getErrorMessage(e, 'Failed to delete association');
       showNotification(msg, 'error');
     }
   };

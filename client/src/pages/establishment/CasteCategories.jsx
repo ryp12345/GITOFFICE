@@ -11,6 +11,7 @@ import {
   deleteCasteCategory,
 } from '../../api/casteCategoryApi';
 import { Link } from 'react-router-dom';
+import { getErrorMessage } from '../../utils/errors';
 
 const initialForm = {
   caste_name: '',
@@ -129,7 +130,7 @@ export default function CasteCategoriesPage() {
       onClose();
       load();
     } catch (e1) {
-      const msg = e1.response?.data?.message || e1.message || 'Failed to save caste category';
+      const msg = getErrorMessage(e1, 'Failed to save caste category');
       setError(msg);
       showNotification(msg, 'error');
     }
@@ -142,7 +143,7 @@ export default function CasteCategoriesPage() {
       showNotification('Caste Category deleted!', 'success');
       load();
     } catch (e1) {
-      const msg = e1.response?.data?.message || e1.message || 'Failed to delete caste category';
+      const msg = getErrorMessage(e1, 'Failed to delete caste category');
       showNotification(msg, 'error');
     }
   };

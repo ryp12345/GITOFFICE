@@ -11,6 +11,7 @@ import {
   deleteStaffInstitution,
   updateStaffInstitution,
 } from '../../../api/staffInstitutionApi';
+import { getErrorMessage } from '../../../utils/errors';
 
 function toInputDate(value) {
   if (!value) return '';
@@ -314,7 +315,7 @@ export default function Association({ staff, setNotification, onAssociationUpdat
       }
       closeModal();
     } catch (err) {
-      setError(err?.response?.data?.message || 'Failed to save association');
+      setError(getErrorMessage(err, 'Failed to save association'));
     } finally {
       setSaving(false);
     }
@@ -344,7 +345,7 @@ export default function Association({ staff, setNotification, onAssociationUpdat
         await onAssociationUpdated();
       }
     } catch (err) {
-      setError(err?.response?.data?.message || 'Failed to delete association');
+      setError(getErrorMessage(err, 'Failed to delete association'));
     }
   };
 
@@ -388,7 +389,7 @@ export default function Association({ staff, setNotification, onAssociationUpdat
       }
       closeInstitutionModal();
     } catch (err) {
-      setError(err?.response?.data?.message || 'Failed to save institution');
+      setError(getErrorMessage(err, 'Failed to save institution'));
     } finally {
       setSaving(false);
     }
@@ -407,7 +408,7 @@ export default function Association({ staff, setNotification, onAssociationUpdat
         await onAssociationUpdated();
       }
     } catch (err) {
-      setError(err?.response?.data?.message || 'Failed to delete institution');
+      setError(getErrorMessage(err, 'Failed to delete institution'));
     }
   };
 

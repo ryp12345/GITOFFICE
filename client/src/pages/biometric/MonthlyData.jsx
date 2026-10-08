@@ -6,7 +6,7 @@ import api from '../../api/axios';
 import { getMyStaff } from '../../api/hodApi';
 import { useAuth } from '../../context/AuthContext';
 import { toast } from '../../notifications/notifier';
-import { getBlobErrorMessage } from '../../utils/errors';
+import { getBlobErrorMessage, getErrorMessage } from '../../utils/errors';
 import { isRoleMatch, ROLE_HOD, ROLE_TEACHING, ROLE_NON_TEACHING } from '../../utils/role';
 
 export default function MonthlyDataPage() {
@@ -120,7 +120,7 @@ export default function MonthlyDataPage() {
       } catch (e) {
         console.error('Failed to load staff for MonthlyData:', e);
         setEmployees([]);
-        const msg = e?.response?.data?.message || e.message || 'Failed to fetch staff';
+        const msg = getErrorMessage(e, 'Failed to fetch staff');
         setStaffFetchError(msg);
       }
     }
@@ -215,7 +215,7 @@ export default function MonthlyDataPage() {
       setLogsByEmployee({});
       if (isHodUser && !selectedEmployee) {
         setHodMonthlySummary(null);
-        setSummaryError(err?.response?.data?.message || 'Failed to load department monthly summary');
+        setSummaryError(getErrorMessage(err, 'Failed to load department monthly summary'));
       } else {
         setSummaryError('');
       }

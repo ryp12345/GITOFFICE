@@ -4,6 +4,7 @@ import Notification from '../../components/common/Notification';
 import Header from '../../components/layout/Header';
 import SidebarExamSection from '../../components/layout/SidebarExamSection';
 import { getExpenseMasters, createExpenseMaster, updateExpenseMaster, deleteExpenseMaster } from '../../api/examSectionApi';
+import { getErrorMessage } from '../../utils/errors';
 
 const initialForm = {
   title: '',
@@ -26,7 +27,7 @@ export default function ExpensesMasterPage() {
       const data = res?.data?.data || res?.data || [];
       setRows(Array.isArray(data) ? data : []);
     } catch (e) {
-      const msg = e.response?.data?.message || e.response?.data?.error || e.message || 'Failed to fetch expense masters';
+      const msg = getErrorMessage(e, 'Failed to fetch expense masters');
       showNotification(msg, 'error');
     }
     setLoading(false);
@@ -77,7 +78,7 @@ export default function ExpensesMasterPage() {
       onClose();
       load();
     } catch (e) {
-      const msg = e.response?.data?.message || e.message || 'Failed to save';
+      const msg = getErrorMessage(e, 'Failed to save');
       setError(msg);
       showNotification(msg, 'error');
     }
@@ -90,7 +91,7 @@ export default function ExpensesMasterPage() {
       load();
       showNotification('Fastrack Expense Master Deleted successfully', 'success');
     } catch (e) {
-      const msg = e.response?.data?.message || e.message || 'Failed to delete expense master';
+      const msg = getErrorMessage(e, 'Failed to delete expense master');
       showNotification(msg, 'error');
     }
   };

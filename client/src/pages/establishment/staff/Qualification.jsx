@@ -38,6 +38,7 @@ import {
   deleteStaffQualification,
 } from '../../../api/staffQualificationApi';
 import { getQualifications } from '../../../api/qualificationApi';
+import { getErrorMessage } from '../../../utils/errors';
 
 const initialForm = {
   qualification_id: '',
@@ -142,7 +143,7 @@ export default function Qualification({ staffId, token }) {
       await fetchStaffQualifications();
       closeModal();
     } catch (err) {
-      setError(err?.response?.data?.message || 'Failed to save qualification');
+      setError(getErrorMessage(err, 'Failed to save qualification'));
     } finally {
       setSaving(false);
     }
@@ -155,7 +156,7 @@ export default function Qualification({ staffId, token }) {
       await deleteStaffQualification(row.id, token);
       await fetchStaffQualifications();
     } catch (err) {
-      setError(err?.response?.data?.message || 'Failed to delete qualification');
+      setError(getErrorMessage(err, 'Failed to delete qualification'));
     }
   };
 

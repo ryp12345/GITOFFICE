@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { forgotPasswordRequest } from '../../api/auth.api';
+import { getErrorMessage } from '../../utils/errors';
 
 export default function ForgotPassword() {
   const [email, setEmail] = useState('');
@@ -28,7 +29,7 @@ export default function ForgotPassword() {
       );
       setEmail('');
     } catch (requestError) {
-      setError(requestError?.response?.data?.message || 'Could not process your request right now.');
+      setError(getErrorMessage(requestError, 'Could not process your request right now.'));
     } finally {
       setIsSubmitting(false);
     }

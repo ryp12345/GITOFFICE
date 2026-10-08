@@ -24,6 +24,7 @@ import {
 import { getLeaveEntitlementMeta } from '../../api/leaveEntitlementApi';
 import { getHolidayRHList } from '../../api/holidayrhApi';
 import { getItCellLeaveApplications } from '../../api/superAdminLeaveApi';
+import { getErrorMessage } from '../../utils/errors';
 
 const MAIN_TABS = {
   LIST: 'list',
@@ -349,7 +350,7 @@ export default function LeaveApplicationPage() {
       setDepartment(null);
       setRows([]);
       setActiveLeaveType('');
-      notify(error?.response?.data?.message || 'Failed to load leave applications.', 'error');
+      notify(getErrorMessage(error, 'Failed to load leave applications.'), 'error');
     } finally {
       setLoading(false);
     }
@@ -644,7 +645,7 @@ export default function LeaveApplicationPage() {
       }
       await loadRows();
     } catch (error) {
-      notify(error?.response?.data?.message || `Failed to ${action} leave application.`, 'error');
+      notify(getErrorMessage(error, `Failed to ${action} leave application.`), 'error');
     } finally {
       setProcessing(false);
     }
@@ -659,7 +660,7 @@ export default function LeaveApplicationPage() {
       notify('Leave approved successfully.');
       await loadRows();
     } catch (error) {
-      notify(error?.response?.data?.message || 'Failed to approve leave.', 'error');
+      notify(getErrorMessage(error, 'Failed to approve leave.'), 'error');
     } finally {
       setProcessing(false);
     }
@@ -674,7 +675,7 @@ export default function LeaveApplicationPage() {
       notify('Leave rejected successfully.');
       await loadRows();
     } catch (error) {
-      notify(error?.response?.data?.message || 'Failed to reject leave.', 'error');
+      notify(getErrorMessage(error, 'Failed to reject leave.'), 'error');
     } finally {
       setProcessing(false);
     }
@@ -689,7 +690,7 @@ export default function LeaveApplicationPage() {
       notify('Leave approved successfully.');
       await loadRows();
     } catch (error) {
-      notify(error?.response?.data?.message || 'Failed to approve leave.', 'error');
+      notify(getErrorMessage(error, 'Failed to approve leave.'), 'error');
     } finally {
       setProcessing(false);
     }
@@ -704,7 +705,7 @@ export default function LeaveApplicationPage() {
       notify('Leave rejected successfully.');
       await loadRows();
     } catch (error) {
-      notify(error?.response?.data?.message || 'Failed to reject leave.', 'error');
+      notify(getErrorMessage(error, 'Failed to reject leave.'), 'error');
     } finally {
       setProcessing(false);
     }
@@ -731,7 +732,7 @@ export default function LeaveApplicationPage() {
       }
       await loadRows();
     } catch (error) {
-      notify(error?.response?.data?.message || `Failed to ${action} selected leaves.`, 'error');
+      notify(getErrorMessage(error, `Failed to ${action} selected leaves.`), 'error');
     } finally {
       setProcessing(false);
     }
@@ -763,7 +764,7 @@ export default function LeaveApplicationPage() {
             else await rejectDeanLeaveApplication(token, id);
           }
         } catch (error) {
-          failed.push({ id, message: error?.response?.data?.message || 'Failed' });
+          failed.push({ id, message: getErrorMessage(error, 'Failed') });
         }
       }
 
@@ -774,7 +775,7 @@ export default function LeaveApplicationPage() {
       }
       await loadRows();
     } catch (error) {
-      notify(error?.response?.data?.message || `Failed to ${verb} selected leaves.`, 'error');
+      notify(getErrorMessage(error, `Failed to ${verb} selected leaves.`), 'error');
     } finally {
       setProcessing(false);
     }

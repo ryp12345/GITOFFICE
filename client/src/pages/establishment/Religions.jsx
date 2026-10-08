@@ -10,6 +10,7 @@ import {
   updateReligion,
   deleteReligion,
 } from '../../api/religionApi';
+import { getErrorMessage } from '../../utils/errors';
 
 const initialForm = {
   religion_name: '',
@@ -107,7 +108,7 @@ export default function ReligionsPage() {
       onClose();
       load();
     } catch (e1) {
-      const msg = e1.response?.data?.message || e1.message || 'Failed to save religion';
+      const msg = getErrorMessage(e1, 'Failed to save religion');
       setError(msg);
       showNotification(msg, 'error');
     }
@@ -121,7 +122,7 @@ export default function ReligionsPage() {
       showNotification('Religion deleted successfully!', 'success');
       load();
     } catch (e1) {
-      const msg = e1.response?.data?.message || e1.message || 'Failed to delete religion';
+      const msg = getErrorMessage(e1, 'Failed to delete religion');
       showNotification(msg, 'error');
     }
   };

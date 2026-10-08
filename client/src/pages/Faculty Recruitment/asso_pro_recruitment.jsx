@@ -9,6 +9,7 @@ import {
   getAssociateProfessorApplications,
   updateAssociateProfessorApplication
 } from '../../api/AssociateProfessorApi';
+import { getErrorMessage } from '../../utils/errors';
 
 const defaultForm = {
   application_no: '',
@@ -316,7 +317,7 @@ export default function AssoProRecruitmentPage({
       const response = await loadApplications();
       setRows(response?.data?.data?.rows || []);
     } catch (error) {
-      setNotification({ show: true, message: error?.response?.data?.message || 'Failed to load applications', type: 'error' });
+      setNotification({ show: true, message: getErrorMessage(error, 'Failed to load applications'), type: 'error' });
     } finally {
       setLoading(false);
     }
@@ -426,7 +427,7 @@ export default function AssoProRecruitmentPage({
       closeModal();
       await loadRows();
     } catch (error) {
-      setNotification({ show: true, message: error?.response?.data?.message || 'Failed to save application', type: 'error' });
+      setNotification({ show: true, message: getErrorMessage(error, 'Failed to save application'), type: 'error' });
     } finally {
       setSubmitting(false);
     }
@@ -439,7 +440,7 @@ export default function AssoProRecruitmentPage({
       setNotification({ show: true, message: 'Associate Professor Application deleted successfully', type: 'success' });
       await loadRows();
     } catch (error) {
-      setNotification({ show: true, message: error?.response?.data?.message || 'Failed to delete application', type: 'error' });
+      setNotification({ show: true, message: getErrorMessage(error, 'Failed to delete application'), type: 'error' });
     }
   };
 
@@ -454,7 +455,7 @@ export default function AssoProRecruitmentPage({
       link.click();
       URL.revokeObjectURL(url);
     } catch (error) {
-      setNotification({ show: true, message: error?.response?.data?.message || 'Failed to export', type: 'error' });
+      setNotification({ show: true, message: getErrorMessage(error, 'Failed to export'), type: 'error' });
     }
   };
 

@@ -15,6 +15,7 @@ import {
   exportFastrackCourses
 } from '../../api/examSectionApi';
 import { blobErrorMessage, currentAcademicYear, saveBlob, shiftAcademicYear } from '../../components/fastrack/fastrackUi';
+import { getErrorMessage } from '../../utils/errors';
 
 const emptyForm = {
   course_code: '',
@@ -64,7 +65,7 @@ export default function FastrackCoursePage() {
       }
       setRows(Array.isArray(coursesData) ? coursesData : []);
     } catch (e) {
-      const msg = e.response?.data?.message || e.message || 'Failed to fetch data';
+      const msg = getErrorMessage(e, 'Failed to fetch data');
       showNotification(msg, 'error');
     }
     setLoading(false);
@@ -136,7 +137,7 @@ export default function FastrackCoursePage() {
       onClose();
       load();
     } catch (e) {
-      const msg = e.response?.data?.message || e.message || 'Failed to save';
+      const msg = getErrorMessage(e, 'Failed to save');
       setError(msg);
       showNotification(msg, 'error');
     }
@@ -149,7 +150,7 @@ export default function FastrackCoursePage() {
       load();
       showNotification('Fastrack Course Deleted successfully', 'success');
     } catch (e) {
-      const msg = e.response?.data?.message || e.message || 'Failed to delete course';
+      const msg = getErrorMessage(e, 'Failed to delete course');
       showNotification(msg, 'error');
     }
   };
@@ -193,7 +194,7 @@ export default function FastrackCoursePage() {
     } catch (e) {
       const msg = e.response?.status === 401
         ? 'Session expired. Please login again.'
-        : (e.response?.data?.message || e.message || 'Failed to upload file');
+        : (getErrorMessage(e, 'Failed to upload file'));
       showNotification(msg, 'error');
     }
   };

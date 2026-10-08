@@ -5,6 +5,7 @@ import SidebarExamSection from '../../components/layout/SidebarExamSection';
 import api from '../../api/axios';
 import { getExamSectionDashboard } from '../../api/examSectionApi';
 import Chart from 'chart.js/auto';
+import { getErrorMessage } from '../../utils/errors';
 
 export default function ExamSectionDashboard() {
   const [stats, setStats] = useState({
@@ -37,7 +38,7 @@ export default function ExamSectionDashboard() {
         setExpenses(Array.isArray(data.expenses) ? data.expenses : []);
         setCourseTypes(Array.isArray(data.ft_course_statistic) ? data.ft_course_statistic : []);
       } catch (err) {
-        setError(err?.response?.data?.message || 'Failed to load dashboard data');
+        setError(getErrorMessage(err, 'Failed to load dashboard data'));
       } finally {
         setLoading(false);
       }

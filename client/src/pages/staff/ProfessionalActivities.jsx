@@ -15,6 +15,7 @@ import {
   updateConductedProfessionalActivity,
   deleteConductedProfessionalActivity,
 } from '../../api/professionalActivityApi';
+import { getErrorMessage } from '../../utils/errors';
 
 const ATTENDEE_ROLES = ['Participant', 'Resource Person', 'Jury'];
 const CONDUCTED_ROLES = ['Coordinator', 'Convenor', 'Member', 'Jury'];
@@ -259,7 +260,7 @@ export default function ProfessionalActivities() {
       });
       setError('');
     } catch (err) {
-      setError(err?.response?.data?.message || 'Failed to load professional activities');
+      setError(getErrorMessage(err, 'Failed to load professional activities'));
     } finally {
       setLoading(false);
     }
@@ -515,7 +516,7 @@ export default function ProfessionalActivities() {
       showNotification('Professional Activity deleted successfully');
       await refreshRecords();
     } catch (err) {
-      const message = err?.response?.data?.message || 'Error in Database transaction';
+      const message = getErrorMessage(err, 'Error in Database transaction');
       setError(message);
       showNotification(message, 'error');
     }

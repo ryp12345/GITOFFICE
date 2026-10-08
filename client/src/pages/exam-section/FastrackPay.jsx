@@ -6,6 +6,7 @@ import Notification from '../../components/common/Notification';
 import Header from '../../components/layout/Header';
 import SidebarExamSection from '../../components/layout/SidebarExamSection';
 import { getPayConfig, getPayConfigData, createPayConfig, updatePayConfig } from '../../api/examSectionApi';
+import { getErrorMessage } from '../../utils/errors';
 
 const YEARS = [];
 const currentYear = new Date().getFullYear();
@@ -80,7 +81,7 @@ export default function FastrackPayPage() {
       setInitialized(true);
       setDataVersion((v) => v + 1);
     } catch (e) {
-      showNotification(e.response?.data?.message || e.message || 'Failed to load pay data', 'error');
+      showNotification(getErrorMessage(e, 'Failed to load pay data'), 'error');
     }
     setLoading(false);
   };
@@ -193,7 +194,7 @@ export default function FastrackPayPage() {
         setExistingId(updated?.fastrack_pays?.id || null);
       }
     } catch (e) {
-      const msg = e.response?.data?.message || e.message || 'Failed to save pay configuration';
+      const msg = getErrorMessage(e, 'Failed to save pay configuration');
       showNotification(msg, 'error');
     }
   };

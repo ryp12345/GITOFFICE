@@ -5,6 +5,7 @@ import {
   getStaffSocietyLoans,
   updateStaffSocietyLoan,
 } from '../../../api/staffSocietyLoanApi';
+import { getErrorMessage } from '../../../utils/errors';
 
 function toInputDate(value) {
   if (!value) return '';
@@ -142,7 +143,7 @@ export default function SocietyLoan({ staff, setNotification, onSocietyLoanUpdat
       if (typeof onSocietyLoanUpdated === 'function') await onSocietyLoanUpdated();
       closeModal();
     } catch (err) {
-      setError(err?.response?.data?.message || 'Failed to save society loan');
+      setError(getErrorMessage(err, 'Failed to save society loan'));
     } finally {
       setSaving(false);
     }
@@ -159,7 +160,7 @@ export default function SocietyLoan({ staff, setNotification, onSocietyLoanUpdat
       await fetchData();
       if (typeof onSocietyLoanUpdated === 'function') await onSocietyLoanUpdated();
     } catch (err) {
-      setError(err?.response?.data?.message || 'Failed to delete society loan');
+      setError(getErrorMessage(err, 'Failed to delete society loan'));
     }
   };
 

@@ -7,6 +7,7 @@ import Notification from '../../components/common/Notification';
 import { CountValue, EventsPanel, NoticesPanel, OverviewChart, statTone } from '../../components/dashboard/ActivityDashboardWidgets';
 import { useAuth } from '../../context/AuthContext';
 import { getEgovDashboard } from '../../api/egovApi';
+import { getErrorMessage } from '../../utils/errors';
 
 // Mirrors resources/views/egov/dashboard.blade.php: a department welcome, the record totals
 // per menu, Upcoming Events and the Notice Board. Laravel's "Overview" chart rendered fixed
@@ -70,7 +71,7 @@ export default function EgovDashboard() {
         if (!active) return;
         setNotification({
           show: true,
-          message: error?.response?.data?.message || 'Failed to load the dashboard.',
+          message: getErrorMessage(error, 'Failed to load the dashboard.'),
           type: 'error',
         });
       })

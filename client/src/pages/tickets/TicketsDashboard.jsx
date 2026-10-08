@@ -11,6 +11,7 @@ import {
   getTicketDashboard,
   updateTicket,
 } from '../../api/ticketApi';
+import { getErrorMessage } from '../../utils/errors';
 
 function getStatusBadgeClass(status) {
   if (status === 'New') return 'bg-red-100 text-red-700';
@@ -105,7 +106,7 @@ export default function TicketsDashboard({ detailBasePath, canManageTickets }) {
       setTickets(Array.isArray(data.tickets) ? data.tickets : []);
       setCounts(data.counts || { new_count: 0, pending_count: 0, resolved_count: 0 });
     } catch (error) {
-      showNotification(error?.response?.data?.message || 'Failed to load tickets.', 'error');
+      showNotification(getErrorMessage(error, 'Failed to load tickets.'), 'error');
     } finally {
       setLoading(false);
     }
@@ -129,7 +130,7 @@ export default function TicketsDashboard({ detailBasePath, canManageTickets }) {
       showNotification('Ticket added successfully.');
       await loadDashboard();
     } catch (error) {
-      showNotification(error?.response?.data?.message || 'Failed to create ticket.', 'error');
+      showNotification(getErrorMessage(error, 'Failed to create ticket.'), 'error');
     } finally {
       setBusyAction('');
     }
@@ -160,7 +161,7 @@ export default function TicketsDashboard({ detailBasePath, canManageTickets }) {
       cancelEdit();
       await loadDashboard();
     } catch (error) {
-      showNotification(error?.response?.data?.message || 'Failed to update ticket.', 'error');
+      showNotification(getErrorMessage(error, 'Failed to update ticket.'), 'error');
     } finally {
       setBusyAction('');
     }
@@ -176,7 +177,7 @@ export default function TicketsDashboard({ detailBasePath, canManageTickets }) {
       showNotification('Ticket deleted successfully.');
       await loadDashboard();
     } catch (error) {
-      showNotification(error?.response?.data?.message || 'Failed to delete ticket.', 'error');
+      showNotification(getErrorMessage(error, 'Failed to delete ticket.'), 'error');
     } finally {
       setBusyAction('');
     }

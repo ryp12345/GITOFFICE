@@ -8,6 +8,7 @@ import {
   getLeaveEntitlements,
   updateLeaveEntitlement,
 } from '../../../api/leaveEntitlementApi';
+import { getErrorMessage } from '../../../utils/errors';
 
 const startYear = 2024;
 
@@ -111,7 +112,7 @@ export default function LeaveEntitlementPage() {
         setYear(Number(data.default_year));
       }
     } catch (error) {
-      showNotification(error.response?.data?.message || error.message || 'Failed to load entitlement metadata', 'error');
+      showNotification(getErrorMessage(error, 'Failed to load entitlement metadata'), 'error');
     }
   };
 
@@ -139,7 +140,7 @@ export default function LeaveEntitlementPage() {
       }
     } catch (error) {
       setRows([]);
-      showNotification(error.response?.data?.message || error.message || 'Failed to load leave entitlements', 'error');
+      showNotification(getErrorMessage(error, 'Failed to load leave entitlements'), 'error');
     }
     setLoading(false);
   };
@@ -246,7 +247,7 @@ export default function LeaveEntitlementPage() {
       closeModal();
       loadRows(year, departmentId, 'yearwise');
     } catch (error) {
-      const message = error.response?.data?.message || error.message || 'Failed to update leave entitlement';
+      const message = getErrorMessage(error, 'Failed to update leave entitlement');
       setFormError(message);
       showNotification(message, 'error');
     }

@@ -5,6 +5,7 @@ import Header from '../../components/layout/Header';
 import SidebarHOD from '../../components/layout/SidebarHOD';
 import { getHodFastrackManagement } from '../../api/examSectionApi';
 import { Pagination, staffName, usePagedRows } from '../../components/fastrack/fastrackUi';
+import { getErrorMessage } from '../../utils/errors';
 
 export default function HODFastrackInsightsPage() {
   const [rows, setRows] = useState([]);
@@ -25,7 +26,7 @@ export default function HODFastrackInsightsPage() {
         const res = await getHodFastrackManagement();
         setRows(Array.isArray(res?.data) ? res.data : []);
       } catch (e) {
-        showNotification(e?.response?.data?.message || e.message || 'Failed to load data', 'error');
+        showNotification(getErrorMessage(e, 'Failed to load data'), 'error');
       }
       setLoading(false);
     })();

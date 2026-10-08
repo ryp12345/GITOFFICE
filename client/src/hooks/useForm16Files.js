@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import api from '../api/axios';
+import { getErrorMessage } from '../utils/errors';
 
 /**
  * Hook to fetch Form 16 files for a given staff member
@@ -24,7 +25,7 @@ export function useForm16Files(staffId) {
       const data = res?.data?.data || [];
       setFiles(Array.isArray(data) ? data : []);
     } catch (err) {
-      const msg = err?.response?.data?.message || err.message || 'Failed to fetch Form 16 files';
+      const msg = getErrorMessage(err, 'Failed to fetch Form 16 files');
       setError(msg);
       setFiles([]);
     } finally {
@@ -67,7 +68,7 @@ export function useUploadForm16(staffId) {
 
       return res?.data?.data || null;
     } catch (err) {
-      const msg = err?.response?.data?.message || err.message || 'Failed to upload Form 16';
+      const msg = getErrorMessage(err, 'Failed to upload Form 16');
       setError(msg);
       return null;
     } finally {
@@ -99,7 +100,7 @@ export function useDeleteForm16(staffId) {
       await api.delete(`/staff/${staffId}/form-16/${fileId}`);
       return true;
     } catch (err) {
-      const msg = err?.response?.data?.message || err.message || 'Failed to delete Form 16';
+      const msg = getErrorMessage(err, 'Failed to delete Form 16');
       setError(msg);
       return false;
     } finally {

@@ -4,6 +4,7 @@ import Header from '../../components/layout/Header';
 import Sidebar from '../../components/layout/Sidebar';
 import { useAuth } from '../../context/AuthContext';
 import { getHolidayRHList } from '../../api/holidayrhApi';
+import { getErrorMessage } from '../../utils/errors';
 
 const PAGE_SIZE = 10;
 
@@ -28,7 +29,7 @@ export default function SuperAdminHolidayRHListPage() {
       setRows(res.data?.data || []);
     } catch (error) {
       setRows([]);
-      showNotification(error.response?.data?.message || error.message || 'Failed to load Holiday/RH list');
+      showNotification(getErrorMessage(error, 'Failed to load Holiday/RH list'));
     }
     setLoading(false);
   };

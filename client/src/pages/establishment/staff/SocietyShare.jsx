@@ -5,6 +5,7 @@ import {
   getStaffSocietyShares,
   updateStaffSocietyShare,
 } from '../../../api/staffSocietyShareApi';
+import { getErrorMessage } from '../../../utils/errors';
 
 function toInputDate(value) {
   if (!value) return '';
@@ -133,7 +134,7 @@ export default function SocietyShare({ staff, setNotification, onSocietyShareUpd
       if (typeof onSocietyShareUpdated === 'function') await onSocietyShareUpdated();
       closeModal();
     } catch (err) {
-      setError(err?.response?.data?.message || 'Failed to save society share');
+      setError(getErrorMessage(err, 'Failed to save society share'));
     } finally {
       setSaving(false);
     }
@@ -150,7 +151,7 @@ export default function SocietyShare({ staff, setNotification, onSocietyShareUpd
       await fetchData();
       if (typeof onSocietyShareUpdated === 'function') await onSocietyShareUpdated();
     } catch (err) {
-      setError(err?.response?.data?.message || 'Failed to delete society share');
+      setError(getErrorMessage(err, 'Failed to delete society share'));
     }
   };
 
