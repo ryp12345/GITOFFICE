@@ -90,6 +90,16 @@ async function getCoordinatorView(coordinatorId, departmentId) {
   };
 }
 
+async function isActiveCoordinatorStaff(coordinatorId, staffId) {
+  const result = await pool.query(
+    `SELECT 1 FROM coordinator_staffs
+     WHERE coordinator_id = $1 AND staff_id = $2 AND status = 'active'
+     LIMIT 1`,
+    [coordinatorId, staffId]
+  );
+  return result.rows.length > 0;
+}
+
 async function addCoordinatorStaff(data) {
   const { coordinator_id, staff_id, start_date, department_id } = data;
   const result = await pool.query(
@@ -149,6 +159,7 @@ module.exports = {
   getHodDepartmentId,
   listCoordinators,
   getCoordinatorView,
+  isActiveCoordinatorStaff,
   addCoordinatorStaff,
   updateCoordinatorStaff
 };

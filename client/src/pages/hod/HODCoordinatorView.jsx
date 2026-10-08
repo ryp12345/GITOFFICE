@@ -100,6 +100,12 @@ export default function HODCoordinatorViewPage() {
     return <span className={`badge ${badgeClass} text-white px-2 py-1 rounded text-xs`}>{status}</span>;
   };
 
+  const activeCoordinatorStaffIds = new Set(
+    (data?.coordinator_staff || [])
+      .filter(cs => cs.status === 'active')
+      .map(cs => Number(cs.staff_id))
+  );
+
   // Pagination for Available Staff
   const totalStaffPages = Math.ceil((data?.staff?.length || 0) / staffPerPage);
   const paginatedStaff = data?.staff?.slice((staffPage - 1) * staffPerPage, staffPage * staffPerPage) || [];
@@ -260,9 +266,14 @@ export default function HODCoordinatorViewPage() {
                           <label className="block mb-2 text-sm font-medium text-gray-700">Select Staff <span className="text-red-500">*</span></label>
                           <select value={formData.staff_id} onChange={e => setFormData({ ...formData, staff_id: e.target.value })} className="block w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" required>
                             <option value="">Select Staff</option>
-                            {data.staff?.map(staff => (
-                              <option key={staff.id} value={staff.id}>{getStaffName(staff)} ({staff.employee_type})</option>
-                            ))}
+                            {data.staff?.map(staff => {
+                              const isCoordinator = activeCoordinatorStaffIds.has(Number(staff.id));
+                              return (
+                                <option key={staff.id} value={staff.id} disabled={isCoordinator}>
+                                  {getStaffName(staff)} ({staff.employee_type}){isCoordinator ? ' - Already Coordinator' : ''}
+                                </option>
+                              );
+                            })}
                           </select>
                         </div>
                         <div>

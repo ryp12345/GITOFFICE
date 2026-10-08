@@ -42,6 +42,9 @@ async function addCoordinatorStaff(req, res, next) {
     if (!coordinator_id || !staff_id || !finalStartDate) {
       throw { statusCode: 400, message: 'coordinator_id, staff_id, and start_date are required' };
     }
+    if (await coordinatorHodModel.isActiveCoordinatorStaff(Number(coordinator_id), Number(staff_id))) {
+      throw { statusCode: 409, message: 'This staff is already an active coordinator' };
+    }
     const row = await coordinatorHodModel.addCoordinatorStaff({
       coordinator_id: Number(coordinator_id),
       staff_id: Number(staff_id),
