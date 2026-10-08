@@ -292,7 +292,7 @@ function LeaveCalendar({ year, month, onYearChange, onMonthChange, holidayMap, r
         {grid.map((week, wi) => (
           <div key={wi} className="grid grid-cols-7">
             {week.map((date, di) => {
-              if (!date) return <div key={di} className="h-14 sm:h-16 bg-slate-50/50" />;
+              if (!date) return <div key={di} className="h-20 sm:h-24 bg-slate-50/50" />;
 
               const key = toDateStr(date);
               const isToday = key === today;
@@ -305,7 +305,7 @@ function LeaveCalendar({ year, month, onYearChange, onMonthChange, holidayMap, r
                   return (
                 <div
                   key={di}
-                  className={`h-14 sm:h-16 p-1 border-l border-slate-100 first:border-l-0 flex flex-col cursor-pointer hover:ring-1 hover:ring-blue-300 ${getDayStyle(date)}`}
+                  className={`h-20 sm:h-24 p-1 border-l border-slate-100 first:border-l-0 flex flex-col cursor-pointer hover:ring-1 hover:ring-blue-300 ${getDayStyle(date)}`}
                   onClick={() => onDateClick?.(key, leaveEntry)}
                   role="button"
                   tabIndex={0}
@@ -1064,15 +1064,16 @@ export default function StaffLeavesPage() {
       const esc = (v) => String(v ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
       const row = (label, value) => `<tr><th>${esc(label)}</th><td>${esc(value)}</td></tr>`;
       printWindow.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Leave application ${esc(d.leave_id)}</title>
-        <style>body{font-family:Arial,sans-serif;margin:32px;color:#111}h2{text-align:center;margin-bottom:24px}
+        <style>body{font-family:Arial,sans-serif;margin:32px;color:#111}h1{text-align:center;font-size:22px;margin:0 0 6px}h2{text-align:center;margin:0 0 24px}
         table{width:100%;border-collapse:collapse}th,td{border:1px solid #999;padding:8px;text-align:left;vertical-align:top}
         th{width:35%;background:#f3f4f6}.sign{display:flex;justify-content:space-between;margin-top:64px}</style></head><body>
+        <h1>KLS Gogte Institute of Technology</h1>
         <h2>Leave Application</h2><table>
         ${row('Application No.', d.leave_id)}${row('Name', d.staff_name)}${row('Department', d.department)}
         ${row('Leave type', d.leave_type)}${row('From', d.from_date)}${row('To', d.to_date)}${row('No. of days', d.no_of_days)}
         ${row('Reason', d.reason)}${row('Alternate arrangement', d.alternate_arrangement)}
         ${row('Additional alternate arrangement', d.additional_alternate_arrangement)}
-        ${row('Leaves to credit', d.leavesCredit)}${row('Recommender', d.recommender)}${row('Date', d.current_date)}
+        ${row('Leaves to credit', d.leavesCredit)}${row('Recommender', d.recommender)}${row('App Date', d.current_date)}
         </table><div class="sign"><span>Signature of the applicant</span><span>Recommended by</span><span>Approved by</span></div>
         </body></html>`);
       printWindow.document.close();
@@ -1195,7 +1196,7 @@ export default function StaffLeavesPage() {
         <Sidebar />
 
         <main className="flex-1 overflow-auto p-3 sm:p-4 lg:p-6">
-          <div className="mx-auto w-full max-w-5xl space-y-6">
+          <div className="w-full space-y-6">
             {/* Page title */}
             <div className="text-left">
               <h2 className="text-2xl font-semibold text-slate-900">Leave Application</h2>
@@ -1213,17 +1214,19 @@ export default function StaffLeavesPage() {
 
               <LeaveStatistics year={calYear} staffId={requesterStaffId} userId={requesterUserId} />
 
-              <LeaveCalendar
-                year={calYear}
-                month={calMonth}
-                onYearChange={setCalYear}
-                onMonthChange={setCalMonth}
-                holidayMap={holidayMap}
-                rhMap={rhMap}
-                leaveMap={leaveMap}
-                availableYears={holidayYears}
-                onDateClick={handleDateClick}
-              />
+              <div className="mt-6">
+                <LeaveCalendar
+                  year={calYear}
+                  month={calMonth}
+                  onYearChange={setCalYear}
+                  onMonthChange={setCalMonth}
+                  holidayMap={holidayMap}
+                  rhMap={rhMap}
+                  leaveMap={leaveMap}
+                  availableYears={holidayYears}
+                  onDateClick={handleDateClick}
+                />
+              </div>
             </div>
 
           {isApplyModalOpen && (

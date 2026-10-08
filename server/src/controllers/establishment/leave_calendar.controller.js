@@ -31,6 +31,14 @@ async function isSelfOrPrivileged(user, targetUserOrStaffId) {
   return Boolean(requesterStaffId) && Number(requesterStaffId) === Number(targetStaffId);
 }
 
+// Same as above for a value that is already a staff.id (e.g. leave_staff_applications.staff_id).
+// It must not go through resolveStaffIdFromUserId, which treats its argument as a users.id first.
+async function isStaffOwnerOrPrivileged(user, staffId) {
+  if (isPrivilegedUser(user)) return true;
+  const requesterStaffId = await LeaveCalendar.resolveStaffIdFromUserId(user?.id);
+  return Boolean(requesterStaffId) && Number(requesterStaffId) === Number(staffId);
+}
+
 function computeNoOfDays(startDate, endDate, clType = 'Full') {
   return LeaveRules.computeNoOfDays(startDate, endDate, clType);
 }
@@ -357,7 +365,7 @@ exports.getLeavePDF = async (req, res) => {
     );
     const app = appResult.rows[0];
     if (!app) return sendError(res, 'Leave application not found', 404);
-    if (!(await isSelfOrPrivileged(req.user, app.staff_id))) return sendError(res, 'Forbidden', 403);
+    if (!(await isStaffOwnerOrPrivileged(req.user, app.staff_id))) return sendError(res, 'Forbidden', 403);
 
     const staffResult = await pool.query(
       `SELECT s.fname, s.mname, s.lname, s.user_id,
