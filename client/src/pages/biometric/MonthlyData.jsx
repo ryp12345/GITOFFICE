@@ -6,7 +6,8 @@ import api from '../../api/axios';
 import { getMyStaff } from '../../api/hodApi';
 import { useAuth } from '../../context/AuthContext';
 import { toast } from '../../notifications/notifier';
-import { getBlobErrorMessage, getErrorMessage } from '../../utils/errors';
+import { getBlobErrorMessage, getErrorMessage, reportError } from '../../utils/errors';
+import LoadError from '../../components/common/LoadError';
 import { isRoleMatch, ROLE_HOD, ROLE_TEACHING, ROLE_NON_TEACHING } from '../../utils/role';
 
 export default function MonthlyDataPage() {
@@ -20,6 +21,7 @@ export default function MonthlyDataPage() {
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [hodMonthlySummary, setHodMonthlySummary] = useState(null);
   const [summaryError, setSummaryError] = useState('');
+  const [searchError, setSearchError] = useState('');
   const [monthlyData, setMonthlyData] = useState(null);
   const [missingDates, setMissingDates] = useState([]);
   const [leaveDates, setLeaveDates] = useState([]);
@@ -85,8 +87,12 @@ export default function MonthlyDataPage() {
               return;
             }
           } catch (err) {
-            console.error('Failed to resolve staff for MonthlyData (staff user):', err);
+            reportError(err, { source: 'MonthlyData:resolveOwnStaff' });
           }
+          // Staff may only see their own record; never fall through to the full staff list
+          setEmployees([]);
+          setStaffFetchError('Your staff record could not be found, so your biometric data cannot be shown. Please contact the establishment section.');
+          return;
         }
         if (user && isRoleMatch(user.role, ROLE_HOD)) {
             const res = await getMyStaff();
@@ -118,7 +124,7 @@ export default function MonthlyDataPage() {
         setEmployees(list);
         setStaffFetchError('');
       } catch (e) {
-        console.error('Failed to load staff for MonthlyData:', e);
+        reportError(e, { source: 'MonthlyData:fetchEmployees' });
         setEmployees([]);
         const msg = getErrorMessage(e, 'Failed to fetch staff');
         setStaffFetchError(msg);
@@ -133,6 +139,7 @@ export default function MonthlyDataPage() {
     if (!shouldLoadEmployeeView && !isHodUser) { toast.warning('Select an employee first.'); return; }
 
     setLoading(true);
+    setSearchError('');
     if (isHodUser && !shouldLoadEmployeeView) {
       setSummaryLoading(true);
       setSummaryError('');
@@ -174,8 +181,12 @@ export default function MonthlyDataPage() {
             .map((h) => String(h?.start || h?.holidayrh_date || '').slice(0, 10))
             .filter(Boolean)
         );
-      } catch (_holidayErr) {
+      } catch (holidayErr) {
+        reportError(holidayErr, { source: 'MonthlyData:holidays' });
         holidayDateSet = new Set();
+        if (shouldLoadEmployeeView) {
+          toast.warning('Holidays could not be loaded, so holiday dates may appear under Punch Missing Dates.', { dedupeKey: 'biometric-holidays' });
+        }
       }
       // build set of employee log keys normalized to ISO YYYY-MM-DD
       const empLogKeys = new Set(Object.keys(empLogs || {}).map(k => {
@@ -218,6 +229,8 @@ export default function MonthlyDataPage() {
         setSummaryError(getErrorMessage(err, 'Failed to load department monthly summary'));
       } else {
         setSummaryError('');
+        // Previously silent: the page just went blank
+        setSearchError(getErrorMessage(err, 'Failed to load biometric logs for this employee and month.'));
       }
     } finally {
       setLoading(false);
@@ -323,39 +336,44 @@ export default function MonthlyDataPage() {
       return String(dt.getDate());
     });
     const dataVals = labels.map(d => {
-      const dur = monthlyData.employeeLogs[d].duration; // 'HH:MM:SS'
-      if (!dur) return 0;
-      const parts = dur.split(':').map(Number);
-      const secs = parts[0]*3600 + parts[1]*60 + parts[2];
-      return secs / 3600; // convert to hours to match Laravel chart
+      const dur = monthlyData.employeeLogs[d]?.duration; // 'HH:MM:SS'
+      if (!dur || typeof dur !== 'string') return 0;
+      const [h = 0, m = 0, sec = 0] = dur.split(':').map(Number);
+      const secs = h*3600 + m*60 + sec;
+      return Number.isFinite(secs) ? secs / 3600 : 0; // convert to hours to match Laravel chart
     });
 
     const ctx = canvasRef.current?.getContext?.('2d');
     if (!ctx) return;
-    if (chartInstance.current) chartInstance.current.destroy();
-    chartInstance.current = new Chart(ctx, {
-      type: 'line',
-      data: {
-        labels: labelsFormatted,
-        datasets: [{
-          label: 'Daily Work Duration (Hours)',
-          data: dataVals,
-          backgroundColor: 'rgba(75, 192, 192, 0.2)',
-          borderColor: 'rgba(75, 192, 192, 1)',
-          borderWidth: 1
-        }]
-      },
-      options: {
-        responsive: true,
-        scales: {
-          y: {
-            beginAtZero: true,
-            title: { display: true, text: 'Work Duration (Hours)' }
-          },
-          x: { title: { display: true, text: `Date (${selectedMonthLabel} ${year})` }, ticks: { autoSkip: false, maxRotation: 0 } }
+    if (chartInstance.current) { chartInstance.current.destroy(); chartInstance.current = null; }
+    // A chart failure should leave the logs table usable, not take down the whole page
+    try {
+      chartInstance.current = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: labelsFormatted,
+          datasets: [{
+            label: 'Daily Work Duration (Hours)',
+            data: dataVals,
+            backgroundColor: 'rgba(75, 192, 192, 0.2)',
+            borderColor: 'rgba(75, 192, 192, 1)',
+            borderWidth: 1
+          }]
+        },
+        options: {
+          responsive: true,
+          scales: {
+            y: {
+              beginAtZero: true,
+              title: { display: true, text: 'Work Duration (Hours)' }
+            },
+            x: { title: { display: true, text: `Date (${selectedMonthLabel} ${year})` }, ticks: { autoSkip: false, maxRotation: 0 } }
+          }
         }
-      }
-    });
+      });
+    } catch (e) {
+      reportError(e, { source: 'MonthlyData:chart' });
+    }
 
     return () => { if (chartInstance.current) { chartInstance.current.destroy(); chartInstance.current = null; } };
   }, [monthlyData, month, year]);
@@ -414,6 +432,8 @@ export default function MonthlyDataPage() {
 
               {loading && <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">Loading...</div>}
 
+              {!loading && <LoadError message={searchError} onRetry={() => submit()} />}
+
               {isHodUser && !selectedEmployee && summaryLoading && (
                 <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">Loading monthly department summary...</div>
               )}
@@ -425,7 +445,7 @@ export default function MonthlyDataPage() {
               {/* No overflow-hidden on the card below: Firefox anchors position:sticky to the nearest
                   ancestor with overflow != visible, so a clipping card would stop the frozen
                   Employee Name column from tracking horizontal scroll. */}
-              {isHodUser && !selectedEmployee && hodMonthlySummary && Array.isArray(hodMonthlySummary.rows) && hodMonthlySummary.rows.length > 0 && (
+              {isHodUser && !selectedEmployee && hodMonthlySummary && Array.isArray(hodMonthlySummary.rows) && Array.isArray(hodMonthlySummary.days) && hodMonthlySummary.rows.length > 0 && (
                 <div className="rounded-xl border border-slate-200 bg-white shadow-xl">
                   <div className="rounded-t-xl border-b border-slate-200 px-4 py-3">
                     <h4 className="text-base font-bold text-slate-900">
@@ -544,12 +564,12 @@ export default function MonthlyDataPage() {
                         </thead>
                         <tbody className="bg-white divide-y divide-gray-200">
                           {(() => {
-                            const rowsArr = monthlyData.employeeLogs ? Object.entries(monthlyData.employeeLogs).map(([dateKey, log]) => ({ dateKey, ...log })) : [];
+                            const rowsArr = monthlyData.employeeLogs ? Object.entries(monthlyData.employeeLogs).map(([dateKey, log]) => ({ dateKey, ...(log || {}) })) : [];
                             const q = tableSearch.trim().toLowerCase();
                             const filteredRows = rowsArr.filter((r) => (
                               formatDate(r.dateKey).toLowerCase().includes(q) ||
-                              (r.entryDevice||'').toLowerCase().includes(q) ||
-                              (r.exitDevice||'').toLowerCase().includes(q)
+                              String(r.entryDevice||'').toLowerCase().includes(q) ||
+                              String(r.exitDevice||'').toLowerCase().includes(q)
                             ));
                             const start = (tablePage - 1) * TABLE_PAGE_SIZE;
                             const pageRows = filteredRows.slice(start, start + TABLE_PAGE_SIZE);
@@ -588,18 +608,18 @@ export default function MonthlyDataPage() {
                       <span className="text-sm text-gray-700">
                         Page {tablePage} of {Math.max(1, Math.ceil((Object.entries(monthlyData.employeeLogs||{}).filter(([dateKey, log]) => {
                           const q = tableSearch.trim().toLowerCase();
-                          return formatDate(dateKey).toLowerCase().includes(q) || (log.entryDevice||'').toLowerCase().includes(q) || (log.exitDevice||'').toLowerCase().includes(q);
+                          return formatDate(dateKey).toLowerCase().includes(q) || String(log?.entryDevice||'').toLowerCase().includes(q) || String(log?.exitDevice||'').toLowerCase().includes(q);
                         }).length) / TABLE_PAGE_SIZE))}
                       </span>
                       <button
                         className="rounded border border-gray-300 bg-white px-3 py-1 text-gray-700 disabled:opacity-50"
                         onClick={() => setTablePage(p => Math.min(Math.ceil(Object.entries(monthlyData.employeeLogs||{}).filter(([dateKey, log]) => {
                           const q = tableSearch.trim().toLowerCase();
-                          return formatDate(dateKey).toLowerCase().includes(q) || (log.entryDevice||'').toLowerCase().includes(q) || (log.exitDevice||'').toLowerCase().includes(q);
+                          return formatDate(dateKey).toLowerCase().includes(q) || String(log?.entryDevice||'').toLowerCase().includes(q) || String(log?.exitDevice||'').toLowerCase().includes(q);
                         }).length / TABLE_PAGE_SIZE), p + 1))}
                         disabled={tablePage === Math.ceil(Object.entries(monthlyData.employeeLogs||{}).filter(([dateKey, log]) => {
                           const q = tableSearch.trim().toLowerCase();
-                          return formatDate(dateKey).toLowerCase().includes(q) || (log.entryDevice||'').toLowerCase().includes(q) || (log.exitDevice||'').toLowerCase().includes(q);
+                          return formatDate(dateKey).toLowerCase().includes(q) || String(log?.entryDevice||'').toLowerCase().includes(q) || String(log?.exitDevice||'').toLowerCase().includes(q);
                         }).length / TABLE_PAGE_SIZE)}
                       >
                         Next

@@ -6,7 +6,9 @@ import Chart from 'chart.js/auto';
 import { getMyStaff } from '../../api/hodApi';
 import { useAuth } from '../../context/AuthContext';
 import { isRoleMatch, ROLE_HOD, ROLE_TEACHING, ROLE_NON_TEACHING } from '../../utils/role';
-import { getErrorMessage } from '../../utils/errors';
+import { getErrorMessage, reportError } from '../../utils/errors';
+import { toast } from '../../notifications/notifier';
+import LoadError from '../../components/common/LoadError';
 
 export default function DailyDataPage() {
   const [attendance, setAttendance] = useState([]);
@@ -35,6 +37,19 @@ export default function DailyDataPage() {
   const [staffFetchError, setStaffFetchError] = useState('');
   const [departmentId, setDepartmentId] = useState(null);
   const [staffEmployeeCode, setStaffEmployeeCode] = useState(null);
+  const isHod = Boolean(user && isRoleMatch(user.role, ROLE_HOD));
+  const isStaffRole = Boolean(user && (isRoleMatch(user.role, ROLE_TEACHING) || isRoleMatch(user.role, ROLE_NON_TEACHING)));
+  // The server does not scope /biometric/daily by role, so the HOD's department and a staff
+  // member's own code must be known before loading. 'pending' | 'ready' | 'error'
+  const [hodScopeStatus, setHodScopeStatus] = useState('pending');
+  const [staffCodeStatus, setStaffCodeStatus] = useState('pending');
+  // Only the status that applies to this user's role should re-trigger a load
+  const scopeKey = isHod ? `hod:${hodScopeStatus}` : isStaffRole ? `staff:${staffCodeStatus}` : 'none';
+  const [loadError, setLoadError] = useState('');
+  const [reloadKey, setReloadKey] = useState(0);
+  const [scopeRetryKey, setScopeRetryKey] = useState(0);
+  const [missingLoading, setMissingLoading] = useState(false);
+  const [missingError, setMissingError] = useState('');
 
   const sumValues = (obj) => Object.values(obj || {}).reduce((s, v) => s + (Number(v) || 0), 0);
 
@@ -80,64 +95,93 @@ export default function DailyDataPage() {
     let missingLogsByDept = missingFromPayload;
 
     // Node daily endpoint does not include leave/missing buckets yet, so derive from missing list endpoint.
+    let bucketsUnavailable = false;
     if (Object.keys(leaveLogsByDept).length === 0 && Object.keys(missingLogsByDept).length === 0) {
-      const missingRows = await fetchMissingForDate(selectedDate, { updateState: false });
+      const { list: missingRows, failed } = await fetchMissingForDate(selectedDate, { updateState: false });
+      bucketsUnavailable = failed;
       const derived = buildLeaveMissingByDept(missingRows);
       leaveLogsByDept = derived.leaveLogsByDept;
       missingLogsByDept = derived.missingLogsByDept;
+      if (failed) {
+        toast.warning('Leave and missing-punch counts could not be loaded for this date.', { dedupeKey: 'biometric-buckets' });
+      }
     }
 
     setChartData({ entryLogsByDept, leaveLogsByDept, missingLogsByDept });
 
     const presentFallback = (rows || []).filter((r) => hasEntry(r)).length;
     const presentTotal = payload.Totalpresent ?? payload.totalPresent ?? (sumValues(entryLogsByDept) || presentFallback);
-    const leaveTotal = payload.TotalLeave ?? payload.totalLeave ?? sumValues(leaveLogsByDept);
-    const missingTotal = payload.Totalmissing ?? payload.totalMissing ?? sumValues(missingLogsByDept);
+    // Unknown, not zero, when the source failed
+    const leaveTotal = payload.TotalLeave ?? payload.totalLeave ?? (bucketsUnavailable ? null : sumValues(leaveLogsByDept));
+    const missingTotal = payload.Totalmissing ?? payload.totalMissing ?? (bucketsUnavailable ? null : sumValues(missingLogsByDept));
 
     setTotalPresent(presentTotal);
     setTotalLeave(leaveTotal);
     setTotalMissing(missingTotal);
   };
 
+  // Resolve the logged-in user's own biometric code (used to scope staff to their own punches)
   useEffect(() => {
     let mounted = true;
     async function resolveMyEmployeeCode() {
       if (!user) return;
+      setStaffCodeStatus('pending');
       try {
+        let code = null;
         if (user.staff_id) {
           const res = await api.get(`/staff/${user.staff_id}`);
           const s = res?.data?.data || res?.data || null;
-          const code = s?.employeecode ?? s?.EmployeeCode ?? s?.biometric_code ?? null;
-          if (mounted && code) setStaffEmployeeCode(String(code));
-          return;
-        }
-
-        if (user.id) {
+          code = s?.employeecode ?? s?.EmployeeCode ?? s?.biometric_code ?? null;
+        } else if (user.id) {
           const listRes = await api.get('/staff');
           const rows = Array.isArray(listRes?.data?.data) ? listRes.data.data : Array.isArray(listRes?.data) ? listRes.data : [];
           const row = rows.find(r => Number(r.user_id) === Number(user.id));
-          const code = row?.employeecode ?? row?.EmployeeCode ?? row?.biometric_code ?? null;
-          if (mounted && code) setStaffEmployeeCode(String(code));
+          code = row?.employeecode ?? row?.EmployeeCode ?? row?.biometric_code ?? null;
         }
+        if (!mounted) return;
+        if (code) setStaffEmployeeCode(String(code));
+        setStaffCodeStatus(code ? 'ready' : 'error');
       } catch (e) {
-        // ignore
+        reportError(e, { source: 'DailyData:resolveMyEmployeeCode' });
+        if (mounted) setStaffCodeStatus('error');
       }
     }
     resolveMyEmployeeCode();
+    return () => { mounted = false; };
+  }, [user, scopeRetryKey]);
+
+  useEffect(() => {
+    let mounted = true;
 
     async function fetchAttendance() {
-      // If HOD, wait until departmentId (from getMyStaff) is resolved to avoid unscoped requests
-      if (user && isRoleMatch(user.role, ROLE_HOD) && departmentId == null && !staffFetchError) {
-        return;
+      // Never load unscoped data: wait for the HOD's department or the staff member's own code,
+      // and show an error instead of falling back to the whole institution if either fails.
+      if (isHod) {
+        if (hodScopeStatus === 'pending') return;
+        if (hodScopeStatus === 'error') {
+          setAttendance([]);
+          setLoadError(staffFetchError || 'Your department could not be determined, so attendance cannot be shown.');
+          setLoading(false);
+          return;
+        }
+      } else if (isStaffRole) {
+        if (staffCodeStatus === 'pending') return;
+        if (staffCodeStatus === 'error') {
+          setAttendance([]);
+          setLoadError('Your biometric employee code could not be found, so your attendance cannot be shown. Please contact the establishment section.');
+          setLoading(false);
+          return;
+        }
       }
       try {
         setLoading(true);
+        setLoadError('');
         const params = { date };
         if (user && isRoleMatch(user.role, ROLE_HOD) && departmentId) params.department_id = departmentId;
         const res = await api.get(`${endpointPrefix}/daily`, { params });
+        // A newer request (date change) has started; drop this stale response
+        if (!mounted) return;
         const payload = res?.data || {};
-        // DEBUG: log backend payload to help diagnose missing totals
-        try { console.debug && console.debug('BIOMETRIC_PAYLOAD_FETCH', payload); } catch (e) {}
 
         // Save entry_exit and totals if available
         const entryExitPayload = payload.entry_exit || null;
@@ -194,20 +238,24 @@ export default function DailyDataPage() {
           await applyChartAndTotals(payload, filteredRows, date);
         }
       } catch (e) {
+        if (!mounted) return;
         setAttendance([]);
+        setChartData(null);
+        setLoadError(getErrorMessage(e, 'Failed to load attendance for this date.'));
       } finally {
-        setLoading(false);
+        if (mounted) setLoading(false);
       }
     }
 
     fetchAttendance();
     return () => { mounted = false; };
-  }, [user, date, hodEmployeeCodes, departmentId, staffEmployeeCode]);
+  }, [user, date, hodEmployeeCodes, departmentId, staffEmployeeCode, scopeKey, reloadKey]);
 
   // Fetch HOD staff mapping so we can scope daily results to the HOD's department
   useEffect(() => {
     async function fetchHodStaff() {
       if (!user || !isRoleMatch(user.role, ROLE_HOD)) return;
+      setHodScopeStatus('pending');
       try {
         const res = await getMyStaff();
         const payload = res?.data?.data || res?.data || {};
@@ -224,14 +272,17 @@ export default function DailyDataPage() {
         const dept = payload.department || res?.data?.department || null;
         if (dept && dept.id) setDepartmentId(Number(dept.id));
         setStaffFetchError('');
+        // Either the department or the staff list is enough to scope results
+        setHodScopeStatus((dept && dept.id) || codes.size > 0 ? 'ready' : 'error');
       } catch (err) {
-        console.error('Failed to load HOD staff for DailyData:', err);
+        reportError(err, { source: 'DailyData:fetchHodStaff' });
         setHodEmployeeCodes(new Set());
-        setStaffFetchError(getErrorMessage(err, 'Failed to fetch HOD staff'));
+        setStaffFetchError(getErrorMessage(err, 'Failed to load your department staff, so attendance cannot be shown.'));
+        setHodScopeStatus('error');
       }
     }
     fetchHodStaff();
-  }, [user]);
+  }, [user, scopeRetryKey]);
 
   // Render chart when chartData changes
   useEffect(() => {
@@ -254,27 +305,37 @@ export default function DailyDataPage() {
 
     if (chartInstance.current) {
       chartInstance.current.destroy();
+      chartInstance.current = null;
     }
 
-    chartInstance.current = new Chart(ctx, {
-      type: 'bar',
-      data: {
-        labels,
-        datasets: [
-          { label: 'Punched data', data: entryData, backgroundColor: 'rgba(54,162,235,0.6)' },
-          { label: 'Leaves', data: leaveData, backgroundColor: 'rgba(255,206,86,0.6)' },
-          { label: 'Missing Punch', data: missingData, backgroundColor: 'rgba(255,99,132,0.6)' },
-        ]
-      },
-      options: { responsive: true, scales: { x: { stacked: true }, y: { stacked: true, beginAtZero: true } } }
-    });
+    // A chart failure should leave the table usable, not take down the whole page
+    try {
+      chartInstance.current = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels,
+          datasets: [
+            { label: 'Punched data', data: entryData, backgroundColor: 'rgba(54,162,235,0.6)' },
+            { label: 'Leaves', data: leaveData, backgroundColor: 'rgba(255,206,86,0.6)' },
+            { label: 'Missing Punch', data: missingData, backgroundColor: 'rgba(255,99,132,0.6)' },
+          ]
+        },
+        options: { responsive: true, scales: { x: { stacked: true }, y: { stacked: true, beginAtZero: true } } }
+      });
+    } catch (e) {
+      reportError(e, { source: 'DailyData:chart' });
+    }
 
     return () => chartInstance.current?.destroy();
   }, [chartData]);
 
+  // Returns { list, failed }. failed is true only when every source errored, so the caller can
+  // tell "nobody is missing" apart from "the missing list could not be loaded".
   const fetchMissingForDate = async (selectedDate, options = {}) => {
     const { updateState = true } = options;
     let list = [];
+    let endpointsFailed = false;
+    let fallbackFailed = false;
     try {
       const missingParams = { date: selectedDate };
       if (user && isRoleMatch(user.role, ROLE_HOD) && departmentId) missingParams.department_id = departmentId;
@@ -289,7 +350,9 @@ export default function DailyDataPage() {
         const data2 = res2?.data || [];
         list = Array.isArray(data2) ? data2 : (data2.data || []);
       } catch (err) {
+        reportError(err, { source: 'DailyData:missingEndpoints' });
         list = [];
+        endpointsFailed = true;
       }
     }
 
@@ -304,7 +367,8 @@ export default function DailyDataPage() {
           if (arr && arr.length > 0) list = arr;
         }
       } catch (e) {
-        // ignore
+        // Optional extra source; the fallback below still runs
+        reportError(e, { source: 'DailyData:missingEnvUrl' });
       }
     }
 
@@ -366,33 +430,61 @@ export default function DailyDataPage() {
             }));
         }
       } catch (e) {
-        // if any of the fallback calls fail, keep list as empty and proceed
+        reportError(e, { source: 'DailyData:missingFallback' });
+        fallbackFailed = true;
       }
     }
 
     const finalList = list || [];
+    const failed = endpointsFailed && fallbackFailed;
     if (updateState) {
       setMissingList(finalList);
+      setMissingError(failed ? 'The missing biometric list could not be loaded. Please try again.' : '');
     }
-    return finalList;
+    return { list: finalList, failed };
   };
 
+  const openMissingModal = async () => {
+    setShowMissingModal(true);
+    setMissingLoading(true);
+    try {
+      await fetchMissingForDate(date);
+    } finally {
+      setMissingLoading(false);
+    }
+  };
+
+  const escapeHtml = (value) => String(value ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
   const exportMissingToExcel = () => {
-    const table = document.createElement('table');
-    table.innerHTML = '<thead><tr><th>Sl No</th><th>Employee Code</th><th>Full Name</th><th>Department</th><th>Leave</th></tr></thead>';
-    const tbody = document.createElement('tbody');
-    missingList.forEach((v, i) => {
-      const tr = document.createElement('tr');
-      const leaveText = (v.leave_staff_applications && v.leave_staff_applications.length > 0) ? v.leave_staff_applications[0].shortname : 'Missing the Leave';
-      tr.innerHTML = `<td>${i+1}</td><td>${v.EmployeeCode||''}</td><td>${v.full_name||''}</td><td>${v.dept_shortname||''}</td><td>${leaveText}</td>`;
-      tbody.appendChild(tr);
-    });
-    table.appendChild(tbody);
-    const blob = new Blob([table.outerHTML], { type: 'application/vnd.ms-excel' });
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    link.download = `missing_Bio_data_${date}.xls`;
-    link.click();
+    try {
+      const rows = missingList.map((v, i) => {
+        const leaveText = (v.leave_staff_applications && v.leave_staff_applications.length > 0) ? v.leave_staff_applications[0].shortname : 'Missing the Leave';
+        return `<tr><td>${i + 1}</td><td>${escapeHtml(v.EmployeeCode)}</td><td>${escapeHtml(v.full_name)}</td><td>${escapeHtml(v.dept_shortname)}</td><td>${escapeHtml(leaveText)}</td></tr>`;
+      }).join('');
+      // Built as a string, never parsed into the page, so staff names cannot inject markup
+      const html = `<table><thead><tr><th>Sl No</th><th>Employee Code</th><th>Full Name</th><th>Department</th><th>Leave</th></tr></thead><tbody>${rows}</tbody></table>`;
+      const blob = new Blob([html], { type: 'application/vnd.ms-excel' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `missing_Bio_data_${date}.xls`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      setTimeout(() => URL.revokeObjectURL(url), 0);
+    } catch (e) {
+      reportError(e, { source: 'DailyData:exportMissing' });
+      toast.error('Failed to export the missing biometric list.');
+    }
+  };
+
+  const retryLoad = () => {
+    if ((isHod && hodScopeStatus === 'error') || (isStaffRole && staffCodeStatus === 'error')) {
+      setScopeRetryKey((k) => k + 1);
+    } else {
+      setReloadKey((k) => k + 1);
+    }
   };
 
   const filtered = useMemo(() => {
@@ -463,42 +555,8 @@ export default function DailyDataPage() {
                   <div className="relative w-full sm:w-72 md:w-80">
                     <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-full h-10 px-3 border border-gray-300 rounded-lg" />
                   </div>
-                    <button onClick={async () => {
-                    setLoading(true);
-                    try {
-                      const res = await api.get(`${endpointPrefix}/daily`, { params: { date } });
-                      const payload = res?.data || {};
-                      // DEBUG: log payload for date search
-                      try { console.debug && console.debug('BIOMETRIC_PAYLOAD_SEARCH', payload); } catch (e) {}
-                      if (payload.combinedData && payload.entry_exit) {
-                        const combined = Array.isArray(payload.combinedData) ? payload.combinedData : [];
-                        const entryExit = payload.entry_exit || {};
-                        const rows = combined.map((d) => {
-                          const code = d.EmployeeCode || d.employeeCode || (d.EmployeeCode ? String(d.EmployeeCode) : null);
-                          return {
-                            ...d,
-                            EmployeeCode: code,
-                            entryLogs: entryExit.entryLogs && code ? entryExit.entryLogs[code] ?? null : null,
-                            exitLogs: entryExit.exitLogs && code ? entryExit.exitLogs[code] ?? null : null,
-                            employeePunchLogs: entryExit.employeePunchLogs && code ? (entryExit.employeePunchLogs[code] ?? []) : (d.employeePunchLogs || []),
-                            punchCounts: entryExit.punchCounts && code ? (entryExit.punchCounts[code] ?? (d.punchCounts || d.punchCount || null)) : (d.punchCounts || d.punchCount || null),
-                            durations: entryExit.durations && code ? (entryExit.durations[code] ?? d.durations ?? d.duration ?? null) : (d.durations || d.duration || null),
-                          };
-                        });
-                        setAttendance(rows);
-                        setEntryExit(payload.entry_exit || null);
-                        await applyChartAndTotals(payload, rows, date);
-                      } else {
-                        const rows = Array.isArray(payload.data) ? payload.data : Array.isArray(payload) ? payload : [];
-                        setAttendance(rows);
-                        await applyChartAndTotals(payload, rows, date);
-                      }
-                    } catch (err) {
-                      setAttendance([]);
-                    } finally {
-                      setLoading(false);
-                    }
-                  }} className="h-10 inline-flex items-center justify-center px-6 min-w-[140px] bg-blue-600 text-white rounded-lg">Search</button>
+                    {/* Re-runs the scoped load above; it used to duplicate the request without HOD/staff scoping */}
+                    <button onClick={() => setReloadKey((k) => k + 1)} disabled={loading} className="h-10 inline-flex items-center justify-center px-6 min-w-[140px] bg-blue-600 text-white rounded-lg disabled:opacity-60">Search</button>
                 </div>
               </div>
               )}
@@ -513,7 +571,7 @@ export default function DailyDataPage() {
                   <div className="border border-slate-200 rounded-lg bg-white shadow-sm">
                     <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
                       <h5 className="text-m font-bold">Overview of Biometric Punch Records</h5>
-                      <button onClick={async () => { await fetchMissingForDate(date); setShowMissingModal(true); }} className="h-10 inline-flex items-center justify-center px-5 min-w-[160px] bg-red-500 text-white rounded-lg hover:bg-red-600 text-sm whitespace-nowrap leading-none">Missing Biometric</button>
+                      <button onClick={openMissingModal} className="h-10 inline-flex items-center justify-center px-5 min-w-[160px] bg-red-500 text-white rounded-lg hover:bg-red-600 text-sm whitespace-nowrap leading-none">Missing Biometric</button>
                     </div>
                     <div className="p-4">
                       <div className="grid grid-cols-12 gap-x-4">
@@ -540,7 +598,7 @@ export default function DailyDataPage() {
                               <div className="flex-auto">
                                 <p className="mb-0 text-amber-600 text-sm">Total On Leave</p>
                                 <div className="flex items-center">
-                                  <span className="text-xl font-semibold text-amber-600" id="total_leave_value">{totalLeave ?? 0}</span>
+                                  <span className="text-xl font-semibold text-amber-600" id="total_leave_value">{totalLeave ?? '—'}</span>
                                 </div>
                               </div>
                               <div className="ml-3">
@@ -557,7 +615,7 @@ export default function DailyDataPage() {
                               <div className="flex-auto" >
                                 <p className="mb-0 text-red-500 text-sm">Biometric Punch Missing</p>
                                 <div className="flex items-center">
-                                  <p className="mb-1 text-sm text-red-600 font-semibold" id="total_missing_value">{totalMissing ?? 0}</p>
+                                  <p className="mb-1 text-sm text-red-600 font-semibold" id="total_missing_value">{totalMissing ?? '—'}</p>
                                 </div>
                               </div>
                               <div className="ml-3">
@@ -594,6 +652,8 @@ export default function DailyDataPage() {
                   <tbody>
                     {loading ? (
                       <tr><td colSpan={10} className="p-6 text-center">Loading...</td></tr>
+                    ) : loadError ? (
+                      <tr><td colSpan={10} className="p-4"><LoadError message={loadError} onRetry={retryLoad} /></td></tr>
                     ) : paginated.length === 0 ? (
                       <tr><td colSpan={10} className="p-6 text-center">No attendance data available</td></tr>
                     ) : (
@@ -644,7 +704,7 @@ export default function DailyDataPage() {
                     <div className="flex justify-between items-center mb-4">
                       <h4 className="font-semibold">Biometric Entry not found / On leave for <span className="text-red-500">{date}</span></h4>
                       <div className="flex items-center gap-2">
-                        <button onClick={() => { exportMissingToExcel(); }} className="text-sm bg-green-600 text-white px-2 py-1 rounded">Export</button>
+                        <button onClick={() => { exportMissingToExcel(); }} disabled={missingLoading || Boolean(missingError) || missingList.length === 0} className="text-sm bg-green-600 text-white px-2 py-1 rounded disabled:opacity-50">Export</button>
                         <button onClick={() => setShowMissingModal(false)} className="text-sm bg-gray-100 text-gray-800 px-2 py-1 rounded">Close</button>
                       </div>
                     </div>
@@ -660,7 +720,11 @@ export default function DailyDataPage() {
                           </tr>
                         </thead>
                         <tbody>
-                          {missingList.length === 0 ? (
+                          {missingLoading ? (
+                            <tr><td colSpan={5} className="p-4 text-center text-gray-500">Loading...</td></tr>
+                          ) : missingError ? (
+                            <tr><td colSpan={5} className="p-4"><LoadError message={missingError} onRetry={openMissingModal} /></td></tr>
+                          ) : missingList.length === 0 ? (
                             <tr><td colSpan={5} className="p-4 text-center text-red-600">No Missing Biometric Logs</td></tr>
                           ) : missingList.map((v, i) => (
                             <tr key={i} className={(v.leave_staff_applications && v.leave_staff_applications.length > 0) ? 'bg-yellow-50' : 'bg-red-50'}>

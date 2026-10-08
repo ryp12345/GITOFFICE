@@ -4,12 +4,15 @@ import Sidebar from '../../components/layout/Sidebar';
 import api from '../../api/axios';
 import { useAuth } from '../../context/AuthContext';
 import { isRoleMatch, ROLE_HOD } from '../../utils/role';
+import LoadError from '../../components/common/LoadError';
+import { getErrorMessage } from '../../utils/errors';
 
 export default function MusterPage() {
   const today = new Date();
   const [month, setMonth] = useState(today.getMonth() + 1);
   const [year, setYear] = useState(today.getFullYear());
   const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState('');
   const [logDates, setLogDates] = useState([]);
   const [staff, setStaff] = useState([]);
   const [logAssoc, setLogAssoc] = useState({});
@@ -26,6 +29,7 @@ export default function MusterPage() {
 
   async function fetchMuster() {
     setLoading(true);
+    setLoadError('');
     try {
       const res = await api.get(`${endpointPrefix}/muster`, { params: { month, year } });
       const data = res?.data || {};
@@ -36,6 +40,7 @@ export default function MusterPage() {
       setLogDates([]);
       setStaff([]);
       setLogAssoc({});
+      setLoadError(getErrorMessage(e, 'Failed to load the muster for this month.'));
     } finally {
       setLoading(false);
     }
@@ -93,7 +98,9 @@ export default function MusterPage() {
               </div> */}
 
               <div className="overflow-auto">
-              {loading ? (<div>Loading...</div>) : (
+              {loading ? (<div>Loading...</div>) : loadError ? (
+                <LoadError message={loadError} onRetry={fetchMuster} />
+              ) : (
                 <table className="min-w-full border-collapse table-auto">
                   <thead>
                     <tr className="bg-gray-100">
