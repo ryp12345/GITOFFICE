@@ -1,4 +1,5 @@
-import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
+import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom';
+import ErrorBoundary from '../components/common/ErrorBoundary';
 import Login from '../pages/auth/Login';
 import Register from '../pages/auth/Register';
 import SuperAdminDashboard from '../pages/super-admin/Dashboard';
@@ -155,9 +156,20 @@ function SharedTicketDetailsRoute() {
   return <StaffTicketDetailsPage listPath="/tickets" />;
 }
 
+// A crash on one page shows a recovery screen for that page only; navigating anywhere clears it.
+function RouteErrorBoundary({ children }) {
+  const { pathname } = useLocation();
+  return (
+    <ErrorBoundary scope="page" resetKeys={[pathname]}>
+      {children}
+    </ErrorBoundary>
+  );
+}
+
 export default function AppRoutes() {
   return (
     <BrowserRouter>
+      <RouteErrorBoundary>
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
@@ -409,6 +421,7 @@ export default function AppRoutes() {
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
+      </RouteErrorBoundary>
     </BrowserRouter>
   );
 }

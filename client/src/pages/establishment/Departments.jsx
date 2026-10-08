@@ -130,7 +130,6 @@ export default function DepartmentsPage() {
       showNotification('Department deleted successfully!', 'success');
     } catch (e) {
       const msg = e.response?.data?.message || e.message || 'Failed to delete department';
-      alert(msg);
       showNotification(msg, 'error');
     }
   };

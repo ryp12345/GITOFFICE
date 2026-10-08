@@ -101,7 +101,6 @@ export default function SchemeConfigPage() {
       showNotification('Scheme Deleted Successfully', 'success');
     } catch (e) {
       const msg = e.response?.data?.message || e.message || 'Failed to delete scheme';
-      alert(msg);
       showNotification(msg, 'error');
     }
   };

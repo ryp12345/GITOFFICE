@@ -4,11 +4,13 @@ import Notification from '../../components/common/Notification';
 import Header from '../../components/layout/Header';
 import SidebarHOD from '../../components/layout/SidebarHOD';
 import { getHodCoordinatorView, addHodCoordinatorStaff, updateHodCoordinatorStaff } from '../../api/examSectionApi';
+import { getErrorMessage } from '../../utils/errors';
 
 export default function HODCoordinatorViewPage() {
   const { id } = useParams();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
   const [notification, setNotification] = useState({ show: false, message: '', type: '' });
   const [addModal, setAddModal] = useState(false);
   const [editModal, setEditModal] = useState(null);
@@ -24,15 +26,18 @@ export default function HODCoordinatorViewPage() {
 
   const load = async () => {
     setLoading(true);
+    setLoadError('');
     try {
       const res = await getHodCoordinatorView(id);
       const viewData = res?.data?.data || res?.data;
       setData(viewData);
     } catch (e) {
-      const msg = e?.response?.data?.message || e.message || 'Failed to load coordinator details';
+      const msg = getErrorMessage(e, 'Failed to load coordinator details');
+      setLoadError(msg);
       showNotification(msg, 'error');
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   useEffect(() => { load(); }, [id]);
@@ -123,7 +128,17 @@ export default function HODCoordinatorViewPage() {
           <SidebarHOD />
           <main className="flex-1 overflow-auto p-6">
             <div className="max-w-full mx-auto">
-              <div className="px-6 py-12 text-center text-gray-500">Loading...</div>
+              {loadError && !loading ? (
+                <div role="alert" className="px-6 py-12 text-center">
+                  <p className="mb-4 text-red-600">{loadError}</p>
+                  <div className="flex justify-center gap-3">
+                    <button onClick={load} className="px-5 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700">Try again</button>
+                    <Link to="/hod/coordinator-management" className="px-5 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50">Back to coordinators</Link>
+                  </div>
+                </div>
+              ) : (
+                <div className="px-6 py-12 text-center text-gray-500">Loading...</div>
+              )}
             </div>
           </main>
         </div>

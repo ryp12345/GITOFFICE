@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { updateStaffById } from '../../../api/staffApi';
 import Input from './Input.jsx';
+import { getErrorMessage, reportError } from '../../../utils/errors';
 
 export default function PersonalInfo({ staff, setNotification }) {
   const [editForm, setEditForm] = useState(staff || {});
@@ -58,7 +59,10 @@ export default function PersonalInfo({ staff, setNotification }) {
             });
           }
         } catch (fileErr) {
-          console.warn('Form-16 upload failed:', fileErr);
+          // The staff details are already saved; stay on the form so the upload can be retried.
+          reportError(fileErr, { source: 'PersonalInfo:form16Upload' });
+          setEditError(`Staff details were saved, but the Form 16 upload failed: ${getErrorMessage(fileErr, 'please try again.')}`);
+          return;
         }
       }
 

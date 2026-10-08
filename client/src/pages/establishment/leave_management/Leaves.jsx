@@ -168,7 +168,6 @@ export default function LeavesPage() {
       showNotification('Leave deleted successfully!', 'success');
     } catch (e) {
       const msg = e.response?.data?.message || e.message || 'Failed to delete leave';
-      alert(msg);
       showNotification(msg, 'error');
     }
   };

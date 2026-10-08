@@ -5,6 +5,8 @@ import Sidebar from '../../components/layout/Sidebar';
 import api from '../../api/axios';
 import { getMyStaff } from '../../api/hodApi';
 import { useAuth } from '../../context/AuthContext';
+import { toast } from '../../notifications/notifier';
+import { getBlobErrorMessage } from '../../utils/errors';
 import { isRoleMatch, ROLE_HOD, ROLE_TEACHING, ROLE_NON_TEACHING } from '../../utils/role';
 
 export default function MonthlyDataPage() {
@@ -128,7 +130,7 @@ export default function MonthlyDataPage() {
   const submit = async (e) => {
     if (e && e.preventDefault) e.preventDefault();
     const shouldLoadEmployeeView = Boolean(selectedEmployee);
-    if (!shouldLoadEmployeeView && !isHodUser) return alert('Select employee');
+    if (!shouldLoadEmployeeView && !isHodUser) { toast.warning('Select an employee first.'); return; }
 
     setLoading(true);
     if (isHodUser && !shouldLoadEmployeeView) {
@@ -248,7 +250,7 @@ export default function MonthlyDataPage() {
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
     } catch (err) {
-      alert(err?.response?.data?.message || 'Failed to download report');
+      toast.error(await getBlobErrorMessage(err, 'Failed to download report'));
     } finally {
       setDownloadingReport(false);
     }

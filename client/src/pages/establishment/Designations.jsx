@@ -113,7 +113,6 @@ export default function DesignationsPage() {
       showNotification('Designation deleted successfully!', 'success');
     } catch (e) {
       const msg = e.response?.data?.message || e.message || 'Failed to delete designation';
-      alert(msg);
       showNotification(msg, 'error');
     }
   };

@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { toast } from '../notifications/notifier';
+import { getHttpErrorMessage, isCancelledRequest } from '../utils/errors';
 
 const configuredApiUrl = import.meta.env.VITE_API_URL?.trim();
 const runtimeHost = typeof window !== 'undefined' ? window.location.hostname : 'localhost';
@@ -25,10 +26,24 @@ const clearSessionAndRedirect = () => {
   }
 };
 
+// Pages commonly fall back to error.message, which axios fills with text such as "Network Error"
+// or "Request failed with status code 500". Replace it with something a user can act on; the
+// original stays on error.originalMessage for debugging.
+const normalizeError = (error) => {
+  if (!error || error.__normalized || isCancelledRequest(error)) return error;
+  const friendly = getHttpErrorMessage(error);
+  if (friendly) {
+    error.originalMessage = error.message;
+    error.message = friendly;
+  }
+  error.__normalized = true;
+  return error;
+};
+
 // Opt-in per request: api.get(url, { notifyError: true }) or { notifyError: 'Fallback message' }
 const notifyRequestError = (error) => {
   const opt = error.config?.notifyError;
-  if (!opt) return;
+  if (!opt || isCancelledRequest(error)) return;
   const fallback = typeof opt === 'string' ? opt : 'Something went wrong. Please try again.';
   toast.error(error.response?.data?.message || fallback);
 };
@@ -44,6 +59,7 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
+    normalizeError(error);
     const originalRequest = error.config;
     const status = error.response?.status;
 
@@ -108,7 +124,7 @@ api.interceptors.response.use(
     } catch (refreshError) {
       runPendingRequests(null);
       clearSessionAndRedirect();
-      return Promise.reject(refreshError);
+      return Promise.reject(normalizeError(refreshError));
     } finally {
       isRefreshing = false;
     }

@@ -1,7 +1,27 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { loginRequest, meRequest, registerRequest } from '../api/auth.api';
+import { reportError } from '../utils/errors';
 
 export const AuthContext = createContext(null);
+
+// A corrupted stored user would otherwise throw on every page load and lock the user out.
+function readStoredUser() {
+  const raw = localStorage.getItem('user');
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? parsed : null;
+  } catch (error) {
+    reportError(error, { source: 'AuthContext:readStoredUser' });
+    return null;
+  }
+}
+
+function clearStoredSession() {
+  localStorage.removeItem('token');
+  localStorage.removeItem('refreshToken');
+  localStorage.removeItem('user');
+}
 
 export default function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
@@ -12,12 +32,15 @@ export default function AuthProvider({ children }) {
   useEffect(() => {
     const savedToken = localStorage.getItem('token');
     const savedRefreshToken = localStorage.getItem('refreshToken');
-    const savedUser = localStorage.getItem('user');
+    const savedUser = readStoredUser();
 
-    if (savedToken && savedRefreshToken && savedUser) {
+    if (savedToken && savedRefreshToken && !savedUser) {
+      // Tokens without a readable user cannot drive the menus or role routes; start fresh.
+      clearStoredSession();
+    } else if (savedToken && savedRefreshToken && savedUser) {
       setToken(savedToken);
       setRefreshToken(savedRefreshToken);
-      setUser(JSON.parse(savedUser));
+      setUser(savedUser);
 
       // Stored sessions may predate coordinator data or a coordinator assignment change,
       // so re-sync the fields the menus depend on from the server.
@@ -36,7 +59,8 @@ export default function AuthProvider({ children }) {
             return nextUser;
           });
         })
-        .catch(() => {});
+        // Non-critical: the stored copy is still usable, and a 401 is handled by the interceptor.
+        .catch((error) => reportError(error, { source: 'AuthContext:meRequest' }));
     }
 
     setIsLoading(false);
@@ -51,9 +75,13 @@ export default function AuthProvider({ children }) {
     setUser(nextUser);
   };
 
+  // Throws on failure so the login form can show the reason.
   const login = async (payload) => {
     const response = await loginRequest(payload);
     const session = response.data?.data;
+    if (!session?.token || !session?.refreshToken || !session?.user) {
+      throw new Error('Login failed: the server returned an incomplete session. Please try again.');
+    }
     persistSession(session.token, session.refreshToken, session.user);
     return session.user;
   };
@@ -64,9 +92,7 @@ export default function AuthProvider({ children }) {
   };
 
   const logout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('refreshToken');
-    localStorage.removeItem('user');
+    clearStoredSession();
     setToken(null);
     setRefreshToken(null);
     setUser(null);

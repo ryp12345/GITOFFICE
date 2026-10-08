@@ -104,7 +104,6 @@ export default function AssociationsPage() {
       showNotification('Association deleted successfully!', 'success');
     } catch (e) {
       const msg = e.response?.data?.message || e.message || 'Failed to delete association';
-      alert(msg);
       showNotification(msg, 'error');
     }
   };

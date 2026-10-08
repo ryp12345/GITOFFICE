@@ -75,17 +75,7 @@ export function saveBlob(blob, filename) {
 }
 
 // With responseType 'blob', axios hands back JSON error bodies as a Blob too
-export async function blobErrorMessage(error, fallback) {
-  const data = error?.response?.data;
-  if (data instanceof Blob) {
-    try {
-      return JSON.parse(await data.text())?.message || fallback;
-    } catch {
-      return fallback;
-    }
-  }
-  return data?.message || error?.message || fallback;
-}
+export { getBlobErrorMessage as blobErrorMessage } from '../../utils/errors';
 
 export function StatusBadge({ status }) {
   const label = status || '--NA--';

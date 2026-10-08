@@ -101,7 +101,6 @@ export default function CourseTypeConfigPage() {
       showNotification('Fastrack Course Deleted successfully', 'success');
     } catch (e) {
       const msg = e.response?.data?.message || e.message || 'Failed to delete course type';
-      alert(msg);
       showNotification(msg, 'error');
     }
   };

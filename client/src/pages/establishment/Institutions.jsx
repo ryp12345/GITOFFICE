@@ -121,7 +121,6 @@ export default function InstitutionsPage() {
       load();
     } catch (e) {
       const msg = e.response?.data?.message || e.response?.data?.error || e.message || 'Failed to delete institution';
-      alert(msg);
       showNotification(msg, 'error');
     }
   };

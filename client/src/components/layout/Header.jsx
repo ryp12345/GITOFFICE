@@ -4,6 +4,7 @@ import { stopImpersonation } from '../../api/userApi';
 import { useAuth } from '../../context/AuthContext';
 import { getDashboardPathByRole, isRoleMatch, ROLE_SUPER_ADMIN } from '../../utils/role';
 import api from '../../api/axios';
+import { toast } from '../../notifications/notifier';
 
 export default function Header() {
   const navigate = useNavigate();
@@ -113,7 +114,7 @@ export default function Header() {
       navigate(getDashboardPathByRole(session?.user?.role), { replace: true });
     } catch (error) {
       const message = error?.response?.data?.message || 'Failed to stop impersonation.';
-      window.alert(message);
+      toast.error(message);
     } finally {
       setIsStoppingImpersonation(false);
     }
