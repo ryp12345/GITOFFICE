@@ -102,6 +102,9 @@ app.use('/api/exam-section', examSectionRoutes);
 const establishmentRoutes = require('./routes/establishment.routes');
 app.use('/api/establishment', establishmentRoutes);
 
+const superAdminDashboardRoutes = require('./routes/superAdminDashboard.routes');
+app.use('/api/super-admin', superAdminDashboardRoutes);
+
 const professionalActivityRoutes = require('./routes/professionalActivity.routes');
 app.use('/api/professional-activities', professionalActivityRoutes);
 
