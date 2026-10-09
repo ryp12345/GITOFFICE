@@ -13,4 +13,12 @@ router.get(
   establishmentDashboardController.getDashboard
 );
 
+// Staff behind one "Staff Records to Complete" count (check = no_department, no_designation, ...).
+router.get(
+  '/dashboard/data-quality/:check',
+  authMiddleware,
+  roleMiddleware('Establishment', 'establishment', 'super-admin'),
+  establishmentDashboardController.getDataQualityStaff
+);
+
 module.exports = router;

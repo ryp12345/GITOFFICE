@@ -13,3 +13,15 @@ async function getDashboard(req, res, next) {
 module.exports = {
   getDashboard,
 };
+
+// GET /api/establishment/dashboard/data-quality/:check
+async function getDataQualityStaff(req, res, next) {
+  try {
+    const data = await establishmentDashboardService.getDataQualityStaff(req.params.check);
+    res.json({ success: true, data });
+  } catch (error) {
+    next(error);
+  }
+}
+
+module.exports.getDataQualityStaff = getDataQualityStaff;

@@ -116,6 +116,38 @@ async function getDataQuality(year) {
   return rows[0] || {};
 }
 
+// Conditions behind each data-quality count, so the dashboard can list the staff concerned.
+// Keys are whitelisted; only these fixed SQL fragments are ever used.
+const DATA_QUALITY_CONDITIONS = {
+  no_department: 'dept_shortname IS NULL',
+  no_designation: 'design_name IS NULL',
+  no_association: 'asso_name IS NULL',
+  no_employee_code: "employeecode IN ('', '0')",
+  duplicate_employee_code: 'employeecode IN (SELECT employeecode FROM dup_codes)',
+  no_superannuation_date: 'date_of_superanuation IS NULL',
+  no_increment_date: 'date_of_increment IS NULL',
+  no_leave_entitlement: 'NOT has_entitlement',
+  no_qualification: 'NOT has_qualification',
+};
+
+// Staff in service matching one data-quality check, or null for an unknown check.
+async function getDataQualityStaff(check, year) {
+  const condition = DATA_QUALITY_CONDITIONS[check];
+  if (!condition) return null;
+  const { rows } = await pool.query(`
+    WITH ${STAFF_CTE},
+    dup_codes AS (
+      SELECT employeecode FROM active_staff
+       WHERE employeecode NOT IN ('', '0')
+       GROUP BY employeecode HAVING COUNT(*) > 1
+    )
+    SELECT id, staff_name, employeecode, employee_type, dept_shortname, design_name, asso_name
+    FROM active_staff
+    WHERE ${condition}
+    ORDER BY dept_shortname NULLS FIRST, staff_name`, [year]);
+  return rows;
+}
+
 // College-wide leave pipeline: waiting at HOD (pending) and at Dean/Principal (recommended),
 // split into leave not yet over vs. leave already in the past.
 async function getLeavePipeline(todayYmd) {
@@ -148,6 +180,8 @@ module.exports = {
   getComposition,
   getServiceEvents,
   getDataQuality,
+  getDataQualityStaff,
+  DATA_QUALITY_CONDITIONS,
   getLeavePipeline,
   getUpcomingHolidays,
 };

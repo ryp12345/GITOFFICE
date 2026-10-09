@@ -47,3 +47,16 @@ async function getDashboard() {
 module.exports = {
   getDashboard,
 };
+
+// Staff behind one "Staff Records to Complete" count.
+async function getDataQualityStaff(check) {
+  const rows = await establishmentModel.getDataQualityStaff(check, new Date().getFullYear());
+  if (rows === null) {
+    const error = new Error('Unknown data quality check');
+    error.statusCode = 400;
+    throw error;
+  }
+  return rows;
+}
+
+module.exports.getDataQualityStaff = getDataQualityStaff;
