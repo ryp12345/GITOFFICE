@@ -3,6 +3,7 @@ const { authMiddleware } = require('../middlewares/auth.middleware');
 const { roleMiddleware } = require('../middlewares/role.middleware');
 const principalLeaveApplicationController = require('../controllers/principal/leaveApplication.controller');
 const facultyRecruitmentController = require('../controllers/principal/facultyRecruitment.controller');
+const principalDashboardController = require('../controllers/principal/dashboard.controller');
 
 const router = Router();
 
@@ -16,6 +17,9 @@ const facultyRecruitmentRoles = roleMiddleware(
   'Dean Admin',
   'dean_admin'
 );
+
+// Dashboard summary for the Principal and Dean Admin portals.
+router.get('/dashboard', authMiddleware, facultyRecruitmentRoles, principalDashboardController.getDashboard);
 
 router.get(
   '/faculty-recruitment/associate-professor-applications',

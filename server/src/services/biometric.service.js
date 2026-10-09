@@ -3,6 +3,7 @@ require('dotenv').config();
 const { pool: pgPool } = require('../config/db');
 const ExcelJS = require('exceljs');
 const { findDepartmentByHodUserId } = require('../models/hodDepartmentOverview.model');
+const { expectedOnBiometricSql } = require('../models/biometricEligibility');
 
 const SECONDARY_DB = {
     host: process.env.DB_SECONDARY_HOST || '127.0.0.1',
@@ -252,7 +253,6 @@ async function getDailyBiometric(dateStr, departmentId = null) {
   let missingListFailed = false;
 
   try {
-    const assocNames = ['Confirmed', 'Probationary', 'Contractual', 'Promotional Probationary', 'Temporary (non teaching)'];
     const sql = `
       SELECT s.employeecode::text AS employeecode,
         TRIM(CONCAT_WS(' ', s.fname, s.mname, s.lname)) AS full_name,
@@ -270,18 +270,14 @@ async function getDailyBiometric(dateStr, departmentId = null) {
           SELECT 1 FROM leave_staff_applications lsa WHERE lsa.staff_id = s.id AND lsa.start <= $1 AND lsa.end >= $1 AND LOWER(COALESCE(lsa.appl_status, '')) NOT IN ('rejected', 'cancelled')
         ) AS on_leave
       FROM staff s
-      WHERE s.id IN (
-        SELECT staff_id FROM association_staff WHERE status = 'active' AND association_id IN (
-          SELECT id FROM associations WHERE asso_name = ANY($2::text[])
-        )
-      )
-      AND ($3::bigint IS NULL OR s.id IN (
-        SELECT staff_id FROM department_staff WHERE department_id = $3 AND LOWER(COALESCE(status, 'active')) = 'active'
+      WHERE ${expectedOnBiometricSql('s')}
+      AND ($2::bigint IS NULL OR s.id IN (
+        SELECT staff_id FROM department_staff WHERE department_id = $2 AND LOWER(COALESCE(status, 'active')) = 'active'
       ))
-      AND COALESCE(s.employeecode::text, '') <> ''
+      AND TRIM(COALESCE(s.employeecode::text, '')) NOT IN ('', '0')
       ORDER BY dept_shortnames, full_name`;
 
-    const res = await pgPool.query(sql, [dateParam, assocNames, departmentId || null]);
+    const res = await pgPool.query(sql, [dateParam, departmentId || null]);
     for (const r of res.rows || []) {
       const code = String(r.employeecode || '').trim();
       if (!code || presentCodes.has(code)) continue;
@@ -342,14 +338,13 @@ async function getMuster(monthParam, yearParam) {
     // staffData from Postgres (eligible staff with active departments and leave applications in month)
     let staffData = [];
     try {
-      const assocNames = ['Confirmed', 'Probationary', 'Contractual', 'Promotional Probationary', 'Temporary (non teaching)'];
       const sql = `SELECT s.id, s.employeecode, s.fname, s.mname, s.lname, STRING_AGG(d.dept_shortname, ', ') AS active_departments
                    FROM staff s
                    JOIN department_staff ds ON ds.staff_id = s.id
                    JOIN departments d ON d.id = ds.department_id
-                   WHERE ds.status = 'active' AND s.id IN (SELECT staff_id FROM association_staff WHERE status = 'active' AND association_id IN (SELECT id FROM associations WHERE asso_name = ANY($1::text[])))
+                   WHERE ds.status = 'active' AND ${expectedOnBiometricSql('s')}
                    GROUP BY s.id, s.employeecode, s.fname, s.mname, s.lname`;
-      const res = await pgPool.query(sql, [assocNames]);
+      const res = await pgPool.query(sql);
       staffData = (res.rows || []).map(r => ({
         id: r.id,
         staffname: [r.fname, r.mname, r.lname].filter(Boolean).join(' '),
@@ -512,9 +507,8 @@ async function getMonthlyForEmployee(empcode, monthParam, yearParam) {
     // fetch employees list for dropdown (eligible staff)
     let employees = [];
     try {
-      const assocNames = ['Confirmed', 'Probationary', 'Contractual', 'Promotional Probationary', 'Temporary (non teaching)'];
-      const empSql = `SELECT s.id, s.employeecode, s.fname, s.mname, s.lname FROM staff s WHERE s.id IN (SELECT staff_id FROM association_staff WHERE status = 'active' AND association_id IN (SELECT id FROM associations WHERE asso_name = ANY($1::text[]))) ORDER BY s.fname`;
-      const ers = await pgPool.query(empSql, [assocNames]);
+      const empSql = `SELECT s.id, s.employeecode, s.fname, s.mname, s.lname FROM staff s WHERE ${expectedOnBiometricSql('s')} ORDER BY s.fname`;
+      const ers = await pgPool.query(empSql);
       employees = ers.rows || [];
     } catch (e) {
       employees = [];
@@ -571,14 +565,6 @@ async function buildHodMonthlyDataset(userId, monthParam, yearParam) {
     throw err;
   }
 
-  const assocNames = [
-    'Confirmed',
-    'Probationary',
-    'Contractual',
-    'Promotional Probationary',
-    'Temporary (non teaching)'
-  ];
-
   const employeesSql = `
     SELECT s.id, s.employeecode::text AS employeecode, s.fname, s.mname, s.lname
     FROM staff s
@@ -588,18 +574,11 @@ async function buildHodMonthlyDataset(userId, monthParam, yearParam) {
       WHERE ds.department_id = $1
         AND LOWER(COALESCE(ds.status, 'active')) = 'active'
     )
-    AND s.id IN (
-      SELECT ast.staff_id
-      FROM association_staff ast
-      WHERE LOWER(COALESCE(ast.status, 'active')) = 'active'
-        AND ast.association_id IN (
-          SELECT id FROM associations WHERE asso_name = ANY($2::text[])
-        )
-    )
+    AND ${expectedOnBiometricSql('s')}
     ORDER BY s.fname ASC, s.mname ASC, s.lname ASC
   `;
 
-  const employeesRes = await pgPool.query(employeesSql, [department.id, assocNames]);
+  const employeesRes = await pgPool.query(employeesSql, [department.id]);
   const employees = (employeesRes.rows || []).map((r) => ({
     code: String(r.employeecode || '').trim(),
     name: [r.fname, r.mname, r.lname].filter(Boolean).join(' ').trim()
@@ -854,3 +833,23 @@ async function getMonthlyMatrixForHod(userId, monthParam, yearParam) {
 }
 
 module.exports.getMonthlyMatrixForHod = getMonthlyMatrixForHod;
+
+// Employee codes with at least one punch on dateYmd ('YYYY-MM-DD'), from the biometric DB.
+// Throws if the month's log table cannot be read, so callers never mistake an outage for "nobody punched".
+async function getPunchedEmployeeCodes(dateYmd) {
+  const [y, m] = String(dateYmd).split('-').map(Number);
+  const tableName = `DeviceLogs_${m}_${y}`;
+  const mysqlPool = mysql.createPool(SECONDARY_DB);
+  try {
+    const [rows] = await mysqlPool.query(
+      `SELECT DISTINCT EmployeeCode FROM \`${tableName}\` WHERE LogDate_Date = ?`,
+      [dateYmd]
+    );
+    return new Set((rows || []).map((r) => String(r.EmployeeCode).trim()));
+  } finally {
+    try { await mysqlPool.end(); } catch (e) {}
+  }
+}
+
+module.exports.getPunchedEmployeeCodes = getPunchedEmployeeCodes;
+module.exports.isWeeklyOff = isWeeklyOff;

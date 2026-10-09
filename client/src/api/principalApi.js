@@ -4,6 +4,13 @@ const tokenHeaders = (token) => {
   return token ? { Authorization: `Bearer ${token}` } : {};
 };
 
+// Dashboard summary shared by the Principal and Dean Admin portals.
+export const getPrincipalDashboard = async (token) => {
+  return axios.get('/principal/dashboard', {
+    headers: tokenHeaders(token),
+  });
+};
+
 export const getPrincipalLeaveApplications = async (token, params = {}) => {
   return axios.get('/principal/leave-applications', {
     headers: tokenHeaders(token),
