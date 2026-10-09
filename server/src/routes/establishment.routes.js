@@ -9,7 +9,7 @@ const router = Router();
 router.get(
   '/dashboard',
   authMiddleware,
-  roleMiddleware('Establishment', 'establishment', 'super-admin'),
+  roleMiddleware('Establishment', 'establishment', 'Super Admin', 'super-admin', 'admin'),
   establishmentDashboardController.getDashboard
 );
 
@@ -17,7 +17,7 @@ router.get(
 router.get(
   '/dashboard/data-quality/:check',
   authMiddleware,
-  roleMiddleware('Establishment', 'establishment', 'super-admin'),
+  roleMiddleware('Establishment', 'establishment', 'Super Admin', 'super-admin', 'admin'),
   establishmentDashboardController.getDataQualityStaff
 );
 
