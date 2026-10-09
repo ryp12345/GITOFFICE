@@ -15,6 +15,30 @@ const SECONDARY_DB = {
     queueLimit: 0,
 };
 
+// DATE columns come back as Date objects at local midnight; format them as local YYYY-MM-DD
+// (toISOString would shift them to the previous day in IST).
+function toYmd(value) {
+  if (!value) return null;
+  if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}/.test(value)) return value.slice(0, 10);
+  const d = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(d.getTime())) return null;
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function ymdToLocalDate(ymd) {
+  const [y, m, d] = String(ymd).split('-').map(Number);
+  return new Date(y, m - 1, d);
+}
+
+// Institute weekly offs: every Sunday plus the 1st and 3rd Saturday of the month.
+function isWeeklyOff(date) {
+  const dow = date.getDay();
+  if (dow === 0) return true;
+  if (dow !== 6) return false;
+  const weekOfMonth = Math.floor((date.getDate() - 1) / 7) + 1;
+  return weekOfMonth === 1 || weekOfMonth === 3;
+}
+
 function formatDurationFromSeconds(totalSeconds) {
   if (!totalSeconds || totalSeconds <= 0) return null;
   const hours = Math.floor(totalSeconds / 3600);
@@ -369,8 +393,8 @@ async function getMonthlyForEmployee(empcode, monthParam, yearParam) {
   const mysqlPool = mysql.createPool(SECONDARY_DB);
   const conn = await mysqlPool.getConnection();
   try {
-    const firstDay = new Date(year, month - 1, 1).toISOString().slice(0, 10);
-    const lastDay = new Date(year, month, 0).toISOString().slice(0, 10);
+    const firstDay = toYmd(new Date(year, month - 1, 1));
+    const lastDay = toYmd(new Date(year, month, 0));
 
     // Fetch logs for the employee for the month (join devices/employees for device name)
     const [rows] = await conn.query(
@@ -418,81 +442,60 @@ async function getMonthlyForEmployee(empcode, monthParam, yearParam) {
     const logsByEmployee = {};
     logsByEmployee[String(empcode)] = rows.map(r => ({ ...r }));
 
-    // Compute missing dates by comparing all distinct dates in month vs dates where this employee has logs
+    // Compute missing dates: working days (any employee punched) on which this employee has no log.
+    // mysql2/pg return DATE columns as Date objects, so compare by YYYY-MM-DD string, not identity.
     let missingDates = [];
     try {
       const [dates] = await conn.query(`SELECT DISTINCT LogDate_Date FROM \`${tableName}\` ORDER BY LogDate_Date`);
-      const presentDates = new Set(rows.map(r => r.LogDate_Date));
+      const presentDates = new Set(rows.map(r => toYmd(r.LogDate_Date)).filter(Boolean));
       for (const drow of dates) {
-        const d = drow.LogDate_Date;
-        if (!presentDates.has(d)) missingDates.push(d);
+        const d = toYmd(drow.LogDate_Date);
+        if (d && !presentDates.has(d)) missingDates.push(d);
       }
     } catch (e) {
       // ignore if table missing
     }
 
-    // Filter missingDates: remove Sundays, holidays and leave-applications for this staff.
-    // 1st/3rd Saturdays are retained for UI highlighting.
-    let filteredMissing = [];
+    // Filter missingDates: remove weekly offs (Sundays, 1st/3rd Saturdays) and holidays;
+    // collect this staff's leave dates for the UI.
+    let filteredMissing = missingDates.filter((d) => !isWeeklyOff(ymdToLocalDate(d)));
     let leaveDates = new Set();
     try {
-      // find staff id from postgres
-      const staffRes = await pgPool.query(`SELECT id FROM staff WHERE employeecode::text = $1 LIMIT 1`, [String(empcode)]);
-      const staffId = staffRes.rows[0] ? staffRes.rows[0].id : null;
-
-      // fetch holiday dates for selected month (Holiday type only)
       const holidayRes = await pgPool.query(
-        `SELECT start FROM holidayrh WHERE start BETWEEN $1 AND $2 AND type = 'Holiday'`,
+        `SELECT start FROM holidayrhs WHERE start BETWEEN $1 AND $2 AND type = 'Holiday'`,
         [firstDay, lastDay]
       );
-      const holidayDates = new Set(
-        (holidayRes.rows || [])
-          .map((r) => {
-            if (!r || !r.start) return null;
-            if (r.start instanceof Date) return r.start.toISOString().slice(0, 10);
-            return String(r.start).slice(0, 10);
-          })
-          .filter(Boolean)
-      );
+      const holidayDates = new Set((holidayRes.rows || []).map((r) => toYmd(r && r.start)).filter(Boolean));
+      filteredMissing = filteredMissing.filter((d) => !holidayDates.has(d));
+    } catch (e) {
+      // keep Sunday-filtered list if holidays cannot be read
+    }
+
+    try {
+      const staffRes = await pgPool.query(`SELECT id FROM staff WHERE employeecode::text = $1 LIMIT 1`, [String(empcode)]);
+      const staffId = staffRes.rows[0] ? staffRes.rows[0].id : null;
 
       // fetch leave ranges for selected staff and expand to per-day leave dates
       if (staffId) {
         const leaveRes = await pgPool.query(
-          `SELECT start, "end" FROM leave_staff_applications WHERE staff_id = $1 AND appl_status != 'rejected' AND start <= $3 AND "end" >= $2`,
+          `SELECT start, "end" FROM leave_staff_applications
+            WHERE staff_id = $1 AND LOWER(COALESCE(appl_status, '')) NOT IN ('rejected', 'cancelled')
+              AND start <= $3 AND "end" >= $2`,
           [staffId, firstDay, lastDay]
         );
-        const monthStart = new Date(`${firstDay}T00:00:00Z`);
-        const monthEnd = new Date(`${lastDay}T00:00:00Z`);
         for (const row of leaveRes.rows || []) {
-          const leaveStartRaw = row && row.start ? String(row.start).slice(0, 10) : null;
-          const leaveEndRaw = row && row.end ? String(row.end).slice(0, 10) : null;
-          if (!leaveStartRaw || !leaveEndRaw) continue;
-          const leaveStart = new Date(`${leaveStartRaw}T00:00:00Z`);
-          const leaveEnd = new Date(`${leaveEndRaw}T00:00:00Z`);
-          if (Number.isNaN(leaveStart.getTime()) || Number.isNaN(leaveEnd.getTime())) continue;
+          const leaveStart = toYmd(row && row.start);
+          const leaveEnd = toYmd(row && row.end);
+          if (!leaveStart || !leaveEnd) continue;
 
-          const from = leaveStart > monthStart ? leaveStart : monthStart;
-          const to = leaveEnd < monthEnd ? leaveEnd : monthEnd;
-          if (from > to) continue;
-
-          for (let d = new Date(from); d <= to; d.setUTCDate(d.getUTCDate() + 1)) {
-            leaveDates.add(d.toISOString().slice(0, 10));
+          const from = leaveStart > firstDay ? leaveStart : firstDay;
+          const to = leaveEnd < lastDay ? leaveEnd : lastDay;
+          for (let d = ymdToLocalDate(from); toYmd(d) <= to; d.setDate(d.getDate() + 1)) {
+            leaveDates.add(toYmd(d));
           }
         }
       }
-
-      for (const md of missingDates) {
-        const mdDate = new Date(`${String(md).slice(0, 10)}T00:00:00Z`);
-        if (Number.isNaN(mdDate.getTime())) continue;
-        const dow = mdDate.getUTCDay(); // 0=Sun
-        if (dow === 0) continue; // skip Sunday
-
-        const mdIso = String(md).slice(0, 10);
-        if (holidayDates.has(mdIso)) continue;
-        filteredMissing.push(md);
-      }
     } catch (e) {
-      filteredMissing = missingDates;
       leaveDates = new Set();
     }
 

@@ -12,12 +12,12 @@ import React from 'react';
 
 // Research resources grouped into the tiles shown on the dashboard (keys match research.model RESOURCES).
 const RESEARCH_GROUPS = [
-  { label: 'Publications', resources: ['publication'], path: '/teaching/research/publication' },
-  { label: 'Conferences', resources: ['conference-attended', 'conference-conducted'], path: '/teaching/research/conference' },
-  { label: 'Books & Chapters', resources: ['book-chapter'], path: '/teaching/research/book-chapters' },
-  { label: 'Funding & Consultancy', resources: ['funded-project', 'consultancy'], path: '/teaching/research/funding-consultancy' },
-  { label: 'Patents & Copyrights', resources: ['patent', 'copyright'], path: '/teaching/research/copyright-patents' },
-  { label: 'Achievements', resources: ['achievement'], path: '/teaching/research/achievement' },
+  { label: 'Publications', resources: ['publication'], path: '/teaching/research/publication', tone: 'blue' },
+  { label: 'Conferences', resources: ['conference-attended', 'conference-conducted'], path: '/teaching/research/conference', tone: 'green' },
+  { label: 'Books & Chapters', resources: ['book-chapter'], path: '/teaching/research/book-chapters', tone: 'yellow' },
+  { label: 'Funding & Consultancy', resources: ['funded-project', 'consultancy'], path: '/teaching/research/funding-consultancy', tone: 'purple' },
+  { label: 'Patents & Copyrights', resources: ['patent', 'copyright'], path: '/teaching/research/copyright-patents', tone: 'blue' },
+  { label: 'Achievements', resources: ['achievement'], path: '/teaching/research/achievement', tone: 'green' },
 ];
 
 const LEAVE_STATUS_STYLES = {
@@ -74,34 +74,33 @@ function formatYearsMonths({ years, months }) {
   return parts.join(' ');
 }
 
-// date_of_increment holds the increment anniversary; roll it forward to the next upcoming one.
-function nextAnniversary(date, today) {
-  if (!date) return null;
-  if (date >= today) return date;
-  const next = new Date(today.getFullYear(), date.getMonth(), date.getDate());
-  if (next < today) next.setFullYear(next.getFullYear() + 1);
-  return next;
-}
+// Same tinted stat-card style as the Establishment / Principal / Registrar dashboards.
+// Full class names are listed so Tailwind keeps them in the build.
+const TILE_TONES = {
+  blue: { card: 'bg-blue-50 border-blue-200', value: 'text-blue-700', label: 'text-blue-900' },
+  green: { card: 'bg-green-50 border-green-200', value: 'text-green-700', label: 'text-green-900' },
+  yellow: { card: 'bg-yellow-50 border-yellow-200', value: 'text-yellow-700', label: 'text-yellow-900' },
+  purple: { card: 'bg-purple-50 border-purple-200', value: 'text-purple-700', label: 'text-purple-900' },
+  red: { card: 'bg-red-50 border-red-200', value: 'text-red-700', label: 'text-red-900' },
+};
 
-function daysBetween(from, to) {
-  return Math.round((to - from) / 86400000);
-}
-
-function StatTile({ label, value, sub, accent = 'text-slate-900' }) {
+function StatTile({ label, value, sub, tone = 'blue' }) {
+  const t = TILE_TONES[tone] || TILE_TONES.blue;
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</p>
-      <p className={`mt-1 text-2xl font-semibold ${accent}`}>{value}</p>
-      {sub ? <p className="mt-0.5 text-xs text-slate-500">{sub}</p> : null}
+    <div className={`rounded-lg p-4 shadow flex h-full flex-col items-center justify-center text-center border ${t.card}`}>
+      <span className={`text-3xl font-bold ${t.value}`}>{value}</span>
+      <span className={`mt-2 ${t.label}`}>{label}</span>
+      {sub ? <span className="mt-1 text-xs text-slate-600">{sub}</span> : null}
     </div>
   );
 }
 
+// Same white panel style as the Dean R&D / e-Gov dashboard widgets.
 function Panel({ title, link, linkLabel = 'view all', children }) {
   return (
-    <div className="rounded-xl border border-blue-100 bg-white p-5 shadow">
+    <div className="h-full rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
       <div className="mb-4 flex items-center justify-between">
-        <h5 className="text-lg font-bold text-blue-700">{title}</h5>
+        <h3 className="text-lg font-semibold text-slate-900">{title}</h3>
         {link ? <a href={link} className="text-sm text-blue-600 hover:underline">{linkLabel}</a> : null}
       </div>
       {children}
@@ -214,13 +213,15 @@ export default function StaffDashboard() {
       });
       const todayLog = todayKey ? logs[todayKey] : null;
 
-      // Server already drops Sundays and holidays; also ignore days covered by a leave application.
-      const missing = (Array.isArray(data.missinglog_array) ? data.missinglog_array : []).filter((m) => {
-        const d = toLocalDate(m);
-        if (!d || d > today) return false;
-        const iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-        return !leaveDates.has(iso);
-      });
+      // Server returns working days (someone punched) with no punch from this employee, minus Sundays,
+      // 1st/3rd Saturdays and holidays; also ignore days covered by a leave application.
+      const missing = (Array.isArray(data.missinglog_array) ? data.missinglog_array : [])
+        .map((m) => toLocalDate(m))
+        .filter((d) => {
+          if (!d || d > today) return false;
+          const iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+          return !leaveDates.has(iso);
+        });
       const leaveDaysSoFar = [...leaveDates].filter((iso) => {
         const d = toLocalDate(iso);
         return d && d <= today;
@@ -230,6 +231,7 @@ export default function StaffDashboard() {
       return {
         presentDays,
         missingDays: missing.length,
+        missingDates: missing,
         leaveDays: leaveDaysSoFar,
         averageDuration: avg ? avg.slice(0, 5) : null,
         todayIn: todayLog?.entryLog?.LogDate || null,
@@ -367,13 +369,10 @@ export default function StaffDashboard() {
   const service = React.useMemo(() => {
     const today = startOfToday();
     const doj = toLocalDate(staff?.doj);
-    const increment = nextAnniversary(toLocalDate(staff?.date_of_increment), today);
     const retirement = toLocalDate(staff?.date_of_superanuation);
     return {
       doj,
       tenure: doj && doj <= today ? diffYearsMonths(doj, today) : null,
-      increment,
-      incrementInDays: increment ? daysBetween(today, increment) : null,
       retirement,
       untilRetirement: retirement && retirement > today ? diffYearsMonths(today, retirement) : null,
     };
@@ -408,7 +407,7 @@ export default function StaffDashboard() {
             {/* Statistic Cards - Blade-style layout */}
             <div className="mt-6 grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-4">
               {/* Department Card */}
-              <div className="rounded-xl bg-blue-50 p-5 shadow flex flex-col border border-blue-200">
+              <div className="rounded-lg bg-blue-50 p-4 shadow flex flex-col border border-blue-200">
                 <div className="flex items-center mb-2">
                   <div className="avatar rounded-sm text-primary p-2.5 bg-blue-100 flex items-center justify-center mr-3">
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="32" height="32" fill="currentColor">
@@ -423,7 +422,7 @@ export default function StaffDashboard() {
                 </div>
               </div>
               {/* Designation & Payscale Card */}
-              <div className="rounded-xl bg-yellow-50 p-5 shadow flex flex-col border border-yellow-200">
+              <div className="rounded-lg bg-yellow-50 p-4 shadow flex flex-col border border-yellow-200">
                 <div className="flex items-center mb-2">
                   <div className="avatar rounded-sm text-yellow-600 p-2.5 bg-yellow-100 flex items-center justify-center mr-3">
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="32" height="32" fill="currentColor">
@@ -439,7 +438,7 @@ export default function StaffDashboard() {
                 </div>
               </div>
               {/* Association Card */}
-              <div className="rounded-xl bg-pink-50 p-5 shadow flex flex-col border border-pink-200">
+              <div className="rounded-lg bg-pink-50 p-4 shadow flex flex-col border border-pink-200">
                 <div className="flex items-center mb-2">
                   <div className="avatar rounded-sm text-pink-600 p-2.5 bg-pink-100 flex items-center justify-center mr-3">
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="32" height="32" fill="currentColor">
@@ -454,7 +453,7 @@ export default function StaffDashboard() {
                 </div>
               </div>
               {/* Leave Statistics Card */}
-              <div className="rounded-xl bg-green-50 p-5 shadow flex flex-col border border-green-200">
+              <div className="rounded-lg bg-green-50 p-4 shadow flex flex-col border border-green-200">
                 <div className="flex items-center mb-2">
                   <div className="avatar rounded-sm text-green-600 p-2.5 bg-green-100 flex items-center justify-center mr-3">
                     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="32" height="32" fill="currentColor">
@@ -475,27 +474,24 @@ export default function StaffDashboard() {
             </div>
 
             {/* Service milestones & leave requests */}
-            <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
               <StatTile
                 label="Years of Service"
                 value={service.tenure ? formatYearsMonths(service.tenure) : '--'}
                 sub={service.doj ? `Joined ${formatDate(service.doj)}` : null}
-              />
-              <StatTile
-                label="Next Increment"
-                value={service.increment ? formatDate(service.increment) : '--'}
-                sub={service.incrementInDays !== null ? (service.incrementInDays === 0 ? 'Today' : `in ${service.incrementInDays} day${service.incrementInDays === 1 ? '' : 's'}`) : null}
+                tone="blue"
               />
               <StatTile
                 label="Superannuation"
                 value={service.retirement ? formatDate(service.retirement) : '--'}
                 sub={service.untilRetirement ? `${formatYearsMonths(service.untilRetirement)} remaining` : null}
+                tone="purple"
               />
               <StatTile
                 label="Leave Requests Awaiting"
                 value={leaveSummary ? leaveSummary.awaiting : '--'}
                 sub={leaveSummary ? `${leaveSummary.approvedDaysThisYear} day${leaveSummary.approvedDaysThisYear === 1 ? '' : 's'} approved this year` : null}
-                accent={leaveSummary?.awaiting ? 'text-amber-600' : 'text-slate-900'}
+                tone="yellow"
               />
             </div>
 
@@ -506,7 +502,7 @@ export default function StaffDashboard() {
                   <div className="w-72 h-56">
                     <canvas ref={chartRef} />
                   </div>
-                  <div className="flex-1 text-sm text-blue-700">
+                  <div className="flex-1 text-sm text-slate-700">
                     {leavePieData.length ? leavePieData.map((item) => (
                       <div key={item.label} className="flex items-center gap-2 mb-2">
                         <span style={{ background: item.color }} className="inline-block w-3 h-3 rounded-full"></span>
@@ -532,10 +528,10 @@ export default function StaffDashboard() {
                 ) : (
                   <>
                     <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                      <StatTile label="Days Present" value={attendance.presentDays} accent="text-green-700" />
-                      <StatTile label="Punch Missing" value={attendance.missingDays} accent={attendance.missingDays ? 'text-red-600' : 'text-slate-900'} />
-                      <StatTile label="On Leave" value={attendance.leaveDays} />
-                      <StatTile label="Avg. Hours" value={attendance.averageDuration || '--'} sub="hh:mm per day" />
+                      <StatTile label="Days Present" value={attendance.presentDays} tone="green" />
+                      <StatTile label="Punch Missing" value={attendance.missingDays} tone={attendance.missingDays ? 'red' : 'green'} />
+                      <StatTile label="On Leave" value={attendance.leaveDays} tone="yellow" />
+                      <StatTile label="Avg. Hours" value={attendance.averageDuration || '--'} sub="hh:mm per day" tone="purple" />
                     </div>
                     <div className="mt-4 rounded-lg bg-slate-50 px-4 py-3 text-sm text-slate-700">
                       <span className="font-semibold">Today:</span>{' '}
@@ -543,6 +539,21 @@ export default function StaffDashboard() {
                         ? <>In {formatTime(attendance.todayIn)}{attendance.todayOut ? <> · Last punch {formatTime(attendance.todayOut)}</> : null}</>
                         : 'No punch recorded yet'}
                     </div>
+                    {attendance.missingDates.length ? (
+                      <div className="mt-3 text-sm">
+                        <p className="font-semibold text-slate-700">Punch missing on</p>
+                        <ul className="mt-1 flex flex-wrap gap-2">
+                          {attendance.missingDates.map((date) => (
+                            <li key={date.getTime()} className="rounded-full bg-red-50 px-2.5 py-0.5 text-xs font-medium text-red-700">
+                              {date.toLocaleDateString('en-IN', { weekday: 'short', day: '2-digit', month: 'short' })}
+                            </li>
+                          ))}
+                        </ul>
+                        <p className="mt-2 text-xs text-slate-500">
+                          Working days when the biometric recorded punches but none from you. Sundays, 1st/3rd Saturdays, holidays and leave days are excluded.
+                        </p>
+                      </div>
+                    ) : null}
                   </>
                 )}
               </Panel>
@@ -612,9 +623,9 @@ export default function StaffDashboard() {
                   <Unavailable />
                 ) : (
                   <div className="grid grid-cols-3 gap-3">
-                    <StatTile label="New" value={tickets.newCount} accent="text-blue-700" />
-                    <StatTile label="Pending" value={tickets.pendingCount} accent="text-amber-600" />
-                    <StatTile label="Resolved" value={tickets.resolvedCount} accent="text-green-700" />
+                    <StatTile label="New" value={tickets.newCount} tone="blue" />
+                    <StatTile label="Pending" value={tickets.pendingCount} tone="yellow" />
+                    <StatTile label="Resolved" value={tickets.resolvedCount} tone="green" />
                   </div>
                 )}
               </Panel>
@@ -633,7 +644,7 @@ export default function StaffDashboard() {
                       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
                         {research.map((g) => (
                           <a key={g.label} href={g.path} className="block transition hover:-translate-y-0.5">
-                            <StatTile label={g.label} value={g.count ?? '--'} accent="text-indigo-700" />
+                            <StatTile label={g.label} value={g.count ?? '--'} tone={g.tone} />
                           </a>
                         ))}
                       </div>
@@ -649,8 +660,8 @@ export default function StaffDashboard() {
                   <Unavailable />
                 ) : (
                   <div className="grid grid-cols-2 gap-3">
-                    <StatTile label="Attended" value={activities.attended} accent="text-teal-700" />
-                    <StatTile label="Conducted" value={activities.conducted} accent="text-teal-700" />
+                    <StatTile label="Attended" value={activities.attended} tone="green" />
+                    <StatTile label="Conducted" value={activities.conducted} tone="blue" />
                   </div>
                 )}
               </Panel>

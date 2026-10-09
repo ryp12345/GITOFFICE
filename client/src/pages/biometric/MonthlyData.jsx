@@ -307,14 +307,6 @@ export default function MonthlyDataPage() {
     return `${hours}:${minutes}:${seconds}`;
   };
 
-  const isFirstOrThirdSaturday = (value) => {
-    if (!value) return false;
-    const d = new Date(value);
-    if (Number.isNaN(d.getTime()) || d.getDay() !== 6) return false;
-    const weekOfMonth = Math.floor((d.getDate() - 1) / 7) + 1;
-    return weekOfMonth === 1 || weekOfMonth === 3;
-  };
-
   const isOnLeaveDate = (value) => {
     if (!value) return false;
     const d = new Date(value);
@@ -517,17 +509,14 @@ export default function MonthlyDataPage() {
                             </thead>
                             <tbody>
                               {(missingDates || []).map((d,i)=> {
-                                const highlightSaturday = isFirstOrThirdSaturday(d);
                                 const highlightLeave = isOnLeaveDate(d);
                                 const rowClass = highlightLeave
                                   ? 'bg-emerald-100'
-                                  : (highlightSaturday
-                                    ? 'bg-amber-100'
-                                    : (i % 2 === 0 ? 'bg-white' : 'bg-slate-50'));
+                                  : (i % 2 === 0 ? 'bg-white' : 'bg-slate-50');
                                 return (
                                   <tr key={i} className={rowClass}>
-                                    <td className={`px-3 py-2 border-b ${highlightLeave ? 'font-semibold text-emerald-900' : (highlightSaturday ? 'font-semibold text-amber-900' : '')}`}>
-                                      {formatDate(d)}{highlightLeave ? ' (On Leave)' : (highlightSaturday ? ' (1st/3rd Sat)' : '')}
+                                    <td className={`px-3 py-2 border-b ${highlightLeave ? 'font-semibold text-emerald-900' : ''}`}>
+                                      {formatDate(d)}{highlightLeave ? ' (On Leave)' : ''}
                                     </td>
                                   </tr>
                                 );
