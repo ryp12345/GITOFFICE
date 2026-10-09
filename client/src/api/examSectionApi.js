@@ -1,7 +1,8 @@
 import api from './axios';
 
-export const getExamSectionDashboard = async () => {
-  const res = await api.get('/exam-section/dashboard');
+// params.academic_year: 'YYYY-YYYY' to filter the whole dashboard; omit for all years.
+export const getExamSectionDashboard = async (params = {}) => {
+  const res = await api.get('/exam-section/dashboard', { params });
   return res.data;
 };
 

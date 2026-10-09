@@ -2,7 +2,7 @@ const examSectionDashboardService = require('../../services/exam-section/dashboa
 
 async function getDashboard(req, res, next) {
   try {
-    const data = await examSectionDashboardService.getExamSectionDashboard();
+    const data = await examSectionDashboardService.getExamSectionDashboard({ academicYear: req.query.academic_year });
     res.json({ success: true, data });
   } catch (error) {
     next(error);
