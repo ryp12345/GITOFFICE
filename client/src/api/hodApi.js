@@ -10,6 +10,13 @@ export const getDepartmentOverview = async (token) => {
   });
 };
 
+// Department research / professional-activity totals, events and notices.
+export const getHodDashboard = async (token) => {
+  return axios.get('/hod/dashboard', {
+    headers: tokenHeaders(token),
+  });
+};
+
 export const getMyStaff = async (token) => {
   return axios.get('/hod/my-staff', {
     headers: tokenHeaders(token),

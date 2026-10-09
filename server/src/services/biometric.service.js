@@ -241,20 +241,33 @@ async function getDailyBiometric(dateStr, departmentId = null) {
   // Prepare present codes set from entry_exit.employeePunchLogs
   const presentCodes = new Set(Object.keys(entry_exit.employeePunchLogs || {}).map((c) => String(c)));
 
-  // Compute missing and leave buckets by querying Postgres for eligible staff not present
+  // Compute missing and leave buckets by querying Postgres for eligible staff not present.
+  // missingList carries the same rows (scoped to departmentId when given) for the
+  // "Missing Biometric" popup, so the list always matches the totals.
   let leaveLogsByDept = {};
   let missingLogsByDept = {};
   let TotalLeave = 0;
   let Totalmissing = 0;
+  const missingList = [];
+  let missingListFailed = false;
 
   try {
     const assocNames = ['Confirmed', 'Probationary', 'Contractual', 'Promotional Probationary', 'Temporary (non teaching)'];
-    // If departmentId provided, only consider eligible staff from that department
-    let sql = `WITH eligible_staff AS (
-      SELECT s.id, s.employeecode::text AS employeecode,
+    const sql = `
+      SELECT s.employeecode::text AS employeecode,
+        TRIM(CONCAT_WS(' ', s.fname, s.mname, s.lname)) AS full_name,
         (SELECT STRING_AGG(d.dept_shortname, ', ') FROM department_staff ds JOIN departments d ON d.id = ds.department_id WHERE ds.staff_id = s.id AND ds.status = 'active') AS dept_shortnames,
+        (
+          SELECT l.shortname
+            FROM leave_staff_applications lsa
+            LEFT JOIN leaves l ON l.id = lsa.leave_id
+           WHERE lsa.staff_id = s.id AND lsa.start <= $1 AND lsa.end >= $1
+             AND LOWER(COALESCE(lsa.appl_status, '')) NOT IN ('rejected', 'cancelled')
+           ORDER BY lsa.id DESC
+           LIMIT 1
+        ) AS leave_shortname,
         EXISTS (
-          SELECT 1 FROM leave_staff_applications lsa WHERE lsa.staff_id = s.id AND lsa.start <= $1 AND lsa.end >= $1 AND lsa.appl_status != 'rejected'
+          SELECT 1 FROM leave_staff_applications lsa WHERE lsa.staff_id = s.id AND lsa.start <= $1 AND lsa.end >= $1 AND LOWER(COALESCE(lsa.appl_status, '')) NOT IN ('rejected', 'cancelled')
         ) AS on_leave
       FROM staff s
       WHERE s.id IN (
@@ -262,34 +275,14 @@ async function getDailyBiometric(dateStr, departmentId = null) {
           SELECT id FROM associations WHERE asso_name = ANY($2::text[])
         )
       )
-    )
-    SELECT employeecode, dept_shortnames, on_leave FROM eligible_staff WHERE COALESCE(employeecode, '') <> ''`;
-    const params = [dateParam, assocNames];
-    if (departmentId) {
-      // restrict eligible_staff to department
-      sql = `WITH eligible_staff AS (
-        SELECT s.id, s.employeecode::text AS employeecode,
-          (SELECT STRING_AGG(d.dept_shortname, ', ') FROM department_staff ds JOIN departments d ON d.id = ds.department_id WHERE ds.staff_id = s.id AND ds.status = 'active') AS dept_shortnames,
-          EXISTS (
-            SELECT 1 FROM leave_staff_applications lsa WHERE lsa.staff_id = s.id AND lsa.start <= $1 AND lsa.end >= $1 AND lsa.appl_status != 'rejected'
-          ) AS on_leave
-        FROM staff s
-        WHERE s.id IN (
-          SELECT staff_id FROM department_staff WHERE department_id = $3 AND LOWER(COALESCE(status,'active')) = 'active'
-        )
-        AND s.id IN (
-          SELECT staff_id FROM association_staff WHERE status = 'active' AND association_id IN (
-            SELECT id FROM associations WHERE asso_name = ANY($2::text[])
-          )
-        )
-      )
-      SELECT employeecode, dept_shortnames, on_leave FROM eligible_staff WHERE COALESCE(employeecode, '') <> ''`;
-      params.push(departmentId);
-    }
+      AND ($3::bigint IS NULL OR s.id IN (
+        SELECT staff_id FROM department_staff WHERE department_id = $3 AND LOWER(COALESCE(status, 'active')) = 'active'
+      ))
+      AND COALESCE(s.employeecode::text, '') <> ''
+      ORDER BY dept_shortnames, full_name`;
 
-    const res = await pgPool.query(sql, params);
-    const staffRows = res.rows || [];
-    for (const r of staffRows) {
+    const res = await pgPool.query(sql, [dateParam, assocNames, departmentId || null]);
+    for (const r of res.rows || []) {
       const code = String(r.employeecode || '').trim();
       if (!code || presentCodes.has(code)) continue;
       const dept = r.dept_shortnames || 'Unknown';
@@ -300,14 +293,31 @@ async function getDailyBiometric(dateStr, departmentId = null) {
         Totalmissing++;
         missingLogsByDept[dept] = (missingLogsByDept[dept] || 0) + 1;
       }
+      missingList.push({
+        EmployeeCode: code,
+        full_name: r.full_name,
+        dept_shortname: dept,
+        leave_staff_applications: r.on_leave ? [{ shortname: r.leave_shortname || 'Leave' }] : [],
+      });
     }
   } catch (e) {
+    missingListFailed = true;
     console.warn('Failed to compute missing/leave buckets from Postgres', e && e.message);
   }
 
   const Totalpresent = (combinedData || []).length;
 
-  return { combinedData, entry_exit, entryLogsByDept, leaveLogsByDept, missingLogsByDept, Totalpresent, TotalLeave, Totalmissing };
+  return {
+    combinedData,
+    entry_exit,
+    entryLogsByDept,
+    leaveLogsByDept,
+    missingLogsByDept,
+    Totalpresent,
+    TotalLeave,
+    Totalmissing,
+    missingList: missingListFailed ? null : missingList,
+  };
 }
 
 module.exports = { getDailyBiometric };

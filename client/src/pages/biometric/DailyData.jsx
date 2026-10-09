@@ -332,112 +332,35 @@ export default function DailyDataPage() {
 
   // Returns { list, failed }. failed is true only when every source errored, so the caller can
   // tell "nobody is missing" apart from "the missing list could not be loaded".
+  // The server's daily endpoint returns missingList: eligible staff with no punch on the date
+  // (on-leave rows carry their leave type), scoped to department_id for an HOD, so the list
+  // always matches the Leave / Missing totals.
   const fetchMissingForDate = async (selectedDate, options = {}) => {
     const { updateState = true } = options;
-    let list = [];
-    let endpointsFailed = false;
-    let fallbackFailed = false;
-    try {
-      const missingParams = { date: selectedDate };
-      if (user && isRoleMatch(user.role, ROLE_HOD) && departmentId) missingParams.department_id = departmentId;
-      const res = await api.get(`${endpointPrefix}/missing`, { params: missingParams });
-      const data = res?.data || [];
-      list = Array.isArray(data) ? data : (data.data || []);
-    } catch (e) {
-      try {
-        const missingParams2 = { date: selectedDate };
-        if (user && isRoleMatch(user.role, ROLE_HOD) && departmentId) missingParams2.department_id = departmentId;
-        const res2 = await api.get(`${endpointPrefix}/missing_logs`, { params: missingParams2 });
-        const data2 = res2?.data || [];
-        list = Array.isArray(data2) ? data2 : (data2.data || []);
-      } catch (err) {
-        reportError(err, { source: 'DailyData:missingEndpoints' });
-        list = [];
-        endpointsFailed = true;
-      }
-    }
+    let finalList = [];
+    let failed = false;
 
-    // If the project provides a specific missing-log URL via env,
-    const missingUrl = import.meta.env.VITE_BIOMETRIC_MISSING_URL;
-    if ((!list || list.length === 0) && missingUrl) {
+    // Never show college-wide data to an HOD: scope by department, else by the department's staff codes.
+    const hodScopedByCodes = isHod && !departmentId && hodEmployeeCodes.size > 0;
+    if (isHod && !departmentId && !hodScopedByCodes) {
+      failed = true;
+    } else {
       try {
-        const resp = await fetch(`${missingUrl}${missingUrl.includes('?') ? '&' : '?'}date=${encodeURIComponent(selectedDate)}`, { credentials: 'include' });
-        if (resp.ok) {
-          const json = await resp.json();
-          const arr = Array.isArray(json) ? json : (json.data || []);
-          if (arr && arr.length > 0) list = arr;
+        const params = { date: selectedDate };
+        if (isHod && departmentId) params.department_id = departmentId;
+        const res = await api.get(`${endpointPrefix}/daily`, { params });
+        const list = res?.data?.missingList;
+        if (Array.isArray(list)) {
+          finalList = hodScopedByCodes ? list.filter((r) => hodEmployeeCodes.has(String(r.EmployeeCode))) : list;
+        } else {
+          failed = true;
         }
       } catch (e) {
-        // Optional extra source; the fallback below still runs
-        reportError(e, { source: 'DailyData:missingEnvUrl' });
+        reportError(e, { source: 'DailyData:missingList' });
+        failed = true;
       }
     }
 
-    // If API returned nothing, try to compute missing list client-side using available server APIs
-    if ((!list || list.length === 0)) {
-      try {
-        // Get daily biometric combinedData (employees who have logs)
-        const dailyParams = { date: selectedDate };
-        if (user && isRoleMatch(user.role, ROLE_HOD) && departmentId) dailyParams.department_id = departmentId;
-        const dailyResp = await api.get(`${endpointPrefix}/daily`, { params: dailyParams });
-        const dailyData = dailyResp?.data || {};
-        const combined = Array.isArray(dailyData.combinedData) ? dailyData.combinedData : (dailyData.data && Array.isArray(dailyData.data.combinedData) ? dailyData.data.combinedData : []);
-
-        // Get staff list from server
-        const staffResp = await api.get('/staff');
-        const staffRows = (staffResp?.data && staffResp.data.data) ? staffResp.data.data : (Array.isArray(staffResp?.data) ? staffResp.data : []);
-
-        const presentCodes = new Set((combined || []).map(c => String(c.EmployeeCode).trim()));
-
-        const resolveDept = (s) => {
-          if (!s) return '';
-          if (s.dept_shortname) return s.dept_shortname;
-          if (s.deptName) return s.deptName;
-          if (s.DepartmentName) return s.DepartmentName;
-          if (s.department_name) return s.department_name;
-          // Prefer activedepartments first (first item = most recent/active)
-          if (Array.isArray(s.activedepartments) && s.activedepartments.length) {
-            const d = s.activedepartments[0];
-            return d?.dept_shortname || d?.dept_name || '';
-          }
-          // Fallback to departments array: pick one active or first
-          if (Array.isArray(s.departments) && s.departments.length) {
-            const active = s.departments.find(dd => dd.status === 'active') || s.departments[0];
-            return active?.dept_shortname || active?.dept_name || '';
-          }
-          return '';
-        };
-
-        const missingFromStaff = (staffRows || []).filter(s => {
-          const code = String(s.employeecode || s.EmployeeCode || s.EmployeeCode || '').trim();
-          return code && !presentCodes.has(code);
-        }).map(s => ({
-          EmployeeCode: String(s.employeecode || s.EmployeeCode || s.EmployeeCode || '').trim(),
-          full_name: s.fname ? `${s.fname} ${s.mname || ''} ${s.lname || ''}`.trim() : (s.full_name || `${s.fname || ''} ${s.lname || ''}`.trim()),
-          dept_shortname: resolveDept(s),
-          leave_staff_applications: s.leave_staff_applications || []
-        }));
-
-        if (missingFromStaff.length > 0) list = missingFromStaff;
-        else if (Array.isArray(attendance) && attendance.length > 0) {
-          // final fallback: derive missing from attendance rows (rows without entryLogs)
-          list = attendance
-            .filter(r => !r.entryLogs)
-            .map(r => ({
-              EmployeeCode: String(r.EmployeeCode || r.employeeCode || r.EmployeeCode || '').trim(),
-              full_name: r.EmployeeName || r.full_name || r.employeeName || '',
-              dept_shortname: r.DepartmentName || r.department || '',
-              leave_staff_applications: []
-            }));
-        }
-      } catch (e) {
-        reportError(e, { source: 'DailyData:missingFallback' });
-        fallbackFailed = true;
-      }
-    }
-
-    const finalList = list || [];
-    const failed = endpointsFailed && fallbackFailed;
     if (updateState) {
       setMissingList(finalList);
       setMissingError(failed ? 'The missing biometric list could not be loaded. Please try again.' : '');

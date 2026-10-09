@@ -7,8 +7,16 @@ const hodLeaveApplicationController = require('../controllers/hod/leaveApplicati
 const associateProfessorController = require('../controllers/hod/associateProfessor.controller');
 const professorController = require('../controllers/hod/professor.controller');
 const hodActivityReportsController = require('../controllers/hod/activityReports.controller');
+const hodDashboardController = require('../controllers/hod/dashboard.controller');
 
 const router = Router();
+
+router.get(
+  '/dashboard',
+  authMiddleware,
+  roleMiddleware('Head of Department', 'hod'),
+  hodDashboardController.getDashboard
+);
 
 // Professional Activity and Research menus: read-only department listings.
 router.get(
