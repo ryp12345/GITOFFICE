@@ -59,7 +59,7 @@ export function TodayTiles({ summary, loading, links }) {
 export function ServiceCalendarPanel({ summary, loading, links }) {
   const events = summary?.service_events;
   return (
-    <Panel title="Service Calendar" link={links.staff} linkLabel="staff">
+    <Panel title="Employee Events & Milestones" link={links.staff} linkLabel="staff">
       {loading ? <Muted>Loading…</Muted> : !events ? <Muted>Data could not be loaded.</Muted> : (
         <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
           <div className="min-w-0">
