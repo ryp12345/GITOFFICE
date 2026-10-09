@@ -126,4 +126,6 @@ async function getDashboard(user) {
 
 module.exports = {
   getDashboard,
+  getAttendanceSummary,
+  toYmd,
 };

@@ -44,8 +44,22 @@ function expectedOnBiometricSql(alias = 's') {
   )`;
 }
 
+// SQL boolean condition: the staff row has no active exit association (resigned, retired, ...),
+// i.e. they still belong to the institute even if their employee type was never closed.
+function notExitedSql(alias = 's') {
+  return `NOT EXISTS (
+      SELECT 1
+        FROM association_staff ast_e
+        JOIN associations a_e ON a_e.id = ast_e.association_id
+       WHERE ast_e.staff_id = ${alias}.id
+         AND LOWER(COALESCE(ast_e.status, '')) = 'active'
+         AND LOWER(TRIM(a_e.asso_name)) IN (${sqlList(EXIT_ASSOCIATIONS)})
+    )`;
+}
+
 module.exports = {
   WORKING_ASSOCIATIONS,
   EXIT_ASSOCIATIONS,
   expectedOnBiometricSql,
+  notExitedSql,
 };

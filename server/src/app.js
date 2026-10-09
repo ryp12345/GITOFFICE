@@ -99,6 +99,9 @@ app.use('/api/tickets', ticketRoutes);
 const examSectionRoutes = require('./routes/exam-section.routes');
 app.use('/api/exam-section', examSectionRoutes);
 
+const establishmentRoutes = require('./routes/establishment.routes');
+app.use('/api/establishment', establishmentRoutes);
+
 const professionalActivityRoutes = require('./routes/professionalActivity.routes');
 app.use('/api/professional-activities', professionalActivityRoutes);
 

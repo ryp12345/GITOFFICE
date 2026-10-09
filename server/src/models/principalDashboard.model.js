@@ -1,5 +1,5 @@
 const { pool } = require('../config/db');
-const { expectedOnBiometricSql } = require('./biometricEligibility');
+const { expectedOnBiometricSql, notExitedSql } = require('./biometricEligibility');
 
 // Staff with an active employee type, each placed in their latest active department and designation.
 const ACTIVE_STAFF_CTE = `
@@ -27,6 +27,7 @@ const ACTIVE_STAFF_CTE = `
        WHERE dst.staff_id = s.id AND LOWER(COALESCE(dst.status, 'active')) = 'active'
        ORDER BY dst.id DESC LIMIT 1
     ) des ON true
+    WHERE ${notExitedSql('s')}
   )`;
 
 async function getStaffSummary() {
@@ -148,6 +149,7 @@ async function getRecruitmentSummary() {
 }
 
 module.exports = {
+  ACTIVE_STAFF_CTE,
   getStaffSummary,
   getOpenLeaveApplications,
   getLeaveBetween,
