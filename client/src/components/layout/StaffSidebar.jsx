@@ -60,10 +60,6 @@ const TEACHING_ONLY_LINKS = [
   }
 ];
 
-const NON_TEACHING_ONLY_LINKS = [
-  { name: 'Tax Investment', teachingPath: '/teaching/tax-investment', nonTeachingPath: '/nonteaching/tax-investment', icon: '🧮' }
-];
-
 function getPath(item, isTeaching) {
   return isTeaching ? item.teachingPath : item.nonTeachingPath;
 }
