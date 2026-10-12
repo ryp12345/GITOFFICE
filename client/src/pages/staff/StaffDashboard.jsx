@@ -7,6 +7,7 @@ import { getMyLeaveEntitlements } from '../../api/leaveEntitlementApi';
 import { getTicketDashboard } from '../../api/ticketApi';
 import { getResearchRecords } from '../../api/researchApi';
 import { getProfessionalActivities } from '../../api/professionalActivityApi';
+import NoticeFeedPanel from '../../components/dashboard/NoticeFeedPanel';
 import { Chart, ArcElement, Tooltip, Legend } from 'chart.js';
 import React from 'react';
 
@@ -493,6 +494,11 @@ export default function StaffDashboard() {
                 sub={leaveSummary ? `${leaveSummary.approvedDaysThisYear} day${leaveSummary.approvedDaysThisYear === 1 ? '' : 's'} approved this year` : null}
                 tone="yellow"
               />
+            </div>
+
+            {/* Notices addressed to this staff member's departments and staff type */}
+            <div className="mt-8">
+              <NoticeFeedPanel />
             </div>
 
             {/* Leave balance pie & attendance */}

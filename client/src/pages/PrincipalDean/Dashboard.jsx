@@ -7,6 +7,7 @@ import { useAuth } from '../../context/AuthContext';
 import { getPrincipalDashboard } from '../../api/principalApi';
 import { isRoleMatch, ROLE_DEAN_ADMIN } from '../../utils/role';
 import { getErrorMessage } from '../../utils/errors';
+import NoticeFeedPanel from '../../components/dashboard/NoticeFeedPanel';
 
 // Same tinted stat-card style as the Establishment / Registrar / HOD dashboards.
 // Full class names are listed so Tailwind keeps them in the build.
@@ -401,6 +402,8 @@ export default function PrincipalDeanDashboard() {
                 />
               </div>
             </Panel>
+
+            <NoticeFeedPanel />
           </div>
         </main>
       </div>

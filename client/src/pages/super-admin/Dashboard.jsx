@@ -14,6 +14,7 @@ import {
 } from '../../components/dashboard/InstituteSections';
 import StaffRecordsPanel from '../../components/dashboard/StaffRecordsPanel';
 import DailyAttendanceTable from '../../components/dashboard/DailyAttendanceTable';
+import NoticeFeedPanel from '../../components/dashboard/NoticeFeedPanel';
 
 const LINKS = {
   staff: '/super-admin/staff',
@@ -149,6 +150,8 @@ export default function SuperAdminDashboard() {
             <StaffCompositionCharts summary={summary} loading={loading} links={LINKS} extra={ticketsPanel} />
 
             <DailyAttendanceTable />
+
+            <NoticeFeedPanel />
           </div>
         </main>
       </div>

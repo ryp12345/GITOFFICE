@@ -77,6 +77,8 @@ const deanRoutes = require('./routes/dean.routes');
 app.use('/api/dean', deanRoutes);
 const principalRoutes = require('./routes/principal.routes');
 app.use('/api/principal', principalRoutes);
+const principalOfficeRoutes = require('./routes/principalOffice.routes');
+app.use('/api/principal-office', principalOfficeRoutes);
 const jobsRoutes = require('./routes/jobs.routes');
 app.use('/api/jobs', jobsRoutes);
 
@@ -127,6 +129,10 @@ app.use('/api/hod/fastrack', hodFastrackRoutes);
 
 const hodCoordinatorRoutes = require('./routes/hodCoordinator.routes');
 app.use('/api/hod', hodCoordinatorRoutes);
+
+// Notice board management (raise / edit / delete); who may do what is in policies/notice.policy.js
+const noticeRoutes = require('./routes/notice.routes');
+app.use('/api/notices', noticeRoutes);
 
 app.use(errorMiddleware);
 

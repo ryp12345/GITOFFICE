@@ -1,6 +1,7 @@
 const { findDepartmentByHodUserId } = require('../../models/hodDepartmentOverview.model');
 const reportsModel = require('../../models/departmentActivityReports.model');
 const announcementsModel = require('../../models/announcements.model');
+const noticeModel = require('../../models/notice.model');
 
 // Department record totals shown on the HOD dashboard (same counting as the e-Gov dashboard).
 const DASHBOARD_REPORTS = [
@@ -32,7 +33,8 @@ async function getDashboard(req, res, next) {
     const [totals, events, notices] = await Promise.all([
       reportsModel.countDepartmentRecords(DASHBOARD_REPORTS, department.id),
       announcementsModel.listEvents(),
-      announcementsModel.listNotices(),
+      // Laravel's HOD dashboard showed only notices addressed to the HOD's own department.
+      noticeModel.listNoticeFeed({ departmentIds: [Number(department.id)] }),
     ]);
 
     res.json({ success: true, data: { department, totals, events, notices } });

@@ -111,12 +111,14 @@ export function EventsPanel({ events, loading }) {
   );
 }
 
-export function NoticesPanel({ notices, loading }) {
+export function NoticesPanel({ notices, loading, error = '' }) {
   return (
     <div className="flex max-h-[450px] flex-col rounded-xl border border-slate-200 bg-white shadow-sm">
       <h3 className="border-b border-slate-200 px-5 py-4 text-lg font-semibold text-slate-900">Notice Board</h3>
       <ul className="flex-1 space-y-5 overflow-y-auto px-5 py-4">
-        {!loading && notices.length === 0 && <li className="text-sm text-slate-500">No notices.</li>}
+        {loading && <li className="text-sm text-slate-500">Loading...</li>}
+        {!loading && error && <li className="text-sm text-red-600">{error}</li>}
+        {!loading && !error && notices.length === 0 && <li className="text-sm text-slate-500">No notices.</li>}
         {notices.map((notice) => (
           <li key={notice.id} className="flex gap-3">
             <div className="h-fit shrink-0 rounded bg-blue-100 px-2 py-1.5 text-center text-xs font-medium text-blue-700">

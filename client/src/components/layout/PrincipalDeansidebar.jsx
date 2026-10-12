@@ -20,6 +20,7 @@ export default function PrincipalDeansidebar() {
   const links = [
     { name: 'Dashboard', path: roleBasePath, icon: '📊' },
     { name: 'Staff', path: `${roleBasePath}/staff`, icon: '👥' },
+    { name: 'Notice Board', path: `${roleBasePath}/notices`, icon: '📢' },
     {
       name: 'Leave Management',
       path: '/leave-management',

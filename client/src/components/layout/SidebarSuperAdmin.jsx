@@ -14,7 +14,7 @@ export default function SidebarSuperAdmin() {
     { name: 'Staff', path: '/super-admin/staff', icon: '👥' },
     { name: 'Tickets', path: '/super-admin/tickets', icon: '🎫' },
     // { name: 'Events', path: '/super-admin/events', icon: '📅' },
-    // { name: 'Notice', path: '/super-admin/notice', icon: '📢' },
+    { name: 'Notice Board', path: '/super-admin/notices', icon: '📢' },
     { name: 'Users', path: '/super-admin/users', icon: '👤' },
      {
       name: 'Leave Management',

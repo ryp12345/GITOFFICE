@@ -48,6 +48,9 @@ import EstablishementLeaveList from '../pages/establishment/leave_management/Est
 import HolidayRHListPage from '../pages/establishment/leave_management/HolidayRHList';
 import ProtectedRoute from './ProtectedRoute';
 import RoleRoute from './RoleRoute';
+import NoticeManagement from '../pages/notices/NoticeManagement';
+import PrincipalOfficeDashboard from '../pages/principal-office/Dashboard';
+import SidebarPrincipalOffice from '../components/layout/SidebarPrincipalOffice';
 import { useAuth } from '../context/AuthContext';
 import { getDashboardPathByRole, isRoleMatch, ROLE_SUPER_ADMIN } from '../utils/role';
 import DepartmentsPage from '../pages/establishment/Departments';
@@ -195,6 +198,7 @@ export default function AppRoutes() {
             <Route path="/super-admin/biometric/daily" element={<DailyDataPage />} />
             <Route path="/super-admin/biometric/monthly" element={<MonthlyDataPage />} />
             <Route path="/super-admin/biometric/muster" element={<MusterPage />} />
+            <Route path="/super-admin/notices" element={<NoticeManagement SidebarComponent={SidebarSuperAdmin} />} />
 
           </Route>
           <Route element={<RoleRoute role="Establishment" />}>
@@ -252,6 +256,7 @@ export default function AppRoutes() {
 
 
           <Route path="/hod/holidays" element={<HolidayRHListPage SidebarComponent={SidebarHOD} />} />
+          <Route path="/hod/notices" element={<NoticeManagement SidebarComponent={SidebarHOD} />} />
 
           {/* HOD biometric routes (sidebar uses /biometric/* paths) */}
           <Route path="/biometric/daily" element={<DailyDataPage />} />
@@ -300,6 +305,7 @@ export default function AppRoutes() {
           <Route path="/registrar/leave-entitlement" element={<HODLeaveEntitlementPage />} />
           <Route path="/registrar/leave-application" element={<LeaveApplicationPage />} />
           <Route path="/registrar/holidays" element={<HolidayRHListPage SidebarComponent={SidebarRegistrar} />} />
+          <Route path="/registrar/notices" element={<NoticeManagement SidebarComponent={SidebarRegistrar} />} />
           <Route path="/registrar/biometric/daily" element={<DailyDataPage />} />
           <Route path="/registrar/biometric/monthly" element={<MonthlyDataPage />} />
           <Route path="/registrar/biometric/muster" element={<MusterPage />} />
@@ -312,6 +318,7 @@ export default function AppRoutes() {
           <Route path="/principal/leave-entitlement" element={<PrincipalDeanLeaveEntitlementPage />} />
           <Route path="/principal/leave-application" element={<LeaveApplicationPage />} />
           <Route path="/principal/leave-list" element={<LeaveListPage />} />
+          <Route path="/principal/notices" element={<NoticeManagement SidebarComponent={PrincipalDeansidebar} />} />
           <Route path="/principal/leave-management/holiday-rh" element={<HolidayRHListPage />} />
           <Route path="/principal/staff" element={<StaffPage readOnly SidebarComponent={PrincipalDeansidebar} viewBasePath="/principal/staff" />} />
           <Route path="/principal/staff/:id" element={<StaffViewPage readOnly SidebarComponent={PrincipalDeansidebar} listPath="/principal/staff" />} />
@@ -345,6 +352,7 @@ export default function AppRoutes() {
           <Route path="/dean_admin/leave-entitlement" element={<PrincipalDeanLeaveEntitlementPage />} />
           <Route path="/dean_admin/leave-application" element={<LeaveApplicationPage />} />
           <Route path="/dean_admin/leave-list" element={<LeaveListPage />} />
+          <Route path="/dean_admin/notices" element={<NoticeManagement SidebarComponent={PrincipalDeansidebar} />} />
           <Route path="/dean_admin/holidays" element={<HolidayRHListPage />} />
           <Route path="/dean_admin/leave-management/holiday-rh" element={<HolidayRHListPage />} />
           <Route path="/dean_admin/staff" element={<StaffPage readOnly SidebarComponent={PrincipalDeansidebar} viewBasePath="/dean_admin/staff" />} />
@@ -406,6 +414,10 @@ export default function AppRoutes() {
           <Route path="/nonteaching/leave-application" element={<StaffLeavesPage />} />
           <Route path="/nonteaching/biometric/daily" element={<DailyDataPage />} />
           <Route path="/nonteaching/biometric/monthly" element={<MonthlyDataPage />} />
+        </Route>
+        <Route element={<RoleRoute role="principal_office" />}>
+          <Route path="/principal-office" element={<PrincipalOfficeDashboard />} />
+          <Route path="/principal-office/notices" element={<NoticeManagement SidebarComponent={SidebarPrincipalOffice} />} />
         </Route>
         <Route element={<RoleRoute role="Exam_section" />}>
           <Route path="/exam-section" element={<ExamSectionDashboard />} />

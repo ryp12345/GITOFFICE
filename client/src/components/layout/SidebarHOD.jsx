@@ -10,6 +10,7 @@ export default function SidebarHOD() {
     { name: 'Dashboard', path: '/hod', icon: '📊' },
     { name: 'Department Overview', path: '/hod/department-overview', icon: '🏢' },
     { name: 'My Staff', path: '/hod/my-staff', icon: '👥' },
+    { name: 'Notice Board', path: '/hod/notices', icon: '📢' },
     {
       name: 'Leave Management',
       icon: '🌿',

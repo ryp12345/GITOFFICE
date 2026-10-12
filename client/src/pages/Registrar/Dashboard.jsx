@@ -7,6 +7,7 @@ import { getDesignations } from '../../api/designationApi';
 import { getInstitutions } from '../../api/institutionApi';
 import { getAssociations } from '../../api/associationApi';
 import { getQualifications } from '../../api/qualificationApi';
+import NoticeFeedPanel from '../../components/dashboard/NoticeFeedPanel';
 
 export default function RegistrarDashboard() {
   const [attendance, setAttendance] = useState([]);
@@ -260,6 +261,10 @@ export default function RegistrarDashboard() {
                 <span className="text-3xl font-bold text-purple-700">{loading || stats.qualifications === null ? '...' : stats.qualifications}</span>
                 <span className="mt-2 text-purple-900">Qualifications</span>
               </div>
+            </div>
+
+            <div className="mt-8">
+              <NoticeFeedPanel />
             </div>
 
             <div className="mt-8">

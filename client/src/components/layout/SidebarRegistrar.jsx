@@ -11,6 +11,7 @@ export default function SidebarRegistrar() {
   const links = [
     { name: 'Dashboard', path: '/registrar', icon: '📊' },
     { name: 'My Staff', path: '/registrar/staff', icon: '👥' },
+    { name: 'Notice Board', path: '/registrar/notices', icon: '📢' },
     {
       name: 'Leave Management',
       icon: '🌿',
