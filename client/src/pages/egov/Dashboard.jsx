@@ -9,7 +9,7 @@ import { useAuth } from '../../context/AuthContext';
 import { getEgovDashboard } from '../../api/egovApi';
 import { getErrorMessage } from '../../utils/errors';
 
-// Mirrors resources/views/egov/dashboard.blade.php: a department welcome, the record totals
+// Mirrors resources/views///egov/dashboard.blade.php: a department welcome, the record totals
 // per menu, Upcoming Events and the Notice Board. Laravel's "Overview" chart rendered fixed
 // sample numbers from the theme's index-8.js; this one plots the department's real totals.
 
