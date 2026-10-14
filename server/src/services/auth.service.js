@@ -1,3 +1,4 @@
+const crypto = require('crypto');
 const userModel = require('../models/user.model');
 const { hashPassword, comparePassword } = require('../utils/hash');
 const {
@@ -37,16 +38,24 @@ function buildSafeUser(user, impersonator = null) {
   };
 }
 
+// Ties a refresh token to the password it was issued under, so changing or resetting the password
+// ends every other session at its next refresh (Laravel ends them with the server-side session).
+function passwordVersion(passwordHash) {
+  if (!passwordHash) return null;
+  return crypto.createHash('sha256').update(String(passwordHash)).digest('hex').slice(0, 16);
+}
+
 function issueSession(user, options = {}) {
   const impersonator = buildImpersonatorContext(options);
-  const tokenPayload = { id: user.id, role: user.role };
+  const tokenPayload = { id: user.id, role: user.role, staff_id: user.staff_id || null };
 
   if (impersonator) {
     tokenPayload.impersonator = impersonator;
   }
 
+  const pv = passwordVersion(user.password);
   const token = signAccessToken(tokenPayload);
-  const refreshToken = signRefreshToken(tokenPayload);
+  const refreshToken = signRefreshToken(pv ? { ...tokenPayload, pv } : tokenPayload);
   const safeUser = buildSafeUser(user, impersonator);
 
   return { token, refreshToken, user: safeUser };
@@ -61,10 +70,12 @@ async function register(payload) {
   }
 
   const passwordHash = await hashPassword(payload.password);
+  // Never take the role from the request: self-registration must not grant Establishment or
+  // Super Admin access. Laravel's User model does not mass-assign role either.
   return userModel.create({
     email: payload.email,
     passwordHash,
-    role: payload.role || 'user'
+    role: 'user'
   });
 }
 
@@ -97,9 +108,16 @@ async function refreshSession(payload) {
     throw err;
   }
 
-  const user = await userModel.findById(decoded.id);
+  const baseUser = await userModel.findById(decoded.id);
+  const user = baseUser ? await userModel.findByEmail(baseUser.email) : null;
   if (!user) {
     const err = new Error('User not found');
+    err.statusCode = 401;
+    throw err;
+  }
+
+  if (decoded.pv && decoded.pv !== passwordVersion(user.password)) {
+    const err = new Error('Session ended because the password was changed. Please log in again.');
     err.statusCode = 401;
     throw err;
   }

@@ -88,6 +88,12 @@ async function changeOwnPassword(userId, currentPassword, newPassword) {
     throw err;
   }
 
+  if (currentPassword === newPassword) {
+    const err = new Error('New password cannot be same as your current password.');
+    err.statusCode = 400;
+    throw err;
+  }
+
   await authService.resetPassword(userId, newPassword);
 }
 

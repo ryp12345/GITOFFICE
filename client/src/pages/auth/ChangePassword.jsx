@@ -8,7 +8,7 @@ import { getDashboardPathByRole } from '../../utils/role';
 
 export default function ChangePassword() {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const [form, setForm] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
   const [showPassword, setShowPassword] = useState({
     currentPassword: false,
@@ -92,8 +92,14 @@ export default function ChangePassword() {
         currentPassword: form.currentPassword,
         newPassword: form.newPassword
       });
-      setSuccess('Password changed successfully. You can use your new password from now on.');
+      // As in Laravel, sign in again with the new password. The server also stops refreshing
+      // sessions issued under the old password, so staying signed in here would fail later anyway.
       setForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
+      logout();
+      navigate('/login', {
+        replace: true,
+        state: { message: 'Password changed successfully. Please log in with your new password.' }
+      });
     } catch (err) {
       const apiMessage = err?.response?.data?.message;
       if (typeof apiMessage === 'string' && apiMessage.toLowerCase().includes('current password')) {

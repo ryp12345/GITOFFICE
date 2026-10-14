@@ -12,6 +12,11 @@ const staffSocietyLoanRoutes = require('./staffSocietyLoan.routes');
 const staffTaxRegimeRoutes = require('./staffTaxRegime.routes');
 const staffLicRoutes = require('./staffLic.routes');
 const staffDesignationPayscaleRoutes = require('./staffDesignationPayscale.routes');
+const { authMiddleware } = require('../middlewares/auth.middleware');
+const { staffRecordGuard } = require('../middlewares/staffAccess.middleware');
+
+// Applies to every route below, including the mounted staff* sub-routers.
+router.use(authMiddleware, staffRecordGuard);
 
 router.get('/checkemailid', staffController.checkEmail);
 router.get('/employee/designations', staffController.getDesignationsByEmployeeType);

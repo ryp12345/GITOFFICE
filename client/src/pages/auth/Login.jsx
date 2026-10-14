@@ -1,12 +1,25 @@
 import { useEffect, useRef, useState } from 'react';
-import { Link, Navigate, useNavigate } from 'react-router-dom';
+import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { getDashboardPathByRole } from '../../utils/role';
 import { getErrorMessage } from '../../utils/errors';
 
+const NO_PORTAL_MESSAGE = 'Your account does not have a portal assigned. Please contact the administrator.';
+
+// Only same-site paths, so ?next= cannot send users to another site.
+function isSafeRedirect(path) {
+  return typeof path === 'string'
+    && path.startsWith('/')
+    && !path.startsWith('//')
+    && !path.startsWith('/\\')
+    && !path.startsWith('/login');
+}
+
 export default function Login() {
   const navigate = useNavigate();
-  const { login, isAuthenticated, user } = useAuth();
+  const location = useLocation();
+  const { login, logout, isAuthenticated, user } = useAuth();
+  const flashMessage = location.state?.message || '';
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -20,8 +33,22 @@ export default function Login() {
     };
   }, []);
 
+  // Laravel's redirect()->intended(): the page that sent the user here, else the role dashboard.
+  // RoleRoute still sends users away from pages their role cannot open.
+  const resolvePostLoginPath = (role) => {
+    const home = getDashboardPathByRole(role);
+    if (home === '/login') return null;
+    const from = location.state?.from;
+    const requested = from
+      ? `${from.pathname}${from.search || ''}`
+      : new URLSearchParams(location.search).get('next');
+    return isSafeRedirect(requested) ? requested : home;
+  };
+
   if (isAuthenticated) {
-    return <Navigate to={getDashboardPathByRole(user?.role)} replace />;
+    const target = resolvePostLoginPath(user?.role);
+    // A role without a portal maps to /login; redirecting there again would loop forever.
+    if (target) return <Navigate to={target} replace />;
   }
 
   const clearError = () => setError('');
@@ -47,7 +74,13 @@ export default function Login() {
     try {
       setIsSubmitting(true);
       const nextUser = await login({ email: email.trim(), password });
-      navigate(getDashboardPathByRole(nextUser?.role), { replace: true });
+      const target = resolvePostLoginPath(nextUser?.role);
+      if (!target) {
+        logout();
+        setError(NO_PORTAL_MESSAGE);
+        return;
+      }
+      navigate(target, { replace: true });
     } catch (requestError) {
       setError(getErrorMessage(requestError, 'Invalid email or password'));
     } finally {
@@ -65,6 +98,11 @@ export default function Login() {
           {/* <h1 className="text-2xl font-bold tracking-tight text-slate-900">GITOFFICE</h1> */}
           <h3 className="br text-lg sm:text-2xl font-bold text-slate-900">KLS Gogte Institute of Technology</h3>
         </div>
+        {flashMessage && !error ? (
+          <div className="mb-5 p-3 bg-green-50 border border-green-300 rounded-lg text-sm text-green-800">
+            {flashMessage}
+          </div>
+        ) : null}
         {error ? (
           <div className="mb-5 p-3 bg-red-50 border border-red-300 rounded-lg">
             <div className="flex items-start justify-between gap-3">

@@ -21,8 +21,10 @@ const clearSessionAndRedirect = () => {
   localStorage.removeItem('refreshToken');
   localStorage.removeItem('user');
 
-  if (window.location.pathname !== '/login') {
-    window.location.replace('/login');
+  const { pathname, search } = window.location;
+  if (pathname !== '/login') {
+    // Login sends the user back here afterwards (Laravel's redirect()->intended()).
+    window.location.replace(`/login?next=${encodeURIComponent(`${pathname}${search}`)}`);
   }
 };
 
@@ -63,7 +65,10 @@ api.interceptors.response.use(
     const originalRequest = error.config;
     const status = error.response?.status;
 
-    if (!originalRequest || status !== 401 || originalRequest._retry) {
+    // A 401 from the login form means wrong credentials, not an expired session.
+    const isLoginRequest = originalRequest?.url?.includes('/auth/login');
+
+    if (!originalRequest || status !== 401 || originalRequest._retry || isLoginRequest) {
       if (status !== 401) notifyRequestError(error);
       return Promise.reject(error);
     }

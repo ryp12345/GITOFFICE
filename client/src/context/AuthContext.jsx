@@ -66,6 +66,27 @@ export default function AuthProvider({ children }) {
     setIsLoading(false);
   }, []);
 
+  // One login per browser, as with Laravel's session cookie: logging out (or in as someone else)
+  // in one tab resets the others instead of leaving them on the previous user's pages.
+  useEffect(() => {
+    // A silent token refresh in another tab keeps the same user and needs no reaction.
+    const handleStorage = (event) => {
+      if (event.key !== 'token' && event.key !== 'user' && event.key !== null) return;
+      if (!user) return;
+      if (!localStorage.getItem('token')) {
+        window.location.replace('/login');
+        return;
+      }
+      const storedUser = readStoredUser();
+      if (storedUser && storedUser.id !== user.id) {
+        window.location.replace('/');
+      }
+    };
+
+    window.addEventListener('storage', handleStorage);
+    return () => window.removeEventListener('storage', handleStorage);
+  }, [user]);
+
   const persistSession = (nextToken, nextRefreshToken, nextUser) => {
     localStorage.setItem('token', nextToken);
     localStorage.setItem('refreshToken', nextRefreshToken);
