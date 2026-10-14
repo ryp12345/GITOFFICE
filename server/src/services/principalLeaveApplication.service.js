@@ -16,11 +16,10 @@ async function listLeaveApplicationsForPrincipal(query = {}) {
   return { applications };
 }
 
-async function approveLeaveForPrincipal(userId, applicationId) {
+async function approveLeaveForPrincipal(_userId, applicationId) {
   const updated = await principalLeaveApplicationModel.updateApplicationStatusForPrincipal({
     applicationId,
     status: 'approved',
-    approverUserId: userId,
   });
 
   return { updated };

@@ -306,7 +306,8 @@ export default function EstablishementLeaveList() {
     setEditModal((m) => ({ ...m, saving: true }));
     try {
       await axios.patch(`/leave-calendar/applications/${editModal.row.id}`, {
-        staff_id: editFields.staff_id,
+        // editFields.staff_id is a staff.id (staff_record_id); the server may reassign the leave to it.
+        staff_record_id: Number(editFields.staff_id) || null,
         leave_id: editFields.leave_id ? Number(editFields.leave_id) : null,
         status: editFields.appl_status,
         cl_type: editFields.cl_type,

@@ -804,17 +804,19 @@ export default function StaffLeavesPage() {
     [activeLeaveTypes, form.leave_id],
   );
 
+  // Alternate: "Deans" first for Dean/Principal designation holders (Staff/Teaching/leaves.blade.php
+  // lists the Deans optgroup inside the Alternate select), then the department colleagues.
   const groupedAlternateOptions = useMemo(
-    () => toOptionGroups(alternateLists.alternates),
+    () => toOptionGroups([
+      ...(alternateLists.deans?.length ? [{ dept_name: 'Deans', staff: alternateLists.deans }] : []),
+      ...(alternateLists.alternates || []),
+    ]),
     [alternateLists],
   );
 
-  // Additional alternate: college-wide list, plus "Deans" for Dean/Principal designation holders.
+  // Additional alternate: college-wide list of the same employee type.
   const groupedAdditionalAlternateOptions = useMemo(
-    () => toOptionGroups(
-      alternateLists.additional_alternates,
-      alternateLists.deans?.length ? [{ dept_name: 'Deans', staff: alternateLists.deans }] : [],
-    ),
+    () => toOptionGroups(alternateLists.additional_alternates),
     [alternateLists],
   );
 

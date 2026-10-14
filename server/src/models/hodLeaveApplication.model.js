@@ -99,7 +99,7 @@ async function getApplicationByIdForDepartment(client, applicationId, department
   return rows[0] || null;
 }
 
-async function updateApplicationStatusForDepartment({ applicationId, departmentId, status, recommenderUserId = null }) {
+async function updateApplicationStatusForDepartment({ applicationId, departmentId, status, mode = 'hod' }) {
   const appId = Number(applicationId);
   const deptId = Number(departmentId);
   const allowedStatus = String(status || '').trim().toLowerCase();
@@ -123,18 +123,22 @@ async function updateApplicationStatusForDepartment({ applicationId, departmentI
     const app = await LeaveRules.getApplicationForAction(client, appId);
     const additionalMap = await LeaveRules.getAdditionalDesignationMap([app.staff_id], client);
     const additional = additionalMap.get(Number(app.staff_id)) || null;
-    const allowed = allowedStatus === 'recommended'
-      ? LeaveRules.canHodRecommend(app, additional)
-      : LeaveRules.canHodReject(app, additional);
+    // 'registrar' / 'superadmin' follow the Laravel views without the leave_authorizer check.
+    const unrestricted = mode === 'registrar' || mode === 'superadmin';
+    let allowed;
+    if (allowedStatus === 'recommended') {
+      allowed = unrestricted ? LeaveRules.canUnrestrictedRecommend(app) : LeaveRules.canHodRecommend(app, additional);
+    } else {
+      allowed = unrestricted ? LeaveRules.canUnrestrictedReject(app) : LeaveRules.canHodReject(app, additional);
+    }
     if (!allowed) {
-      const err = new Error(`This leave application cannot be ${allowedStatus} by the HoD in its current state`);
+      const actor = mode === 'registrar' ? 'Registrar' : mode === 'superadmin' ? 'Super Admin' : 'HoD';
+      const err = new Error(`This leave application cannot be ${allowedStatus} by the ${actor} in its current state`);
       err.statusCode = 403;
       throw err;
     }
 
-    const row = await LeaveRules.transitionApplicationStatus(client, app, allowedStatus, {
-      actorUserId: allowedStatus === 'recommended' ? recommenderUserId : null,
-    });
+    const row = await LeaveRules.transitionApplicationStatus(client, app, allowedStatus);
 
     await client.query('COMMIT');
     return row;

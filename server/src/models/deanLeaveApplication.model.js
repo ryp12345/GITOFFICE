@@ -73,7 +73,7 @@ async function getAllLeaveApplications({ month = null, year = null }) {
   return rows;
 }
 
-async function updateApplicationStatusForDean({ applicationId, status, approverUserId = null }) {
+async function updateApplicationStatusForDean({ applicationId, status }) {
   const appId = Number(applicationId);
   const nextStatus = String(status || '').trim().toLowerCase();
 
@@ -102,7 +102,6 @@ async function updateApplicationStatusForDean({ applicationId, status, approverU
     }
 
     const row = await LeaveRules.transitionApplicationStatus(client, app, nextStatus, {
-      actorUserId: nextStatus === 'approved' ? approverUserId : null,
       notifyStaff: true,
     });
 

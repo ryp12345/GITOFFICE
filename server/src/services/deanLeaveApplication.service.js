@@ -16,11 +16,10 @@ async function listLeaveApplicationsForDean(query = {}) {
   return { applications };
 }
 
-async function approveLeaveForDean(userId, applicationId) {
+async function approveLeaveForDean(_userId, applicationId) {
   const updated = await deanLeaveApplicationModel.updateApplicationStatusForDean({
     applicationId,
     status: 'approved',
-    approverUserId: userId,
   });
 
   return { updated };

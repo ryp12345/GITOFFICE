@@ -15,6 +15,22 @@ const PRIVILEGED_ROLES = [
   'dean admin',
 ];
 
+// Roles that see the college-wide leave calendar in Laravel
+// (ESTB leaves_calender, Dean_admin / Principal calendars, Admin leave management).
+const CALENDAR_WIDE_ROLES = [
+  'establishment',
+  'super admin',
+  'super-admin',
+  'admin',
+  'principal',
+  'dean_admin',
+  'dean admin',
+];
+
+function isCalendarWideUser(user) {
+  return CALENDAR_WIDE_ROLES.includes(String(user?.role || '').trim().toLowerCase());
+}
+
 function isEstablishmentUser(user) {
   return String(user?.role || '').trim().toLowerCase() === 'establishment';
 }
@@ -54,7 +70,9 @@ function normalizeClType(value) {
 
 function normalizePayload(body) {
   return {
+    // staff_id is a users.id; staff_record_id (ESTB leave list) is an explicit staff.id.
     staffId: Number(body.staff_id),
+    staffRecordId: body.staff_record_id ? Number(body.staff_record_id) : null,
     leaveId: Number(body.leave_id),
     startDate: body.start_date,
     endDate: body.end_date,
@@ -66,7 +84,7 @@ function normalizePayload(body) {
 }
 
 function validateRequiredPayload(payload) {
-  if (!payload.staffId || !payload.leaveId || !payload.startDate || !payload.endDate || !payload.reason) {
+  if ((!payload.staffId && !payload.staffRecordId) || !payload.leaveId || !payload.startDate || !payload.endDate || !payload.reason) {
     const err = new Error('staff_id, leave_id, start_date, end_date and reason are required');
     err.statusCode = 400;
     throw err;
@@ -95,7 +113,14 @@ exports.getEvents = async (req, res) => {
   try {
     const year = Number(req.query.year);
     const month = Number(req.query.month);
-    const data = await LeaveCalendar.getCalendarEvents({ year, month });
+    if (isCalendarWideUser(req.user)) {
+      return sendSuccess(res, await LeaveCalendar.getCalendarEvents({ year, month }));
+    }
+    // Everyone else only sees who in their own department is on leave
+    // (LeaveStaffApplicationsController::checkanydeptpersononleave).
+    const staffId = await LeaveCalendar.resolveStaffIdFromUserId(req.user?.id);
+    const departmentIds = staffId ? await LeaveCalendar.getActiveDepartmentIdsForStaff(staffId) : [];
+    const data = await LeaveCalendar.getCalendarEvents({ year, month, departmentIds });
     sendSuccess(res, data);
   } catch (err) {
     sendError(res, err.message || 'Failed to load leave calendar events', err.statusCode || 500);
@@ -109,6 +134,7 @@ exports.getApplicationById = async (req, res) => {
 
     const row = await LeaveCalendar.getLeaveApplicationById(applicationId);
     if (!row) return sendError(res, 'Leave application not found', 404);
+    if (!(await isStaffOwnerOrPrivileged(req.user, row.staff_id))) return sendError(res, 'Forbidden', 403);
 
     sendSuccess(res, row);
   } catch (err) {
@@ -121,7 +147,8 @@ exports.validateApplication = async (req, res) => {
     const payload = normalizePayload(req.body || {});
     validateRequiredPayload(payload);
 
-    if (!(await isSelfOrPrivileged(req.user, payload.staffId))) {
+    const payloadStaffId = await LeaveCalendar.resolvePayloadStaffId(payload);
+    if (!(await isStaffOwnerOrPrivileged(req.user, payloadStaffId))) {
       return sendError(res, 'Forbidden', 403);
     }
 
@@ -143,9 +170,9 @@ exports.createApplication = async (req, res) => {
     validateRequiredPayload(payload);
 
     const requester = req.user || {};
-    const isEstablishment = String(requester.role || '').trim() === 'Establishment';
+    const isEstablishment = isEstablishmentUser(requester);
     const requesterStaffId = await LeaveCalendar.resolveStaffIdFromUserId(requester.id);
-    const payloadStaffId = await LeaveCalendar.resolveStaffIdFromUserId(payload.staffId);
+    const payloadStaffId = await LeaveCalendar.resolvePayloadStaffId(payload);
 
     if (!isEstablishment && (!requesterStaffId || !payloadStaffId || Number(requesterStaffId) !== Number(payloadStaffId))) {
       return sendError(res, 'Forbidden', 403);
@@ -167,7 +194,7 @@ exports.updateApplication = async (req, res) => {
     if (!existingApplication) return sendError(res, 'Leave application not found', 404);
 
     const requester = req.user || {};
-    const isEstablishment = String(requester.role || '').trim() === 'Establishment';
+    const isEstablishment = isEstablishmentUser(requester);
     const requesterStaffId = await LeaveCalendar.resolveStaffIdFromUserId(requester.id);
 
     if (!isEstablishment && (!requesterStaffId || Number(requesterStaffId) !== Number(existingApplication.staff_id))) {
@@ -177,7 +204,7 @@ exports.updateApplication = async (req, res) => {
     const payload = normalizePayload(req.body || {});
     validateRequiredPayload(payload);
 
-    const payloadStaffId = await LeaveCalendar.resolveStaffIdFromUserId(payload.staffId);
+    const payloadStaffId = await LeaveCalendar.resolvePayloadStaffId(payload);
     if (!isEstablishment && (!payloadStaffId || Number(payloadStaffId) !== Number(existingApplication.staff_id))) {
       return sendError(res, 'Forbidden', 403);
     }
@@ -202,7 +229,7 @@ exports.cancelApplication = async (req, res) => {
 
     // allow cancellation if requester is Establishment role or the application owner
     const requester = req.user || {};
-    const isEstablishment = String(requester.role || '').trim() === 'Establishment';
+    const isEstablishment = isEstablishmentUser(requester);
 
     // resolve staff id of requester (user -> staff)
     const requesterStaffId = await LeaveCalendar.resolveStaffIdFromUserId(requester.id);
@@ -265,6 +292,7 @@ exports.getAlternateStaff = async (req, res) => {
   try {
     const staffId = Number(req.query.staff_id);
     if (!staffId) return sendError(res, 'staff_id is required', 400);
+    if (!(await isSelfOrPrivileged(req.user, staffId))) return sendError(res, 'Forbidden', 403);
 
     const employeeTypeHint = req.query.employee_type
       ? String(req.query.employee_type).trim().toLowerCase()

@@ -118,42 +118,42 @@ function splitDaysByYear(startDate, endDate, noOfDays) {
 // ── staff profile ──────────────────────────────────────────────────────────
 async function getStaffLeaveProfile(staffId, db = pool) {
   const id = Number(staffId);
-  const [empType, additional, association, deanOrPrincipal] = await Promise.all([
-    db.query(
-      `SELECT employee_type FROM employee_types
-       WHERE staff_id = $1 AND LOWER(COALESCE(status, 'active')) = 'active'
-       ORDER BY id DESC LIMIT 1`,
-      [id]
-    ),
-    db.query(
-      `SELECT d.id, d.design_name, d.isvacational, d.leave_authorizer
-       FROM designation_staff ds
-       JOIN designations d ON d.id = ds.designation_id
-       WHERE ds.staff_id = $1
-         AND LOWER(COALESCE(ds.status, 'active')) = 'active'
-         AND d.isadditional = 1
-       ORDER BY ds.id ASC`,
-      [id]
-    ),
-    db.query(
-      `SELECT a.asso_name
-       FROM association_staff ast
-       JOIN associations a ON a.id = ast.association_id
-       WHERE ast.staff_id = $1 AND LOWER(COALESCE(ast.status, 'active')) = 'active'
-       ORDER BY ast.id DESC LIMIT 1`,
-      [id]
-    ),
-    db.query(
-      `SELECT 1
-       FROM designation_staff ds
-       JOIN designations d ON d.id = ds.designation_id
-       WHERE ds.staff_id = $1
-         AND LOWER(COALESCE(ds.status, 'active')) = 'active'
-         AND (d.design_name ILIKE '%Dean%' OR d.design_name ILIKE '%Principal%')
-       LIMIT 1`,
-      [id]
-    ),
-  ]);
+  // Run sequentially: `db` is often a transaction client, which must not run queries concurrently
+  // (pg deprecates it and pg@9 rejects it).
+  const empType = await db.query(
+    `SELECT employee_type FROM employee_types
+     WHERE staff_id = $1 AND LOWER(COALESCE(status, 'active')) = 'active'
+     ORDER BY id DESC LIMIT 1`,
+    [id]
+  );
+  const additional = await db.query(
+    `SELECT d.id, d.design_name, d.isvacational, d.leave_authorizer
+     FROM designation_staff ds
+     JOIN designations d ON d.id = ds.designation_id
+     WHERE ds.staff_id = $1
+       AND LOWER(COALESCE(ds.status, 'active')) = 'active'
+       AND d.isadditional = 1
+     ORDER BY ds.id ASC`,
+    [id]
+  );
+  const association = await db.query(
+    `SELECT a.asso_name
+     FROM association_staff ast
+     JOIN associations a ON a.id = ast.association_id
+     WHERE ast.staff_id = $1 AND LOWER(COALESCE(ast.status, 'active')) = 'active'
+     ORDER BY ast.id DESC LIMIT 1`,
+    [id]
+  );
+  const deanOrPrincipal = await db.query(
+    `SELECT 1
+     FROM designation_staff ds
+     JOIN designations d ON d.id = ds.designation_id
+     WHERE ds.staff_id = $1
+       AND LOWER(COALESCE(ds.status, 'active')) = 'active'
+       AND (d.design_name ILIKE '%Dean%' OR d.design_name ILIKE '%Principal%')
+     LIMIT 1`,
+    [id]
+  );
 
   const employeeType = empType.rows[0]?.employee_type || null;
   const isTeaching = String(employeeType || '').trim().toLowerCase() === 'teaching';
@@ -297,9 +297,16 @@ async function findAdjacentLeave(db, staffId, column, dateKey, excludedClType, e
   return rows[0] || null;
 }
 
+// Laravel validateleave excludes Republic Day and Independence Day from the holidays
+// that bridge two leaves (holidayrh ... ->where('title','not like','Republic Day')
+// ->whereOr('title','not like','Independence Day')).
 async function isHoliday(db, dateKey) {
   const { rows } = await db.query(
-    "SELECT 1 FROM holidayrhs WHERE start = $1::date AND type = 'Holiday' LIMIT 1",
+    `SELECT 1 FROM holidayrhs
+     WHERE start = $1::date AND type = 'Holiday'
+       AND TRIM(COALESCE(title, '')) NOT ILIKE 'Republic Day'
+       AND TRIM(COALESCE(title, '')) NOT ILIKE 'Independence Day'
+     LIMIT 1`,
     [dateKey]
   );
   return rows.length > 0;
@@ -588,13 +595,59 @@ async function validateStaffRequest(db, { staffId, leaveId, startDate, endDate, 
 }
 
 // ── entitlement bookkeeping (Laravel increments / decrements consumed) ─────
+
+// Accumulated balance the yearly job (ScheduledJobs::yearly_leave_entitlements) carries
+// into the next year for a given consumption.
+function carriedForward(ent, consumed, rule) {
+  const entitled = Number(ent.entitled_curr_year || 0);
+  const accumulated = Number(ent.accumulated || 0);
+  if (String(rule?.carry_forwardable || '').toLowerCase() === 'yes') {
+    const value = accumulated + entitled - consumed - Number(ent.encashed_curr_year || 0);
+    return rule.max_cf != null ? Math.min(value, Number(rule.max_cf)) : value;
+  }
+  // Not carry forwardable: only consumption beyond the yearly entitlement eats into accumulated.
+  return accumulated + Math.min(0, entitled - consumed);
+}
+
+// LeaveStaffApplicationsController::store — when the next year's entitlement already
+// exists (leave applied after the 26 Dec yearly job), its accumulated must follow the
+// change in this year's consumption (carry forwardable, or consumed beyond entitled).
+async function propagateToNextYear(db, { staffId, leaveId, year, ent, consumedBefore, consumedAfter }) {
+  const { rows: nextRows } = await db.query(
+    `SELECT id FROM leave_staff_entitlements
+     WHERE staff_id = $1 AND leave_id = $2 AND year = $3
+     ORDER BY id DESC LIMIT 1`,
+    [Number(staffId), Number(leaveId), Number(year) + 1]
+  );
+  if (!nextRows[0]) return;
+
+  const { rows: ruleRows } = await db.query(
+    `SELECT carry_forwardable, max_cf FROM leave_rules
+     WHERE leave_id = $1 AND LOWER(COALESCE(status, 'active')) = 'active'
+     ORDER BY id ASC LIMIT 1`,
+    [Number(leaveId)]
+  );
+  const rule = ruleRows[0] || null;
+  const change = carriedForward(ent, consumedAfter, rule) - carriedForward(ent, consumedBefore, rule);
+  if (!change) return;
+
+  // accumulated has a >= 0 check constraint; Establishment applies without balance validation.
+  await db.query(
+    `UPDATE leave_staff_entitlements
+     SET accumulated = GREATEST(COALESCE(accumulated, 0) + $1, 0), updated_at = NOW()
+     WHERE id = $2`,
+    [change, nextRows[0].id]
+  );
+}
+
 async function adjustConsumed(db, { staffId, leaveId, startDate, endDate, noOfDays, sign }) {
   const perYear = splitDaysByYear(startDate, endDate, noOfDays);
   for (const [yearKey, yearDays] of Object.entries(perYear)) {
     const delta = sign * Number(yearDays || 0);
     if (!delta) continue;
     const { rows } = await db.query(
-      `SELECT id FROM leave_staff_entitlements
+      `SELECT id, entitled_curr_year, accumulated, consumed_curr_year, encashed_curr_year
+       FROM leave_staff_entitlements
        WHERE staff_id = $1 AND leave_id = $2 AND year = $3
        ORDER BY id DESC LIMIT 1`,
       [Number(staffId), Number(leaveId), Number(yearKey)]
@@ -606,6 +659,15 @@ async function adjustConsumed(db, { staffId, leaveId, startDate, endDate, noOfDa
          WHERE id = $2`,
         [delta, rows[0].id]
       );
+      const consumedBefore = Number(rows[0].consumed_curr_year || 0);
+      await propagateToNextYear(db, {
+        staffId,
+        leaveId,
+        year: yearKey,
+        ent: rows[0],
+        consumedBefore,
+        consumedAfter: consumedBefore + delta,
+      });
     } else if (delta > 0) {
       // First application of a leave without a yearly grant (DL-GIT, DL-VTU...).
       await db.query(
@@ -654,6 +716,17 @@ function canHodReject(app, additional) {
   return authorized && normalizeStatus(app.appl_status) === 'pending';
 }
 
+// Registrar (registrar_leave_view.blade.php — the leave_authorizer check is commented out)
+// and Super Admin (admin_leaves_management.blade.php) act on every leave of their
+// department: Recommend is hidden only for recommended / approved, Reject is always shown.
+function canUnrestrictedRecommend(app) {
+  return ['pending', 'rejected'].includes(normalizeStatus(app.appl_status));
+}
+
+function canUnrestrictedReject(app) {
+  return !['rejected', 'cancelled'].includes(normalizeStatus(app.appl_status));
+}
+
 function canDeanAct(app, additional) {
   return !additional
     && Number(app.no_of_days || 0) < 5
@@ -677,6 +750,9 @@ async function annotateApplications(rows, role, db = pool) {
     if (role === 'hod') {
       flags.can_recommend = canHodRecommend(row, additional);
       flags.can_reject = canHodReject(row, additional);
+    } else if (role === 'registrar' || role === 'superadmin') {
+      flags.can_recommend = canUnrestrictedRecommend(row);
+      flags.can_reject = canUnrestrictedReject(row);
     } else if (role === 'dean') {
       flags.can_approve = canDeanAct(row, additional);
       flags.can_reject = flags.can_approve;
@@ -704,7 +780,7 @@ async function insertNotification(db, userId, title, description, type = 'Leave'
 
 // Apply a status transition with Laravel's entitlement side effects:
 //   rejected → recommended/approved re-adds the days, any → rejected removes them.
-async function transitionApplicationStatus(db, app, nextStatus, { actorUserId = null, notifyStaff = false } = {}) {
+async function transitionApplicationStatus(db, app, nextStatus, { notifyStaff = false } = {}) {
   const current = normalizeStatus(app.appl_status);
   const wasCounted = !['rejected', 'cancelled'].includes(current);
   const willCount = !['rejected', 'cancelled'].includes(nextStatus);
@@ -718,15 +794,14 @@ async function transitionApplicationStatus(db, app, nextStatus, { actorUserId = 
   if (wasCounted && !willCount) await adjustConsumed(db, { ...leave, sign: -1 });
   if (!wasCounted && willCount) await adjustConsumed(db, { ...leave, sign: 1 });
 
+  // Laravel's recommend_leave / approve_leave / reject_leave only change appl_status; the
+  // recommender / approver routed at apply time are kept (they are printed on the leave PDF).
   const { rows } = await db.query(
     `UPDATE leave_staff_applications
-     SET appl_status = $1,
-         recommender = CASE WHEN $1 = 'recommended' AND $2::bigint IS NOT NULL THEN $2 ELSE recommender END,
-         approver = CASE WHEN $1 = 'approved' AND $2::bigint IS NOT NULL THEN $2 ELSE approver END,
-         updated_at = NOW()
-     WHERE id = $3
+     SET appl_status = $1, updated_at = NOW()
+     WHERE id = $2
      RETURNING id, appl_status`,
-    [nextStatus, actorUserId ? Number(actorUserId) : null, Number(app.id)]
+    [nextStatus, Number(app.id)]
   );
 
   if (notifyStaff) {
@@ -771,6 +846,8 @@ module.exports = {
   getAdditionalDesignationMap,
   canHodRecommend,
   canHodReject,
+  canUnrestrictedRecommend,
+  canUnrestrictedReject,
   canDeanAct,
   canPrincipalAct,
   annotateApplications,

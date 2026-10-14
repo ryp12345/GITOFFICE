@@ -13,6 +13,17 @@ const normalizeInteger = (value) => {
   return Number.isFinite(parsed) ? Math.trunc(parsed) : null;
 };
 
+// Rule values whose change creates a new version of the rule (LeaveRulesController::update).
+const VERSIONED_TEXT_FIELDS = ['carry_forwardable', 'encashable', 'gap'];
+const VERSIONED_INT_FIELDS = ['max_cf', 'max_enc', 'min_gap', 'max_time_allowed', 'prior_intimation_days'];
+
+const normalizeText = (value) => String(value ?? '').trim().toLowerCase();
+
+function ruleValuesChanged(current, data) {
+  return VERSIONED_TEXT_FIELDS.some((field) => normalizeText(current[field]) !== normalizeText(data[field]))
+    || VERSIONED_INT_FIELDS.some((field) => normalizeInteger(current[field]) !== normalizeInteger(data[field]));
+}
+
 const LeaveRules = {
   async getAll(leave_id) {
     const result = await pool.query('SELECT * FROM leave_rules WHERE leave_id = $1 ORDER BY id DESC', [leave_id]);
@@ -76,7 +87,83 @@ const LeaveRules = {
     const result = await pool.query(q, values);
     return result.rows[0];
   },
+  // LeaveRulesController::update: if any rule value changed, the active rule is closed
+  // (closing dates / GCRs recorded, status inactive) and a new active row is inserted with
+  // the new values, keeping the rule history. Otherwise the rule is updated in place.
   async update(id, data) {
+    const current = await this.getById(id);
+    if (!current) return null;
+
+    const isActive = normalizeText(current.status || 'active') === 'active';
+    if (!isActive || !ruleValuesChanged(current, data)) {
+      return this.updateInPlace(id, data);
+    }
+
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query(
+        `UPDATE leave_rules
+         SET cf_closing_date = $1, cf_closing_gcr = $2,
+             enc_closing_date = $3, enc_closing_gcr = $4,
+             gap_closing_date = $5, gap_closing_gcr = $6,
+             entitlement_post_max_cf = $7,
+             status = 'inactive', updated_at = NOW()
+         WHERE id = $8`,
+        [
+          normalizeDate(data.cf_closing_date),
+          data.cf_closing_gcr ?? null,
+          normalizeDate(data.enc_closing_date),
+          data.enc_closing_gcr ?? null,
+          normalizeDate(data.gap_closing_date),
+          data.gap_closing_gcr ?? null,
+          normalizeInteger(data.entitlement_post_max_cf),
+          id,
+        ]
+      );
+      await client.query(`
+        SELECT setval(
+          pg_get_serial_sequence('leave_rules', 'id'),
+          COALESCE((SELECT MAX(id) FROM leave_rules), 1),
+          true
+        )
+      `);
+      const { rows } = await client.query(
+        `INSERT INTO leave_rules (leave_id, carry_forwardable, cf_gcr, cf_wef, max_cf, entitlement_post_max_cf,
+           encashable, enc_gcr, enc_wef, max_enc, gap, gap_gcr, gap_wef, min_gap, max_time_allowed, period,
+           prior_intimation_days, status, created_at, updated_at)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,'active',NOW(),NOW())
+         RETURNING *`,
+        [
+          current.leave_id,
+          data.carry_forwardable,
+          data.cf_gcr,
+          normalizeDate(data.cf_wef),
+          normalizeInteger(data.max_cf),
+          normalizeInteger(data.entitlement_post_max_cf),
+          data.encashable,
+          data.enc_gcr,
+          normalizeDate(data.enc_wef),
+          normalizeInteger(data.max_enc),
+          data.gap,
+          data.gap_gcr,
+          normalizeDate(data.gap_wef),
+          normalizeInteger(data.min_gap),
+          normalizeInteger(data.max_time_allowed),
+          data.period,
+          normalizeInteger(data.prior_intimation_days),
+        ]
+      );
+      await client.query('COMMIT');
+      return rows[0];
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  },
+  async updateInPlace(id, data) {
     const q = `UPDATE leave_rules SET leave_id=$1, carry_forwardable=$2, cf_gcr=$3, cf_wef=$4, cf_closing_date=$5, cf_closing_gcr=$6, max_cf=$7, entitlement_post_max_cf=$8, encashable=$9, enc_gcr=$10, enc_wef=$11, enc_closing_date=$12, enc_closing_gcr=$13, max_enc=$14, gap=$15, gap_gcr=$16, gap_wef=$17, gap_closing_date=$18, gap_closing_gcr=$19, min_gap=$20, max_time_allowed=$21, period=$22, prior_intimation_days=$23, status=$24, updated_at=NOW() WHERE id=$25 RETURNING *`;
     const cfWef = normalizeDate(data.cf_wef);
     const cfClosingDate = normalizeDate(data.cf_closing_date);

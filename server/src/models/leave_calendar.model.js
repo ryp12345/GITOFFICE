@@ -19,6 +19,18 @@ async function resolveStaffIdFromUserId(userId) {
   return null;
 }
 
+// payload.staffRecordId is an explicit staff.id (ESTB leave list); payload.staffId is a
+// users.id (staff self-service, ESTB calendar). The explicit staff.id avoids resolving
+// a staff.id as somebody else's users.id.
+async function resolvePayloadStaffId(payload) {
+  const staffRecordId = Number(payload?.staffRecordId);
+  if (staffRecordId) {
+    const { rows } = await pool.query('SELECT id FROM staff WHERE id = $1 LIMIT 1', [staffRecordId]);
+    return rows[0]?.id ? Number(rows[0].id) : null;
+  }
+  return resolveStaffIdFromUserId(payload?.staffId);
+}
+
 async function getActiveDepartmentIdsForStaff(staffId) {
   const { rows } = await pool.query(
     `
@@ -70,13 +82,43 @@ async function getMeta() {
   };
 }
 
-async function getCalendarEvents({ year, month } = {}) {
+// departmentIds: when given, only leaves of staff in those departments are returned with
+// the minimal fields Laravel's checkanydeptpersononleave exposes to staff
+// (staff_id, leave_id, alternate + the dates/status needed to mark them "On Leave").
+async function getCalendarEvents({ year, month, departmentIds = null } = {}) {
   const y = Number(year);
   const m = Number(month);
   if (!y || !m || m < 1 || m > 12) return [];
 
   const from = `${y}-${String(m).padStart(2, '0')}-01`;
   const to = new Date(y, m, 0).toISOString().slice(0, 10);
+
+  if (Array.isArray(departmentIds)) {
+    if (departmentIds.length === 0) return [];
+    const { rows } = await pool.query(
+      `
+        SELECT DISTINCT
+          la.id,
+          la.staff_id,
+          la.leave_id,
+          la.alternate,
+          TO_CHAR(la.start::date, 'YYYY-MM-DD') AS start_date,
+          TO_CHAR(la.end::date, 'YYYY-MM-DD') AS end_date,
+          la.cl_type,
+          la.appl_status,
+          la.appl_status AS status
+        FROM leave_staff_applications la
+        JOIN department_staff ds ON ds.staff_id = la.staff_id
+          AND LOWER(COALESCE(ds.status, 'active')) = 'active'
+        WHERE ds.department_id = ANY($3::bigint[])
+          AND la.start::date <= $2::date
+          AND la.end::date >= $1::date
+        ORDER BY start_date ASC, la.id ASC
+      `,
+      [from, to, departmentIds]
+    );
+    return rows || [];
+  }
 
   const { rows } = await pool.query(
     `
@@ -221,7 +263,7 @@ function validationError(message) {
 }
 
 async function validateLeaveApplication(payload, { applicationId = null, isEstablishment = false } = {}) {
-  const staffId = await resolveStaffIdFromUserId(payload.staffId);
+  const staffId = await resolvePayloadStaffId(payload);
   if (!staffId) {
     return { valid: false, message: 'Staff record not found for this user' };
   }
@@ -264,7 +306,7 @@ async function deleteDaywiseLeaves(client, applicationId) {
 }
 
 async function createLeaveApplication(payload, { isEstablishment = false } = {}) {
-  const staffId = await resolveStaffIdFromUserId(payload.staffId);
+  const staffId = await resolvePayloadStaffId(payload);
   if (!staffId) {
     const err = new Error('Staff record not found for this user');
     err.statusCode = 404;
@@ -370,7 +412,14 @@ async function updateLeaveApplication(applicationId, payload, { isEstablishment 
       throw validationError('Only pending leave applications can be edited.');
     }
 
-    const staffId = Number(before.staff_id);
+    const previousStaffId = Number(before.staff_id);
+    // Establishment may reassign the application to another staff member
+    // (LeavelistController::ESTB_leave_update updates staff_id); staff cannot.
+    let staffId = previousStaffId;
+    if (isEstablishment) {
+      const requestedStaffId = await resolvePayloadStaffId(payload);
+      if (requestedStaffId) staffId = requestedStaffId;
+    }
     const validation = await runValidation(client, staffId, payload, { applicationId: id, isEstablishment, isNew: false });
     if (!validation.valid) throw validationError(validation.message);
 
@@ -386,6 +435,7 @@ async function updateLeaveApplication(applicationId, payload, { isEstablishment 
           alternate = $7,
           additional_alternate = $8,
           year = $9,
+          staff_id = $11,
           updated_at = NOW()
       WHERE id = $10
       RETURNING id, staff_id
@@ -401,12 +451,14 @@ async function updateLeaveApplication(applicationId, payload, { isEstablishment 
         payload.additionalAlternate || null,
         Number(String(payload.endDate).slice(0, 4)),
         id,
+        staffId,
       ]
     );
 
+    // The old consumption is returned to the previous owner, the new one charged to the current owner.
     if (isCounted(before.appl_status)) {
       await LeaveRules.adjustConsumed(client, {
-        staffId,
+        staffId: previousStaffId,
         leaveId: before.leave_id,
         startDate: before.start_date,
         endDate: before.end_date,
@@ -677,15 +729,24 @@ async function getLeaveAlternateOptions(userId) {
   );
 
   let alternates = departmentIds.length ? groupByDepartment((await staffQuery(true, true)).rows) : [];
-  const firstDeptHasStaff = alternates.some((g) => g.department_id === departmentIds[0] && g.staff.length > 0);
+  // Laravel checks $dept_staff[0], i.e. the applicant's first department ordered by dept_name.
+  const { rows: firstDeptRows } = departmentIds.length
+    ? await pool.query(
+      'SELECT id FROM departments WHERE id = ANY($1::bigint[]) ORDER BY dept_name ASC LIMIT 1',
+      [departmentIds]
+    )
+    : { rows: [] };
+  const firstDeptId = Number(firstDeptRows[0]?.id || 0);
+  const firstDeptHasStaff = alternates.some((g) => g.department_id === firstDeptId && g.staff.length > 0);
   if (departmentIds.length && !firstDeptHasStaff) {
     alternates = groupByDepartment((await staffQuery(true, false)).rows);
   }
 
   const additionalAlternates = groupByDepartment((await staffQuery(false, true)).rows);
 
+  // Only the teaching leave form (Staff/Teaching/leaves.blade.php) offers the Deans group.
   let deans = [];
-  if (profile.hasDeanOrPrincipalDesignation) {
+  if (profile.isTeaching && profile.hasDeanOrPrincipalDesignation) {
     const { rows } = await pool.query(
       `
         SELECT DISTINCT s.id, s.user_id, TRIM(CONCAT_WS(' ', s.fname, s.mname, s.lname)) AS name
@@ -811,6 +872,7 @@ async function updateNotificationsForUpdate(client, applicationId, staffId, star
 
 module.exports = {
   resolveStaffIdFromUserId,
+  resolvePayloadStaffId,
   getMeta,
   getCalendarEvents,
   getApplicationsByStaffUserId,

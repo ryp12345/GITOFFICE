@@ -31,6 +31,7 @@ exports.create = async (req, res) => {
 exports.update = async (req, res) => {
   try {
     const rule = await LeaveRules.update(req.params.id, req.body);
+    if (!rule) return sendError(res, 'Leave rule not found', 404);
     sendSuccess(res, rule);
   } catch (err) {
     sendError(res, err.message || 'Error updating leave rule', 500);

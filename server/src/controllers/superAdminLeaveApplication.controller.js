@@ -1,16 +1,22 @@
 const { pool } = require('../config/db');
+const LeaveRules = require('../services/leaveRules.service');
+const hodLeaveApplicationModel = require('../models/hodLeaveApplication.model');
+
+async function findItCellDepartmentId() {
+  const deptResult = await pool.query(
+    "SELECT id FROM departments WHERE LOWER(dept_name) = 'it cell' LIMIT 1"
+  );
+  return deptResult.rows[0]?.id || null;
+}
 
 // Fetch all leave applications for IT Cell department
 async function listItCellLeaveApplications(req, res, next) {
   try {
     // Get IT Cell department id
-    const deptResult = await pool.query(
-      "SELECT id FROM departments WHERE LOWER(dept_name) = 'it cell' LIMIT 1"
-    );
-    if (!deptResult.rows.length) {
+    const itCellDeptId = await findItCellDepartmentId();
+    if (!itCellDeptId) {
       return res.status(404).json({ success: false, message: 'IT Cell department not found' });
     }
-    const itCellDeptId = deptResult.rows[0].id;
 
     // Get all staff ids in IT Cell
     const staffResult = await pool.query(
@@ -72,11 +78,13 @@ async function listItCellLeaveApplications(req, res, next) {
       [staffIds, year]
     );
 
+    const applications = await LeaveRules.annotateApplications(leaveResult.rows, 'superadmin');
+
     return res.json({
       success: true,
       data: {
         department: { id: itCellDeptId, dept_name: 'IT Cell' },
-        applications: leaveResult.rows,
+        applications,
       },
     });
   } catch (error) {
@@ -84,6 +92,73 @@ async function listItCellLeaveApplications(req, res, next) {
   }
 }
 
+// AdminController::recommend_leave / reject_leave — Super Admin recommends or rejects
+// IT Cell leave applications with the same entitlement side effects as the HoD.
+async function updateItCellStatus(status, applicationId) {
+  const departmentId = await findItCellDepartmentId();
+  if (!departmentId) {
+    const err = new Error('IT Cell department not found');
+    err.statusCode = 404;
+    throw err;
+  }
+  return hodLeaveApplicationModel.updateApplicationStatusForDepartment({
+    applicationId,
+    departmentId,
+    status,
+    mode: 'superadmin',
+  });
+}
+
+async function recommendItCellLeave(req, res, next) {
+  try {
+    const updated = await updateItCellStatus('recommended', req.params.id);
+    res.json({ success: true, message: 'Leave recommended successfully', data: { updated } });
+  } catch (error) {
+    next(error);
+  }
+}
+
+async function rejectItCellLeave(req, res, next) {
+  try {
+    const updated = await updateItCellStatus('rejected', req.params.id);
+    res.json({ success: true, message: 'Leave rejected successfully', data: { updated } });
+  } catch (error) {
+    next(error);
+  }
+}
+
+async function bulkUpdateItCellLeaves(req, res, next) {
+  try {
+    const action = String(req.body?.action || '').trim().toLowerCase();
+    if (!['recommended', 'rejected'].includes(action)) {
+      return res.status(400).json({ success: false, message: 'Invalid bulk action. Use recommended or rejected' });
+    }
+    const ids = Array.isArray(req.body?.ids) ? req.body.ids : [];
+    const uniqueIds = [...new Set(ids.map(Number).filter((v) => Number.isFinite(v) && v > 0))];
+    if (uniqueIds.length === 0) {
+      return res.status(400).json({ success: false, message: 'ids must be a non-empty array' });
+    }
+
+    const updated = [];
+    const failed = [];
+    for (const id of uniqueIds) {
+      try {
+        // eslint-disable-next-line no-await-in-loop
+        const row = await updateItCellStatus(action, id);
+        if (row) updated.push(row.id);
+      } catch (error) {
+        failed.push({ id, message: error?.message || 'Failed to update leave application' });
+      }
+    }
+    res.json({ success: true, message: 'Bulk leave action completed', data: { action, updated, failed } });
+  } catch (error) {
+    next(error);
+  }
+}
+
 module.exports = {
   listItCellLeaveApplications,
+  recommendItCellLeave,
+  rejectItCellLeave,
+  bulkUpdateItCellLeaves,
 };

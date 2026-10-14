@@ -31,6 +31,15 @@ async function resolveDepartmentOrThrow(userOrId) {
   return department;
 }
 
+// Registrar acts like Laravel RegistrarLeaveController (no leave_authorizer restriction);
+// everyone else on these routes follows the HoD rules.
+function approverModeFor(userOrId) {
+  const role = typeof userOrId === 'object' && userOrId !== null && userOrId.role
+    ? String(userOrId.role).trim().toLowerCase()
+    : '';
+  return role === 'registrar' ? 'registrar' : 'hod';
+}
+
 function parseOptionalInt(value) {
   if (value === undefined || value === null || value === '') return null;
   const num = Number(value);
@@ -118,7 +127,7 @@ async function listLeaveApplicationsForHod(userOrId, query = {}) {
   }
 
   applications = await enrichApplicationRows(applications);
-  applications = await LeaveRules.annotateApplications(applications, 'hod');
+  applications = await LeaveRules.annotateApplications(applications, approverModeFor(userOrId));
 
   return {
     department,
@@ -128,12 +137,11 @@ async function listLeaveApplicationsForHod(userOrId, query = {}) {
 
 async function recommendLeaveForHod(userOrId, applicationId) {
   const department = await resolveDepartmentOrThrow(userOrId);
-  const actorUserId = typeof userOrId === 'object' && userOrId !== null ? Number(userOrId.id) : Number(userOrId);
   const updated = await hodLeaveApplicationModel.updateApplicationStatusForDepartment({
     applicationId,
     departmentId: department.id,
     status: 'recommended',
-    recommenderUserId: actorUserId,
+    mode: approverModeFor(userOrId),
   });
 
   return {
@@ -144,12 +152,11 @@ async function recommendLeaveForHod(userOrId, applicationId) {
 
 async function rejectLeaveForHod(userOrId, applicationId) {
   const department = await resolveDepartmentOrThrow(userOrId);
-  const actorUserId = typeof userOrId === 'object' && userOrId !== null ? Number(userOrId.id) : Number(userOrId);
   const updated = await hodLeaveApplicationModel.updateApplicationStatusForDepartment({
     applicationId,
     departmentId: department.id,
     status: 'rejected',
-    recommenderUserId: actorUserId,
+    mode: approverModeFor(userOrId),
   });
 
   return {
@@ -173,7 +180,6 @@ async function bulkUpdateLeaveStatusForHod(userOrId, { action, ids }) {
   }
 
   const department = await resolveDepartmentOrThrow(userOrId);
-  const actorUserId = typeof userOrId === 'object' && userOrId !== null ? Number(userOrId.id) : Number(userOrId);
   const uniqueIds = [...new Set(ids.map((value) => Number(value)).filter((value) => Number.isFinite(value) && value > 0))];
 
   const updated = [];
@@ -185,7 +191,7 @@ async function bulkUpdateLeaveStatusForHod(userOrId, { action, ids }) {
         applicationId,
         departmentId: department.id,
         status: normalizedAction,
-        recommenderUserId: actorUserId,
+        mode: approverModeFor(userOrId),
       });
       if (row) updated.push(row.id);
     } catch (error) {

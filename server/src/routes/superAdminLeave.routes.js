@@ -6,11 +6,34 @@ const superAdminLeaveApplicationController = require('../controllers/superAdminL
 const router = Router();
 
 // Only Super Admin can access
+const superAdminOnly = roleMiddleware('Super Admin', 'super-admin', 'admin');
+
 router.get(
   '/it-cell-leave-applications',
   authMiddleware,
-  roleMiddleware('Super Admin', 'super-admin', 'admin'),
+  superAdminOnly,
   superAdminLeaveApplicationController.listItCellLeaveApplications
+);
+
+router.post(
+  '/it-cell-leave-applications/bulk-action',
+  authMiddleware,
+  superAdminOnly,
+  superAdminLeaveApplicationController.bulkUpdateItCellLeaves
+);
+
+router.post(
+  '/it-cell-leave-applications/:id/recommend',
+  authMiddleware,
+  superAdminOnly,
+  superAdminLeaveApplicationController.recommendItCellLeave
+);
+
+router.post(
+  '/it-cell-leave-applications/:id/reject',
+  authMiddleware,
+  superAdminOnly,
+  superAdminLeaveApplicationController.rejectItCellLeave
 );
 
 module.exports = router;

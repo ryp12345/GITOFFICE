@@ -369,6 +369,8 @@ export default function EstablishmentLeaveCalendarPage() {
       const staffUserId = selectedStaff?.user_id || form.staff_id;
       const payload = {
         staff_id: Number(staffUserId) || null,
+        // form.staff_id is a staff.id; send it explicitly so the server never reads it as a users.id.
+        staff_record_id: Number(form.staff_id) || null,
         leave_id: Number(form.leave_id) || null,
         cl_type: form.cl_type,
         start_date: form.start_date,

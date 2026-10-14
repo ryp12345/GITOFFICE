@@ -23,7 +23,12 @@ import {
 } from '../../api/principalApi';
 import { getLeaveEntitlementMeta } from '../../api/leaveEntitlementApi';
 import { getHolidayRHList } from '../../api/holidayrhApi';
-import { getItCellLeaveApplications } from '../../api/superAdminLeaveApi';
+import {
+  getItCellLeaveApplications,
+  recommendItCellLeaveApplication,
+  rejectItCellLeaveApplication,
+  bulkUpdateItCellLeaveApplications,
+} from '../../api/superAdminLeaveApi';
 import { getErrorMessage } from '../../utils/errors';
 
 const MAIN_TABS = {
@@ -624,11 +629,14 @@ export default function LeaveApplicationPage() {
 
     setProcessing(true);
     try {
+      // Super Admin acts on IT Cell leaves (Laravel AdminController::recommend_leave / reject_leave).
       if (action === 'recommend') {
-        await recommendHodLeaveApplication(token, id);
+        if (isSuperAdmin) await recommendItCellLeaveApplication(token, id);
+        else await recommendHodLeaveApplication(token, id);
         notify('Leave recommended successfully.');
       } else {
-        await rejectHodLeaveApplication(token, id);
+        if (isSuperAdmin) await rejectItCellLeaveApplication(token, id);
+        else await rejectHodLeaveApplication(token, id);
         notify('Leave rejected successfully.');
       }
       await loadRows();
@@ -711,7 +719,9 @@ export default function LeaveApplicationPage() {
     setProcessing(true);
     try {
       const payloadAction = action === 'recommend' ? 'recommended' : 'rejected';
-      const response = await bulkUpdateHodLeaveApplications(token, payloadAction, selectedIds);
+      const response = isSuperAdmin
+        ? await bulkUpdateItCellLeaveApplications(token, payloadAction, selectedIds)
+        : await bulkUpdateHodLeaveApplications(token, payloadAction, selectedIds);
       const failed = response?.data?.data?.failed || [];
       if (failed.length > 0) {
         notify(`Completed with partial failures (${failed.length}).`, 'error');
