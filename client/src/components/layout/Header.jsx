@@ -136,7 +136,7 @@ export default function Header() {
       <div className="flex h-16 sm:h-20 w-full items-center justify-between px-3 sm:px-6 lg:px-8">
 
         <div className="flex items-center gap-3">
-          <img src="/git_logo.jpg" alt="Git logo" className="h-8 w-8 sm:h-10 sm:w-10 rounded-md object-contain" />
+          <img src="/git_logo.jpg" alt="Git logo" className="h-10 w-10 sm:h-12 sm:w-12 rounded-md object-contain" />
           <h1 className="br text-lg sm:text-2xl font-bold text-slate-900">KLS Gogte Institute of Technology</h1>
         </div>
 
