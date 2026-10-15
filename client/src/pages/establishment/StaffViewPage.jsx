@@ -213,73 +213,23 @@ export default function StaffViewPage({
                 {staff ? (
                   <>
                     {activeTab === 'summary' && (
-                      <div className="space-y-8">
+                      <div className="w-full space-y-8">
                         <h2 className="text-2xl font-bold text-blue-700 mb-2">Staff Summary</h2>
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                          {/* Personal Info */}
-                          <div className="bg-white rounded-xl p-5 shadow flex items-center gap-4 border border-blue-100">
-                            <span className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-blue-100 text-blue-700">
-                              <svg className="w-7 h-7" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M5.121 17.804A9.001 9.001 0 0112 15c2.21 0 4.21.8 5.879 2.137M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
-                            </span>
-                            <div>
-                              <div className="text-gray-500 text-xs">Name</div>
-                              <div className="text-lg font-semibold">{staff.name || (staff.fname ? `${staff.fname} ${staff.lname}` : '')}</div>
-                            </div>
-                          </div>
-                          <div className="bg-white rounded-xl p-5 shadow flex items-center gap-4 border border-blue-100">
-                            <span className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-blue-100 text-blue-700">
-                              <svg className="w-7 h-7" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 01-8 0" /></svg>
-                            </span>
-                            <div>
-                              <div className="text-gray-500 text-xs">Designation & Payscale</div>
-                              <div className="text-lg font-semibold">{staff.designation_name || '-'}</div>
-                            </div>
-                          </div>
-                          <div className="bg-white rounded-xl p-5 shadow flex items-center gap-4 border border-blue-100">
-                            <span className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-blue-100 text-blue-700">
-                              <svg className="w-7 h-7" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M3 7h18M3 12h18M3 17h18" /></svg>
-                            </span>
-                            <div>
-                              <div className="text-gray-500 text-xs">Department</div>
-                              <div className="text-lg font-semibold">{staff.department_name || '-'}</div>
-                            </div>
-                          </div>
-                          <div className="bg-white rounded-xl p-5 shadow flex items-center gap-4 border border-blue-100">
-                            <span className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-blue-100 text-blue-700">
-                              <svg className="w-7 h-7" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a4 4 0 00-3-3.87M9 20H4v-2a4 4 0 013-3.87m9-5a4 4 0 11-8 0 4 4 0 018 0z" /></svg>
-                            </span>
-                            <div>
-                              <div className="text-gray-500 text-xs">Association</div>
-                              <div className="text-lg font-semibold">{staff.association_name || '-'}</div>
-                            </div>
-                          </div>
-                          <div className="bg-white rounded-xl p-5 shadow flex items-center gap-4 border border-blue-100">
-                            <span className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-blue-100 text-blue-700">
-                              <svg className="w-7 h-7" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M8 17l4 4 4-4m0-5V3a2 2 0 00-2-2H6a2 2 0 00-2 2v14a2 2 0 002 2h8a2 2 0 002-2z" /></svg>
-                            </span>
-                            <div>
-                              <div className="text-gray-500 text-xs">Email</div>
-                              <div className="text-lg font-semibold">{staff.emailUser || '-'}</div>
-                            </div>
-                          </div>
-                          <div className="bg-white rounded-xl p-5 shadow flex items-center gap-4 border border-blue-100">
-                            <span className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-blue-100 text-blue-700">
-                              <svg className="w-7 h-7" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3" /></svg>
-                            </span>
-                            <div>
-                              <div className="text-gray-500 text-xs">Date of Joining</div>
-                              <div className="text-lg font-semibold">{staff.doj || '-'}</div>
-                            </div>
-                          </div>
-                          <div className="bg-white rounded-xl p-5 shadow flex items-center gap-4 border border-blue-100">
-                            <span className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-blue-100 text-blue-700">
-                              <svg className="w-7 h-7" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><rect width="20" height="12" x="2" y="7" rx="2" /><path d="M2 17h20" /></svg>
-                            </span>
-                            <div>
-                              <div className="text-gray-500 text-xs">Superannuation Date</div>
-                              <div className="text-lg font-semibold">{staff.date_of_superannuation || '-'}</div>
-                            </div>
-                          </div>
+                          <SummaryCard tone="blue" label="Name" value={staff.name || (staff.fname ? `${staff.fname} ${staff.lname}` : '')}
+                            icon={<path strokeLinecap="round" strokeLinejoin="round" d="M5.121 17.804A9.001 9.001 0 0112 15c2.21 0 4.21.8 5.879 2.137M15 11a3 3 0 11-6 0 3 3 0 016 0z" />} />
+                          <SummaryCard tone="purple" label="Designation & Payscale" value={staff.designation_name}
+                            icon={<path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 01-8 0" />} />
+                          <SummaryCard tone="green" label="Department" value={staff.department_names || staff.department_name}
+                            icon={<path strokeLinecap="round" strokeLinejoin="round" d="M3 7h18M3 12h18M3 17h18" />} />
+                          <SummaryCard tone="yellow" label="Association" value={staff.association_name}
+                            icon={<path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a4 4 0 00-3-3.87M9 20H4v-2a4 4 0 013-3.87m9-5a4 4 0 11-8 0 4 4 0 018 0z" />} />
+                          <SummaryCard tone="indigo" label="Email" value={staff.emailUser}
+                            icon={<path strokeLinecap="round" strokeLinejoin="round" d="M8 17l4 4 4-4m0-5V3a2 2 0 00-2-2H6a2 2 0 00-2 2v14a2 2 0 002 2h8a2 2 0 002-2z" />} />
+                          <SummaryCard tone="teal" label="Date of Joining" value={staff.doj}
+                            icon={<path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3" />} />
+                          <SummaryCard tone="red" label="Superannuation Date" value={staff.date_of_superannuation}
+                            icon={<><rect width="20" height="12" x="2" y="7" rx="2" /><path d="M2 17h20" /></>} />
                         </div>
                         <div className="mt-8 text-gray-600 text-base">Select a tab on the left to view or edit more details about this staff member.</div>
                       </div>
@@ -379,6 +329,33 @@ export default function StaffViewPage({
             </div>
           </div>
         </main>
+      </div>
+    </div>
+  );
+}
+
+// Same tone scheme as StatTile in components/dashboard/DashboardUI.jsx (-50 card, -200 border,
+// -700 value, -900 label), plus an icon badge.
+const SUMMARY_TONES = {
+  blue: { card: 'bg-blue-50 border-blue-200', icon: 'bg-blue-100 text-blue-700', value: 'text-blue-700', label: 'text-blue-900' },
+  purple: { card: 'bg-purple-50 border-purple-200', icon: 'bg-purple-100 text-purple-700', value: 'text-purple-700', label: 'text-purple-900' },
+  green: { card: 'bg-green-50 border-green-200', icon: 'bg-green-100 text-green-700', value: 'text-green-700', label: 'text-green-900' },
+  yellow: { card: 'bg-yellow-50 border-yellow-200', icon: 'bg-yellow-100 text-yellow-700', value: 'text-yellow-700', label: 'text-yellow-900' },
+  indigo: { card: 'bg-indigo-50 border-indigo-200', icon: 'bg-indigo-100 text-indigo-700', value: 'text-indigo-700', label: 'text-indigo-900' },
+  teal: { card: 'bg-teal-50 border-teal-200', icon: 'bg-teal-100 text-teal-700', value: 'text-teal-700', label: 'text-teal-900' },
+  red: { card: 'bg-red-50 border-red-200', icon: 'bg-red-100 text-red-700', value: 'text-red-700', label: 'text-red-900' },
+};
+
+function SummaryCard({ tone = 'blue', label, value, icon }) {
+  const t = SUMMARY_TONES[tone] || SUMMARY_TONES.blue;
+  return (
+    <div className={`rounded-xl border p-5 shadow-sm flex items-center gap-4 ${t.card}`}>
+      <span className={`inline-flex shrink-0 items-center justify-center w-12 h-12 rounded-full ${t.icon}`}>
+        <svg className="w-7 h-7" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">{icon}</svg>
+      </span>
+      <div className="min-w-0">
+        <div className={`text-xs font-medium ${t.label}`}>{label}</div>
+        <div className={`text-lg font-semibold break-words ${t.value}`}>{value || '-'}</div>
       </div>
     </div>
   );

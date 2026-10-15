@@ -366,6 +366,12 @@ async function getById(id) {
     SELECT s.*, u.email,
       (SELECT a.asso_name FROM association_staff ast JOIN associations a ON a.id = ast.association_id WHERE ast.staff_id = s.id AND ast.status = 'active' ORDER BY ast.id DESC LIMIT 1) AS association_name,
       (SELECT d.dept_name FROM department_staff dst JOIN departments d ON d.id = dst.department_id WHERE dst.staff_id = s.id AND dst.status = 'active' ORDER BY dst.id DESC LIMIT 1) AS department_name,
+      -- Staff can be active in several departments at once (e.g. a department plus Exam Section).
+      (SELECT STRING_AGG(x.dept_name, ', ' ORDER BY x.first_id)
+         FROM (SELECT d.dept_name, MIN(dst.id) AS first_id
+                 FROM department_staff dst JOIN departments d ON d.id = dst.department_id
+                WHERE dst.staff_id = s.id AND dst.status = 'active'
+                GROUP BY d.dept_name) x) AS department_names,
       (SELECT des.design_name FROM designation_staff dst2 JOIN designations des ON des.id = dst2.designation_id WHERE dst2.staff_id = s.id AND dst2.status = 'active' ORDER BY dst2.id DESC LIMIT 1) AS designation_name,
       (SELECT des.isvacational FROM designation_staff dst2 JOIN designations des ON des.id = dst2.designation_id WHERE dst2.staff_id = s.id AND dst2.status = 'active' ORDER BY dst2.id DESC LIMIT 1) AS isvacational,
       (SELECT CASE WHEN LOWER(COALESCE(des.isvacational::text, '0')) IN ('1', 'true', 't', 'yes', 'vacational') THEN 'Vacational' ELSE 'Non-Vacational' END FROM designation_staff dst2 JOIN designations des ON des.id = dst2.designation_id WHERE dst2.staff_id = s.id AND dst2.status = 'active' ORDER BY dst2.id DESC LIMIT 1) AS designation_type,
