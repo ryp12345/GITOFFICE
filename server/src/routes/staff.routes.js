@@ -12,6 +12,8 @@ const staffSocietyLoanRoutes = require('./staffSocietyLoan.routes');
 const staffTaxRegimeRoutes = require('./staffTaxRegime.routes');
 const staffLicRoutes = require('./staffLic.routes');
 const staffDesignationPayscaleRoutes = require('./staffDesignationPayscale.routes');
+const staffPayrollRoutes = require('./staffPayroll.routes');
+const staffLeaveRoutes = require('./staffLeave.routes');
 const { authMiddleware } = require('../middlewares/auth.middleware');
 const { staffRecordGuard } = require('../middlewares/staffAccess.middleware');
 
@@ -37,6 +39,8 @@ router.use('/', staffSocietyLoanRoutes);
 router.use('/', staffTaxRegimeRoutes);
 router.use('/', staffLicRoutes);
 router.use('/', staffDesignationPayscaleRoutes);
+router.use('/', staffPayrollRoutes);
+router.use('/', staffLeaveRoutes);
 router.put('/:id', staffController.update);
 router.delete('/:id', staffController.remove);
 router.get('/:id', staffController.getById);

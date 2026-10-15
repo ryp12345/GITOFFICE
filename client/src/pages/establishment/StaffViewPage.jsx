@@ -17,10 +17,20 @@ import SocietyShare from './staff/SocietyShare';
 import SocietyLoan from './staff/SocietyLoan';
 import TaxRegime from './staff/TaxRegime';
 import LicManagement from './staff/LicManagement';
+import FestivalAdvance from './staff/FestivalAdvance';
+import Remuneration from './staff/Remuneration';
+import Salary from './staff/Salary';
+import Tds from './staff/Tds';
+import StaffLeaves from './staff/StaffLeaves';
 
+// Same tabs and order as the Laravel ESTB staff view (resources/views/ESTB/staff/view.blade.php).
+// nonTeachingOnly: Laravel shows the tab only when the latest employee type is Non-Teaching.
 const TABS = [
-  { key: 'personal', label: 'Personal Info', icon: (
+  { key: 'personal', label: 'Staff Basic Information', icon: (
     <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M5.121 17.804A9.001 9.001 0 0112 15c2.21 0 4.21.8 5.879 2.137M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+  ) },
+  { key: 'annual_increment', label: 'Annual Increment', icon: (
+    <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3" /></svg>
   ) },
   { key: 'association', label: 'Association', icon: (
     <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a4 4 0 00-3-3.87M9 20H4v-2a4 4 0 013-3.87m9-5a4 4 0 11-8 0 4 4 0 018 0z" /></svg>
@@ -31,8 +41,8 @@ const TABS = [
   { key: 'designation', label: 'Designation & Payscale', icon: (
     <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 01-8 0" /></svg>
   ) },
-  { key: 'annual_increment', label: 'Annual Increment', icon: (
-    <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3" /></svg>
+  { key: 'festival_advance', label: 'Festival Advance', nonTeachingOnly: true, icon: (
+    <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 8v13m0-13V6a2 2 0 112 2h-2zm0 0V5.5A2.5 2.5 0 109.5 8H12zm-7 4h14M5 12a2 2 0 110-4h14a2 2 0 110 4M5 12v7a2 2 0 002 2h10a2 2 0 002-2v-7" /></svg>
   ) },
   { key: 'form_16', label: 'Form 16', icon: (
     <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M8 17l4 4 4-4m0-5V3a2 2 0 00-2-2H6a2 2 0 002 2v14a2 2 0 002-2z" /></svg>
@@ -40,32 +50,32 @@ const TABS = [
   { key: 'laptop_loan', label: 'Laptop Loan', icon: (
     <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><rect width="20" height="12" x="2" y="7" rx="2" /><path d="M2 17h20" /></svg>
   ) },
-  { key: 'qualification', label: 'Qualification', icon: (
-    <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 14l9-5-9-5-9 5 9 5z" /><path strokeLinecap="round" strokeLinejoin="round" d="M12 14l6.16-3.422A12.083 12.083 0 0121 13.5c0 2.485-4.03 4.5-9 4.5s-9-2.015-9-4.5c0-.538.214-1.05.6-1.522L12 14z" /></svg>
-  ) },
-  { key: 'salary', label: 'Salary', icon: (
-    <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" /><path d="M8 12h8m-4-4v8" /></svg>
-  ) },
-  { key: 'society_share', label: 'Society Share', icon: (
-    <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" /><path d="M8 12h8m-4-4v8" /></svg>
-  ) },
-  { key: 'society_loan', label: 'Society Loan', icon: (
-    <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><rect width="20" height="12" x="2" y="7" rx="2" /><path d="M2 17h20" /></svg>
-  ) },
-  { key: 'tax_regime', label: 'Tax Regime', icon: (
-    <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3" /></svg>
+  { key: 'leaves', label: 'Leaves', icon: (
+    <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
   ) },
   { key: 'lic_management', label: 'LIC Management', icon: (
     <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>
   ) },
-  { key: 'leaves', label: 'Leaves', icon: (
-    <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+  { key: 'qualification', label: 'Qualification', icon: (
+    <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 14l9-5-9-5-9 5 9 5z" /><path strokeLinecap="round" strokeLinejoin="round" d="M12 14l6.16-3.422A12.083 12.083 0 0121 13.5c0 2.485-4.03 4.5-9 4.5s-9-2.015-9-4.5c0-.538.214-1.05.6-1.522L12 14z" /></svg>
   ) },
   { key: 'remuneration', label: 'Remuneration', icon: (
     <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
   ) },
+  { key: 'salary', label: 'Salary', icon: (
+    <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" /><path d="M8 12h8m-4-4v8" /></svg>
+  ) },
   { key: 'tds', label: 'TDS', icon: (
     <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
+  ) },
+  { key: 'society_share', label: 'Society Share', icon: (
+    <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" /><path d="M8 12h8m-4-4v8" /></svg>
+  ) },
+  { key: 'society_loan', label: 'Society Loans', icon: (
+    <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><rect width="20" height="12" x="2" y="7" rx="2" /><path d="M2 17h20" /></svg>
+  ) },
+  { key: 'tax_regime', label: 'Tax Regime', icon: (
+    <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3" /></svg>
   ) },
 ];
 
@@ -127,8 +137,20 @@ export default function StaffViewPage({
     refreshStaff();
   }, [refreshStaff]);
 
-  if (loading) return <div className="p-8 text-center">Loading...</div>;
-  if (error) return <div className="p-8 text-center text-red-600">{error}</div>;
+  const isNonTeaching = String(staff?.employee_type || '').trim().toLowerCase() === 'non-teaching';
+  const visibleTabs = TABS.filter((tab) => !tab.nonTeachingOnly || isNonTeaching);
+
+  // A tab hidden after a refresh (e.g. employee type changed) falls back to the summary.
+  useEffect(() => {
+    if (staff && activeTab !== 'summary' && !visibleTabs.some((tab) => tab.key === activeTab)) {
+      setActiveTab('summary');
+    }
+  }, [staff, activeTab, visibleTabs]);
+
+  // Only the first load blocks the page. Tabs call refreshStaff after saving; replacing the page
+  // with "Loading..." then would unmount the open tab and drop its state.
+  if (loading && !staff) return <div className="p-8 text-center">Loading...</div>;
+  if (error && !staff) return <div className="p-8 text-center text-red-600">{error}</div>;
 
   return (
     <div className="min-h-screen bg-slate-100 flex flex-col">
@@ -173,7 +195,7 @@ export default function StaffViewPage({
                 <span className="text-gray-500 text-sm text-center mb-6 truncate w-full">{staff?.designation_name || ''}</span>
                 {/* Sidebar Tabs - scrollable */}
                 <div className="flex flex-col gap-2 w-full overflow-y-auto flex-1">
-                  {TABS.map(tab => (
+                  {visibleTabs.map(tab => (
                     <button
                       key={tab.key}
                       onClick={() => setActiveTab(tab.key)}
@@ -186,7 +208,8 @@ export default function StaffViewPage({
                 </div>
               </div>
               {/* Right: Tab Content */}
-              <div className={`flex-1 px-4 py-4 flex flex-col items-start overflow-y-auto ${readOnly ? '[&_input]:pointer-events-none [&_select]:pointer-events-none [&_textarea]:pointer-events-none [&_button]:pointer-events-none [&_button]:opacity-60 [&_button]:cursor-not-allowed' : ''}`}>
+              {/* Read-only views block form controls, except filters/exports marked data-readonly-allow. */}
+              <div className={`flex-1 px-4 py-4 flex flex-col items-start overflow-y-auto ${readOnly ? '[&_input:not([data-readonly-allow])]:pointer-events-none [&_select:not([data-readonly-allow])]:pointer-events-none [&_textarea]:pointer-events-none [&_button:not([data-readonly-allow])]:pointer-events-none [&_button:not([data-readonly-allow])]:opacity-60 [&_button:not([data-readonly-allow])]:cursor-not-allowed' : ''}`}>
                 {staff ? (
                   <>
                     {activeTab === 'summary' && (
@@ -305,8 +328,11 @@ export default function StaffViewPage({
                     {activeTab === 'qualification' && (
                       <Qualification staffId={staff.id} token={localStorage.getItem('token')} />
                     )}
+                    {activeTab === 'festival_advance' && isNonTeaching && (
+                      <FestivalAdvance staff={staff} setNotification={setNotification} readOnly={readOnly} />
+                    )}
                     {activeTab === 'salary' && (
-                      <div>Salary content goes here.</div>
+                      <Salary staff={staff} />
                     )}
                     {activeTab === 'society_share' && (
                       <SocietyShare
@@ -337,22 +363,13 @@ export default function StaffViewPage({
                       />
                     )}
                     {activeTab === 'leaves' && (
-                      <div className="space-y-4">
-                        <h2 className="text-xl font-bold text-blue-700">Staff Leaves</h2>
-                        <p className="text-gray-600">Leave management functionality is available in the dedicated Leave section.</p>
-                      </div>
+                      <StaffLeaves staff={staff} setNotification={setNotification} readOnly={readOnly} />
                     )}
                     {activeTab === 'remuneration' && (
-                      <div className="space-y-4">
-                        <h2 className="text-xl font-bold text-blue-700">Staff Remuneration</h2>
-                        <p className="text-gray-600">Remuneration details will be displayed here.</p>
-                      </div>
+                      <Remuneration staff={staff} setNotification={setNotification} readOnly={readOnly} />
                     )}
                     {activeTab === 'tds' && (
-                      <div className="space-y-4">
-                        <h2 className="text-xl font-bold text-blue-700">TDS</h2>
-                        <p className="text-gray-600">TDS details will be displayed here.</p>
-                      </div>
+                      <Tds staff={staff} />
                     )}
                   </>
                 ) : (
@@ -363,29 +380,6 @@ export default function StaffViewPage({
           </div>
         </main>
       </div>
-    </div>
-  );
-}
-
-function Detail({ label, value }) {
-  return (
-    <div className="mb-2">
-      <span className="block text-sm font-semibold text-gray-600 mb-1">{label}</span>
-      <span className="block text-base text-gray-900 bg-gray-50 rounded px-2 py-1 border border-gray-200">{value || '-'}</span>
-    </div>
-  );
-}
-
-function Input({ label, value, onChange, type = 'text' }) {
-  return (
-    <div>
-      <label className="block mb-1 text-sm font-medium text-gray-700">{label}</label>
-      <input
-        type={type}
-        value={value}
-        onChange={e => onChange(e.target.value)}
-        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-      />
     </div>
   );
 }

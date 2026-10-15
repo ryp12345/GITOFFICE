@@ -1042,6 +1042,31 @@ async function listAnnualIncrementsByStaffId(staffId) {
   return rows;
 }
 
+// annual_increments.additional_days_type only accepts 'current_year' | 'permanent'. The forms (Laravel and
+// React) post 'Current Year' / 'Permanent', which MySQL's case-insensitive enum tolerated but Postgres rejects.
+function normalizeAdditionalDaysType(value) {
+  const v = String(value || '').trim().toLowerCase().replace(/\s+/g, '_');
+  return v === 'current_year' ? 'current_year' : 'permanent';
+}
+
+// Laravel urlcontroller::annual_increment prefills "Increment Postponed By" with the LWP days taken
+// between the latest increment's WEF and the staff's date of increment.
+async function getLwpDaysSinceLastIncrement(staffId) {
+  const { rows } = await pool.query(
+    `SELECT SUM(lsa.no_of_days) AS total_leave_days
+     FROM leave_staff_applications lsa
+     JOIN leaves l ON l.id = lsa.leave_id
+     WHERE lsa.staff_id = $1
+       AND l.shortname ILIKE '%lwp%'
+       AND lsa.appl_status <> 'rejected'
+       AND lsa.start >= (SELECT wef FROM annual_increments WHERE staff_id = $1 ORDER BY created_at DESC NULLS LAST, id DESC LIMIT 1)
+       AND lsa.start <= (SELECT date_of_increment FROM staff WHERE id = $1)`,
+    [staffId]
+  );
+  const total = rows[0] ? rows[0].total_leave_days : null;
+  return total === null || total === undefined ? null : Number(total);
+}
+
 async function createAnnualIncrementForStaff(staffId, payload) {
   const client = await pool.connect();
   try {
@@ -1059,7 +1084,7 @@ async function createAnnualIncrementForStaff(staffId, payload) {
     const reason = payload.reason || null;
     const basic = payload.basic ? Number(payload.basic) : null;
     const additionalDays = payload.additional_days ? parseInt(payload.additional_days, 10) : 0;
-    const additionalDaysType = payload.additional_days_type || 'Permanent';
+    const additionalDaysType = normalizeAdditionalDaysType(payload.additional_days_type);
 
     if (!wef || !gc || !reason || basic === null) {
       const err = new Error('wef, gc, reason and basic are required');
@@ -1080,7 +1105,7 @@ async function createAnnualIncrementForStaff(staffId, payload) {
       const currentDoi = staffRows[0].date_of_increment;
       if (currentDoi) {
         let daysToAdd = 0;
-        if (additionalDaysType === 'Permanent') {
+        if (additionalDaysType === 'permanent') {
           daysToAdd = 365 + additionalDays;
         } else {
           daysToAdd = additionalDays;
@@ -1119,6 +1144,9 @@ async function updateAnnualIncrementForStaff(staffId, incrementId, payload) {
     }
 
     const existing = existingRows[0];
+    if (payload.additional_days_type !== undefined) {
+      payload = { ...payload, additional_days_type: normalizeAdditionalDaysType(payload.additional_days_type) };
+    }
     const allowed = ['wef', 'additional_days', 'additional_days_type', 'gc', 'reason', 'basic'];
     const updates = [];
     const values = [];
@@ -1149,12 +1177,14 @@ async function updateAnnualIncrementForStaff(staffId, incrementId, payload) {
     // Mirror Laravel update logic: adjust date_of_increment if Permanent and additional_days changed
     const newReason = payload.reason !== undefined ? payload.reason : existing.reason;
     const newAdditionalDays = payload.additional_days !== undefined ? parseInt(payload.additional_days, 10) : parseInt(existing.additional_days, 10);
-    const newAdditionalDaysType = payload.additional_days_type !== undefined ? payload.additional_days_type : existing.additional_days_type;
+    const newAdditionalDaysType = normalizeAdditionalDaysType(
+      payload.additional_days_type !== undefined ? payload.additional_days_type : existing.additional_days_type
+    );
     const oldAdditionalDays = parseInt(existing.additional_days, 10);
 
     if (
       newReason === 'Regular Annual Increment' &&
-      newAdditionalDaysType === 'Permanent' &&
+      newAdditionalDaysType === 'permanent' &&
       newAdditionalDays !== oldAdditionalDays
     ) {
       const diff = newAdditionalDays - oldAdditionalDays;
@@ -1195,7 +1225,7 @@ async function deleteAnnualIncrementForStaff(staffId, incrementId) {
     if (existing.reason === 'Regular Annual Increment') {
       const additionalDays = parseInt(existing.additional_days, 10) || 0;
       let daysToSubtract = 0;
-      if (existing.additional_days_type === 'Permanent') {
+      if (normalizeAdditionalDaysType(existing.additional_days_type) === 'permanent') {
         daysToSubtract = 365 + additionalDays;
       } else {
         daysToSubtract = additionalDays;
@@ -1392,8 +1422,23 @@ async function listSocietyLoansByStaffId(staffId) {
   return rows;
 }
 
+async function getActiveSocietyShare(staffId) {
+  const { rows } = await pool.query(
+    "SELECT * FROM staffshares WHERE staff_id = $1 AND status = 'active' ORDER BY id ASC LIMIT 1",
+    [staffId]
+  );
+  return rows[0] || null;
+}
+
 async function createSocietyLoanForStaff(staffId, payload) {
-  const memberId = payload.member_id || null;
+  // Laravel only offers the loan form to society members, with member_id fixed to the active share's.
+  const share = await getActiveSocietyShare(staffId);
+  if (!share) {
+    const err = new Error('Staff is not a society member (no active society share)');
+    err.statusCode = 400;
+    throw err;
+  }
+  const memberId = share.member_id;
   const loanType = payload.loan_type || null;
   const loanId = payload.loan_id || null;
   const loanAmount = payload.loan_amount !== undefined ? parseFloat(payload.loan_amount) : null;
@@ -1852,6 +1897,7 @@ module.exports = {
   updateInstitutionForStaff,
   deleteInstitutionForStaff,
   listAnnualIncrementsByStaffId,
+  getLwpDaysSinceLastIncrement,
   createAnnualIncrementForStaff,
   updateAnnualIncrementForStaff,
   deleteAnnualIncrementForStaff,
@@ -1864,6 +1910,7 @@ module.exports = {
   updateSocietyShareForStaff,
   deleteSocietyShareForStaff,
   listSocietyLoansByStaffId,
+  getActiveSocietyShare,
   createSocietyLoanForStaff,
   updateSocietyLoanForStaff,
   deleteSocietyLoanForStaff,

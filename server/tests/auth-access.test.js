@@ -72,6 +72,29 @@ test('staff sub-records: Establishment and Super Admin read all, others only the
   assert.equal(await runGuard(staffRecordGuard, { method: 'PATCH', path: '/7/lics/1', user: estb }), undefined);
 });
 
+test('staff view payroll and leave tabs follow the staff sub-record rules', async () => {
+  const tabPaths = ['/api/staff/42/festival-advances', '/api/staff/42/remunerations', '/api/staff/42/salaries',
+    '/api/staff/42/tds', '/api/staff/42/tds/export', '/api/staff/42/leaves'];
+  for (const path of tabPaths) {
+    assert.equal((await request(app).get(path)).status, 401, path);
+  }
+
+  const auth = bearer(teacher);
+  const writes = [
+    request(app).post('/api/staff/42/festival-advances').set('Authorization', auth).send({}),
+    request(app).patch('/api/staff/42/festival-advances/1').set('Authorization', auth).send({}),
+    request(app).post('/api/staff/42/remunerations').set('Authorization', auth).send({}),
+    request(app).delete('/api/staff/42/remunerations/1').set('Authorization', auth)
+  ];
+  for (const res of await Promise.all(writes)) {
+    assert.equal(res.status, 403, `${res.req.method} ${res.req.path}`);
+  }
+  for (const path of tabPaths) {
+    const res = await request(app).get(path.replace('/42/', '/7/')).set('Authorization', auth);
+    assert.equal(res.status, 403, path);
+  }
+});
+
 test('staff may manage only their own qualifications', async () => {
   const guard = (user, method, staffId) => runGuard(qualificationGuard, { method, params: { staffId }, user });
 

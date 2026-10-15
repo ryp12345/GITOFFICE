@@ -4,8 +4,11 @@ async function listAnnualIncrements(req, res, next) {
   try {
     const staffId = parseInt(req.params.id, 10);
     if (!staffId) return res.status(400).json({ success: false, message: 'Invalid staff id' });
-    const data = await staffService.listAnnualIncrementsByStaffId(staffId);
-    return res.json({ success: true, data });
+    const [data, lwpDays] = await Promise.all([
+      staffService.listAnnualIncrementsByStaffId(staffId),
+      staffService.getLwpDaysSinceLastIncrement(staffId),
+    ]);
+    return res.json({ success: true, data, lwp_days: lwpDays });
   } catch (err) {
     next(err);
   }

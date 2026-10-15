@@ -413,7 +413,78 @@ const updateEntitlements = async ({ year, staffId, entitled, availed, thisYearEn
   }
 };
 
+// Staff view "Leaves" tab (Laravel urlcontroller::leave_entitlement / filter_yearwise_leave).
+// Without a year: the staff member's active entitlements, plus days taken (non-rejected
+// applications) for leave types they have no entitlement row for. With a year: that year's rows.
+const getStaffLeaveData = async ({ staffId, year }) => {
+  const currentYear = new Date().getFullYear();
+  const hasYear = Number.isFinite(Number(year)) && Number(year) > 0;
+  const selectedYear = hasYear ? Number(year) : currentYear;
+
+  const [leaveTypes, leaveTypesTaken, staffQuery] = await Promise.all([
+    getLeaveTypes(true),
+    getLeaveTypes(false),
+    pool.query(
+      `SELECT id, user_id, TRIM(CONCAT_WS(' ', fname, mname, lname)) AS name FROM staff WHERE id = $1`,
+      [staffId]
+    )
+  ]);
+
+  if (!staffQuery.rows.length) {
+    const err = new Error('Staff not found');
+    err.statusCode = 404;
+    throw err;
+  }
+
+  const entitlementRows = await getEntitlementsForStaff(selectedYear, [Number(staffId)], {
+    useYearFilter: hasYear,
+    activeOnly: !hasYear
+  });
+  const [entitlement] = buildRows(staffQuery.rows, entitlementRows, selectedYear);
+
+  if (!hasYear) {
+    const { rows: taken } = await pool.query(
+      `SELECT UPPER(TRIM(l.shortname)) AS shortname, SUM(lsa.no_of_days) AS total_days
+       FROM leave_staff_applications lsa
+       JOIN leaves l ON l.id = lsa.leave_id
+       WHERE lsa.staff_id = $1 AND COALESCE(lsa.appl_status, '') <> 'rejected'
+       GROUP BY 1`,
+      [staffId]
+    );
+    taken.forEach((row) => {
+      if (!entitlement.leaves[row.shortname]) {
+        entitlement.leaves[row.shortname] = { availed: toSafeNumber(row.total_days, 0) };
+      }
+    });
+  }
+
+  // Laravel inner-joins the alternate, which hides applications that have none; left join instead.
+  const { rows: applications } = await pool.query(
+    `SELECT lsa.id, UPPER(TRIM(l.shortname)) AS shortname, lsa.reason, lsa.start, lsa."end",
+            lsa.no_of_days, lsa.appl_status, lsa.leave_status, lsa.year,
+            TRIM(CONCAT_WS(' ', alt.fname, alt.mname, alt.lname)) AS alternate_name,
+            approver.role AS approver_role
+     FROM leave_staff_applications lsa
+     JOIN leaves l ON l.id = lsa.leave_id
+     LEFT JOIN staff alt ON alt.id = lsa.alternate
+     LEFT JOIN users approver ON approver.id = lsa.approver
+     WHERE lsa.staff_id = $1
+     ORDER BY lsa.start DESC, lsa.id DESC`,
+    [staffId]
+  );
+
+  return {
+    year: selectedYear,
+    mode: hasYear ? 'yearwise' : 'default',
+    leave_types: leaveTypes,
+    leave_types_taken: leaveTypesTaken,
+    entitlement,
+    applications
+  };
+};
+
 module.exports = {
   getEntitlementScreenData,
+  getStaffLeaveData,
   updateEntitlements
 };

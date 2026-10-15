@@ -53,6 +53,9 @@ export default function SocietyLoan({ staff, setNotification, onSocietyLoanUpdat
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [form, setForm] = useState(defaultForm);
+  // Active society share. As in Laravel, only society members can take a loan, and the
+  // loan's member ID is the share's.
+  const [share, setShare] = useState(null);
 
   const fetchData = async () => {
     if (!staff?.id) return;
@@ -60,8 +63,10 @@ export default function SocietyLoan({ staff, setNotification, onSocietyLoanUpdat
     try {
       const res = await getStaffSocietyLoans(staff.id);
       setRows(Array.isArray(res?.data) ? res.data : []);
+      setShare(res?.share || null);
     } catch (_e) {
       setRows([]);
+      setShare(null);
     } finally {
       setLoading(false);
     }
@@ -75,7 +80,7 @@ export default function SocietyLoan({ staff, setNotification, onSocietyLoanUpdat
   const openCreateModal = () => {
     setEditingRow(null);
     setError('');
-    setForm({ ...defaultForm, start_date: toInputDate(new Date()) });
+    setForm({ ...defaultForm, member_id: share?.member_id || '', start_date: toInputDate(new Date()) });
     setShowModal(true);
   };
 
@@ -170,7 +175,9 @@ export default function SocietyLoan({ staff, setNotification, onSocietyLoanUpdat
         <h2 className="text-xl font-bold text-blue-700">Society Loan Details</h2>
         <button
           onClick={openCreateModal}
-          className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm font-semibold flex items-center gap-2"
+          disabled={!share}
+          title={share ? '' : 'Staff is not a society member'}
+          className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm font-semibold flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -178,6 +185,12 @@ export default function SocietyLoan({ staff, setNotification, onSocietyLoanUpdat
           Add Loan Details
         </button>
       </div>
+
+      {!loading && !share && (
+        <div className="rounded-md border border-yellow-200 bg-yellow-50 px-4 py-3 text-sm text-yellow-800">
+          Staff is not a society member. Add an active Society Share before recording a loan.
+        </div>
+      )}
 
       {error && (
         <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
@@ -271,10 +284,10 @@ export default function SocietyLoan({ staff, setNotification, onSocietyLoanUpdat
                   </label>
                   <input
                     type="text"
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2"
+                    className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2"
                     value={form.member_id}
-                    onChange={(e) => setForm((prev) => ({ ...prev, member_id: e.target.value }))}
                     placeholder="Member ID"
+                    readOnly
                     required
                   />
                 </div>

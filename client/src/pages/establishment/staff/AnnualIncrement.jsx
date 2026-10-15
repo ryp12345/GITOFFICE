@@ -38,15 +38,20 @@ function formatDateDMY(value) {
   return `${day}-${month}-${year}`;
 }
 
+// Values stored in annual_increments.additional_days_type (CHECK: 'current_year' | 'permanent').
 const ADDITIONAL_DAYS_TYPE_OPTIONS = [
-  { value: 'Current Year', label: 'Current Year' },
-  { value: 'Permanent', label: 'Permanent' },
+  { value: 'current_year', label: 'Current Year' },
+  { value: 'permanent', label: 'Permanent' },
 ];
+
+function normalizeAdditionalDaysType(value) {
+  return String(value || '').trim().toLowerCase().replace(/\s+/g, '_') === 'current_year' ? 'current_year' : 'permanent';
+}
 
 const defaultForm = {
   wef: '',
   additional_days: '',
-  additional_days_type: 'Permanent',
+  additional_days_type: 'permanent',
   gc: '',
   reason: '',
   basic: '',
@@ -60,6 +65,8 @@ export default function AnnualIncrement({ staff, setNotification, onAnnualIncrem
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [form, setForm] = useState(defaultForm);
+  // LWP days since the last increment's WEF; Laravel prefills "Increment Postponed By" with it.
+  const [lwpDays, setLwpDays] = useState(null);
 
   const fetchData = async () => {
     if (!staff?.id) return;
@@ -68,8 +75,10 @@ export default function AnnualIncrement({ staff, setNotification, onAnnualIncrem
       const res = await getStaffAnnualIncrements(staff.id);
       const data = Array.isArray(res?.data) ? res.data : [];
       setRows(data);
+      setLwpDays(res?.lwp_days ?? null);
     } catch (_e) {
       setRows([]);
+      setLwpDays(null);
     } finally {
       setLoading(false);
     }
@@ -83,7 +92,11 @@ export default function AnnualIncrement({ staff, setNotification, onAnnualIncrem
   const openCreateModal = () => {
     setEditingRow(null);
     setError('');
-    setForm({ ...defaultForm, wef: toInputDate(new Date()) });
+    setForm({
+      ...defaultForm,
+      wef: toInputDate(new Date()),
+      additional_days: lwpDays !== null ? String(lwpDays) : '',
+    });
     setShowModal(true);
   };
 
@@ -93,7 +106,7 @@ export default function AnnualIncrement({ staff, setNotification, onAnnualIncrem
     setForm({
       wef: toInputDate(row.wef),
       additional_days: row.additional_days !== null && row.additional_days !== undefined ? String(row.additional_days) : '',
-      additional_days_type: row.additional_days_type || 'Permanent',
+      additional_days_type: normalizeAdditionalDaysType(row.additional_days_type),
       gc: row.gc || '',
       reason: row.reason || '',
       basic: row.basic !== null && row.basic !== undefined ? String(row.basic) : '',

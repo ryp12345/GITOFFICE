@@ -4,8 +4,11 @@ async function listSocietyLoans(req, res, next) {
   try {
     const staffId = parseInt(req.params.id, 10);
     if (!staffId) return res.status(400).json({ success: false, message: 'Invalid staff id' });
-    const data = await staffService.listSocietyLoansByStaffId(staffId);
-    return res.json({ success: true, data });
+    const [data, share] = await Promise.all([
+      staffService.listSocietyLoansByStaffId(staffId),
+      staffService.getActiveSocietyShare(staffId),
+    ]);
+    return res.json({ success: true, data, share });
   } catch (err) {
     next(err);
   }
