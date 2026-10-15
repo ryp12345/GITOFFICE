@@ -22,6 +22,8 @@ import Remuneration from './staff/Remuneration';
 import Salary from './staff/Salary';
 import Tds from './staff/Tds';
 import StaffLeaves from './staff/StaffLeaves';
+import Avatar from '../../components/common/Avatar';
+import { resolveUploadUrl } from '../../utils/uploads';
 
 // Same tabs and order as the Laravel ESTB staff view (resources/views/ESTB/staff/view.blade.php).
 // nonTeachingOnly: Laravel shows the tab only when the latest employee type is Non-Teaching.
@@ -184,12 +186,14 @@ export default function StaffViewPage({
               <div className="flex flex-col items-center py-4 px-2 border-r border-gray-200 min-w-[180px] bg-slate-50 overflow-y-auto max-h-[600px]">
                 <button
                   onClick={() => setActiveTab('summary')}
-                  className="w-24 h-24 rounded-full bg-gray-200 flex items-center justify-center mb-4 border-4 border-blue-100 shadow hover:border-blue-400 hover:shadow-lg transition-all duration-200 cursor-pointer"
+                  className="mb-4 rounded-full border-4 border-blue-100 shadow hover:border-blue-400 hover:shadow-lg transition-all duration-200 cursor-pointer"
                   title="Click to view summary"
                 >
-                  <svg className="w-12 h-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.121 17.804A9.001 9.001 0 0112 15c2.21 0 4.21.8 5.879 2.137M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                  </svg>
+                  <Avatar
+                    src={resolveUploadUrl(staff?.profile_photo_url)}
+                    name={staff?.name || [staff?.fname, staff?.lname].filter(Boolean).join(' ')}
+                    className="w-24 h-24 text-2xl"
+                  />
                 </button>
                 <h2 className="text-lg font-bold text-blue-700 mb-1 text-center truncate w-full">{staff?.name || '-'}</h2>
                 <span className="text-gray-500 text-sm text-center mb-6 truncate w-full">{staff?.designation_name || ''}</span>

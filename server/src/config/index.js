@@ -26,6 +26,8 @@ module.exports = {
   dbUser: process.env.DB_USER || 'postgres',
   dbPass: process.env.DB_PASS || '',
   corsOrigins,
+  // Laravel's public/Uploads/Staff/Profile_photos, read as a fallback so existing photos keep showing.
+  legacyProfilePhotoDir: process.env.LEGACY_PROFILE_PHOTO_DIR || '',
   smtpHost: process.env.SMTP_HOST || '',
   smtpPort: Number(process.env.SMTP_PORT || 465),
   smtpSecure: String(process.env.SMTP_SECURE || 'true') === 'true',

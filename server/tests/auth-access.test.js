@@ -95,6 +95,24 @@ test('staff view payroll and leave tabs follow the staff sub-record rules', asyn
   }
 });
 
+test('profile photo: login required, JPG only, at most 500 KB (Laravel rule)', async () => {
+  assert.equal((await request(app).get('/api/profile/photo')).status, 401);
+  assert.equal((await request(app).post('/api/profile/photo')).status, 401);
+
+  const auth = bearer(teacher);
+  const png = await request(app).post('/api/profile/photo').set('Authorization', auth)
+    .attach('profile_photo', Buffer.from('89504e470d0a1a0a', 'hex'), { filename: 'me.png', contentType: 'image/png' });
+  assert.equal(png.status, 400);
+  assert.match(png.body.message, /Only JPG/);
+
+  const big = Buffer.alloc(500001, 0);
+  big[0] = 0xff; big[1] = 0xd8; big[2] = 0xff;
+  const tooLarge = await request(app).post('/api/profile/photo').set('Authorization', auth)
+    .attach('profile_photo', big, { filename: 'me.jpg', contentType: 'image/jpeg' });
+  assert.equal(tooLarge.status, 400);
+  assert.match(tooLarge.body.message, /500 KB/);
+});
+
 test('staff may manage only their own qualifications', async () => {
   const guard = (user, method, staffId) => runGuard(qualificationGuard, { method, params: { staffId }, user });
 

@@ -108,6 +108,7 @@ async function getStatistics({ start_date, end_date }) {
 
 const { pool } = require('../config/db');
 const { hashPassword } = require('../utils/hash');
+const { photoUrl } = require('./profilePhoto.service');
 
 async function listAll() {
   // Get all staff
@@ -486,6 +487,7 @@ async function getById(id) {
     a => a.association_id === 6 || a.asso_name === 'Confirmed' || a.association_name === 'Confirmed'
   );
   staff.confirmation_date = confirmAssoc ? confirmAssoc.start_date : null;
+  staff.profile_photo_url = photoUrl(staff.profile_photo);
 
   return staff;
 }

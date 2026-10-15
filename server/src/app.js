@@ -48,6 +48,9 @@ const corsOptions = {
 app.use(cors(corsOptions));
 app.use(express.json());
 app.use('/uploads', express.static(path.resolve(__dirname, '..', 'uploads')));
+// Photos not uploaded through this app yet are served from Laravel's folder.
+const { LEGACY_PHOTO_DIR, PHOTO_URL_PREFIX } = require('./services/profilePhoto.service');
+if (LEGACY_PHOTO_DIR) app.use(PHOTO_URL_PREFIX, express.static(LEGACY_PHOTO_DIR));
 
 app.get('/health', (_req, res) => res.json({ ok: true }));
 app.use('/api/auth', authRoutes);
@@ -133,6 +136,10 @@ app.use('/api/hod', hodCoordinatorRoutes);
 // Notice board management (raise / edit / delete); who may do what is in policies/notice.policy.js
 const noticeRoutes = require('./routes/notice.routes');
 app.use('/api/notices', noticeRoutes);
+
+// Signed-in user's own profile photo (upload / current URL)
+const profileRoutes = require('./routes/profile.routes');
+app.use('/api/profile', profileRoutes);
 
 app.use(errorMiddleware);
 
