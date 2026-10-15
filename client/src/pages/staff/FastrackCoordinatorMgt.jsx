@@ -69,7 +69,7 @@ export default function FastrackCoordinatorMgtPage() {
       setRows(Array.isArray(coursesData) ? coursesData : []);
     } else {
       setRows([]);
-      showNotification(coursesRes.getErrorMessage(reason, 'Failed to load courses'), 'error');
+      showNotification(getErrorMessage(coursesRes.reason, 'Failed to load courses'), 'error');
     }
 
     if (staffRes.status === 'fulfilled') {

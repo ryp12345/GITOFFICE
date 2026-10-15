@@ -109,8 +109,7 @@ export default function StaffSidebar() {
     }
 
     if (isNonTeaching) {
-      const nonTeachingOnly = NON_TEACHING_ONLY_LINKS.map((item) => ({ ...item, path: getPath(item, false) }));
-      return [...shared, ...nonTeachingOnly];
+      return shared;
     }
 
     return [];

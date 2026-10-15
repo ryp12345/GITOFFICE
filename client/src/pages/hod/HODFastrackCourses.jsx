@@ -63,7 +63,7 @@ export default function HODFastrackCoursesPage() {
       setRows(Array.isArray(coursesRes.value?.data) ? coursesRes.value.data : []);
     } else {
       setRows([]);
-      showNotification(coursesRes.getErrorMessage(reason, 'Failed to load courses'), 'error');
+      showNotification(getErrorMessage(coursesRes.reason, 'Failed to load courses'), 'error');
     }
     if (lookupRes.status === 'fulfilled') {
       setInstances(lookupRes.value?.data?.instances || []);
