@@ -16,3 +16,7 @@ Monorepo with:
 ## Structure
 
 See folders in `server/` and `client/` for modular architecture.
+
+## Docs
+
+- [Biometric troubleshooting (VPS)](docs/BIOMETRIC_TROUBLESHOOTING.md)
