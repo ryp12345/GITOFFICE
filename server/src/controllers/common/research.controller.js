@@ -2,6 +2,7 @@ const fs = require('fs');
 const path = require('path');
 
 const researchModel = require('../../models/research.model');
+const { normalizeWebUrl } = require('../../utils/safeUrl');
 const { RESEARCH_DOCUMENT_ROOTS } = require('../../middlewares/upload.middleware');
 
 const VALID_OPTION_MESSAGE = 'Please select a valid option from the provided choices';
@@ -38,6 +39,16 @@ const MIN_DAYS = 1;
 function readString(body, field) {
   const value = body[field];
   return typeof value === 'string' ? value.trim() : '';
+}
+
+// Optional web link: must be http(s); blocks stored "javascript:" links (XSS).
+function optionalWebUrl(errors, body, field) {
+  const result = normalizeWebUrl(readString(body, field));
+  if (!result.ok) {
+    errors[field] = 'Please enter a valid web link starting with http:// or https://';
+    return null;
+  }
+  return result.url;
 }
 
 function readNumber(body, field) {
@@ -196,7 +207,7 @@ const VALIDATORS = {
         sponsored: sponsored || null,
         sponsored_by: sponsoredBy,
         amount: optionalNumber(errors, body, 'amount', 'Amount'),
-        weblink: readString(body, 'weblink') || null,
+        weblink: optionalWebUrl(errors, body, 'weblink'),
         type_of_level: requireOption(errors, body, 'type_of_level', LEVEL_ONLY_OPTIONS, 'level'),
         issn_no: readString(body, 'issn_no') || null,
       },
@@ -226,7 +237,7 @@ const VALIDATORS = {
         place: requireText(errors, body, 'place', 'place'),
         publisher: readString(body, 'publisher') || null,
         role: requireOption(errors, body, 'role', CONDUCTED_ROLES, 'role'),
-        weblink: readString(body, 'weblink') || null,
+        weblink: optionalWebUrl(errors, body, 'weblink'),
         type_of_level: requireOption(errors, body, 'type_of_level', LEVEL_ONLY_OPTIONS, 'level'),
         issn_no: readString(body, 'issn_no') || null,
       },
@@ -246,7 +257,7 @@ const VALIDATORS = {
         date: requireDate(errors, body, 'date'),
         journal: readString(body, 'journal') || null,
         doi_number: readString(body, 'doi_number') || null,
-        link: readString(body, 'link') || null,
+        link: optionalWebUrl(errors, body, 'link'),
         role: requireOption(errors, body, 'role', PUBLICATION_ROLES, 'role'),
         volume: readString(body, 'volume') || null,
         issue: readString(body, 'issue') || null,

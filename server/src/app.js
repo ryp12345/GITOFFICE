@@ -45,12 +45,24 @@ const corsOptions = {
 	}
 };
 
+const { uploadsGuard } = require('./utils/fileSecurity');
+
+// Baseline browser protections on every response.
+app.use((_req, res, next) => {
+	res.setHeader('X-Content-Type-Options', 'nosniff');
+	res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+	next();
+});
+
 app.use(cors(corsOptions));
 app.use(express.json());
-app.use('/uploads', express.static(path.resolve(__dirname, '..', 'uploads')));
+// Uploaded files: only PDF/image extensions are served, with nosniff + a script-blocking CSP,
+// no directory listings and no dotfiles. Nothing under /uploads is ever executed.
+const staticUploadOptions = { dotfiles: 'deny', index: false, redirect: false };
+app.use('/uploads', uploadsGuard, express.static(path.resolve(__dirname, '..', 'uploads'), staticUploadOptions));
 // Photos not uploaded through this app yet are served from Laravel's folder.
 const { LEGACY_PHOTO_DIR, PHOTO_URL_PREFIX } = require('./services/profilePhoto.service');
-if (LEGACY_PHOTO_DIR) app.use(PHOTO_URL_PREFIX, express.static(LEGACY_PHOTO_DIR));
+if (LEGACY_PHOTO_DIR) app.use(PHOTO_URL_PREFIX, uploadsGuard, express.static(LEGACY_PHOTO_DIR, staticUploadOptions));
 
 app.get('/health', (_req, res) => res.json({ ok: true }));
 app.use('/api/auth', authRoutes);

@@ -2,6 +2,7 @@ const express = require('express');
 const multer = require('multer');
 const { authMiddleware } = require('../middlewares/auth.middleware');
 const profilePhotoService = require('../services/profilePhoto.service');
+const { createFileFilter } = require('../utils/fileSecurity');
 
 const router = express.Router();
 
@@ -10,9 +11,11 @@ const PHOTO_RULE = 'Only JPG files up to 500 KB in size are accepted.';
 const photoUpload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: profilePhotoService.MAX_PHOTO_BYTES, files: 1 },
-  fileFilter: (_req, file, cb) => {
-    const ok = file.mimetype === 'image/jpeg' || /\.jpe?g$/i.test(file.originalname || '');
-    cb(ok ? null : Object.assign(new Error(PHOTO_RULE), { statusCode: 400 }), ok);
+  // Extension AND MIME must both say JPEG (was OR); the service then checks the magic bytes.
+  fileFilter: (req, file, cb) => {
+    createFileFilter('jpeg')(req, file, (err, ok) => {
+      cb(err ? Object.assign(new Error(PHOTO_RULE), { statusCode: 400 }) : null, Boolean(ok));
+    });
   },
 }).single('profile_photo');
 

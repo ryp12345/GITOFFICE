@@ -11,8 +11,9 @@ const fastrackPayController = require('../controllers/exam-section/fastrack_pay.
 const fastrackExpensesController = require('../controllers/exam-section/fastrack_expenses.controller');
 const fastrackInsightsController = require('../controllers/exam-section/fastrack_insights.controller');
 const coeprogramController = require('../controllers/exam-section/coeprogram.controller');
-const multer = require('multer');
-const upload = multer({ storage: multer.memoryStorage() });
+const { uploadExcelSheet } = require('../middlewares/upload.middleware');
+// Excel only (.xlsx/.xls, verified by content), 10 MB max.
+const upload = uploadExcelSheet;
 
 const router = Router();
 

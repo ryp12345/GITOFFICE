@@ -28,6 +28,7 @@ import {
   toInputDate,
 } from './researchShared';
 import { getErrorMessage } from '../../../utils/errors';
+import { safeExternalUrl } from '../../../utils/safeUrl';
 
 const MAX_DOCUMENT_BYTES = 500 * 1024;
 
@@ -428,8 +429,11 @@ export default function ResearchModule({ resource, title, subtitle, modulePath, 
 
     if (column.type === 'link') {
       if (!value) return '-';
+      // Only http(s) links are clickable; anything else is shown as plain text.
+      const safeHref = safeExternalUrl(value);
+      if (!safeHref) return String(value);
       return (
-        <a href={value} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">
+        <a href={safeHref} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
           {value}
         </a>
       );

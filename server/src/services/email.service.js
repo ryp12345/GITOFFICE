@@ -68,7 +68,7 @@ async function sendForm16UploadIssueReport(opts) {
           ${unmatchedPans.map((pan, i) => `
             <tr style="background:${i % 2 === 0 ? '#fffbeb' : '#fff'}">
               <td style="padding:6px 12px;border:1px solid #e5e7eb;">${i + 1}</td>
-              <td style="padding:6px 12px;border:1px solid #e5e7eb;font-family:monospace;">${pan}</td>
+              <td style="padding:6px 12px;border:1px solid #e5e7eb;font-family:monospace;">${escapeHtml(pan)}</td>
             </tr>
           `).join('')}
         </tbody>
@@ -90,7 +90,7 @@ async function sendForm16UploadIssueReport(opts) {
           ${invalidFiles.map((file, i) => `
             <tr style="background:${i % 2 === 0 ? '#fff5f5' : '#fff'}">
               <td style="padding:6px 12px;border:1px solid #e5e7eb;">${i + 1}</td>
-              <td style="padding:6px 12px;border:1px solid #e5e7eb;font-family:monospace;">${file}</td>
+              <td style="padding:6px 12px;border:1px solid #e5e7eb;font-family:monospace;">${escapeHtml(file)}</td>
             </tr>
           `).join('')}
         </tbody>
@@ -112,7 +112,7 @@ async function sendForm16UploadIssueReport(opts) {
           ${invalidPartPath.map((p, i) => `
             <tr style="background:${i % 2 === 0 ? '#f5f3ff' : '#fff'}">
               <td style="padding:6px 12px;border:1px solid #e5e7eb;">${i + 1}</td>
-              <td style="padding:6px 12px;border:1px solid #e5e7eb;font-family:monospace;">${p}</td>
+              <td style="padding:6px 12px;border:1px solid #e5e7eb;font-family:monospace;">${escapeHtml(p)}</td>
             </tr>
           `).join('')}
         </tbody>
@@ -135,7 +135,7 @@ async function sendForm16UploadIssueReport(opts) {
         <!-- Summary -->
         <div style="padding:24px 32px 0;">
           <p style="color:#374151;font-size:14px;margin:0 0 16px;">
-            The bulk upload for <strong>FY ${year}</strong> completed with some issues. Please review the details below and re-upload the affected files.
+            The bulk upload for <strong>FY ${escapeHtml(year)}</strong> completed with some issues. Please review the details below and re-upload the affected files.
           </p>
 
           <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:8px;">
@@ -149,7 +149,7 @@ async function sendForm16UploadIssueReport(opts) {
             </div>
             <div style="background:#eff6ff;border:1px solid #93c5fd;border-radius:6px;padding:14px;text-align:center;">
               <div style="font-size:24px;font-weight:700;color:#1d4ed8;">${totalPdfInZip}</div>
-              <div style="font-size:12px;color:#1e40af;margin-top:4px;">Total PDFs in ${archiveType.toUpperCase()}</div>
+              <div style="font-size:12px;color:#1e40af;margin-top:4px;">Total PDFs in ${escapeHtml(String(archiveType).toUpperCase())}</div>
             </div>
           </div>
 
@@ -218,7 +218,7 @@ async function sendPasswordResetEmail({ toEmail, resetUrl }) {
           <p>We received a request to reset the password for your <strong>GITOFFICE</strong> account.</p>
           <p>To proceed, please click the button below to set a new password. For your security, this link will expire shortly.</p>
           <p style="margin:24px 0;">
-            <a href="${resetUrl}" style="display:inline-block;background:#2563eb;color:#fff;text-decoration:none;padding:10px 16px;border-radius:8px;font-weight:600;">Reset Password</a>
+            <a href="${escapeHtml(resetUrl)}" style="display:inline-block;background:#2563eb;color:#fff;text-decoration:none;padding:10px 16px;border-radius:8px;font-weight:600;">Reset Password</a>
           </p>
           <p>If you did not request a password reset, please ignore this email. Your account will remain secure, and no changes will be made.</p>
           <p>If you have any concerns, feel free to contact our support team.</p>

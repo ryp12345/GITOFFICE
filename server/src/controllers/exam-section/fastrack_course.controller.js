@@ -2,11 +2,9 @@ const courseService = require('../../services/exam-section/fastrack_course.servi
 const { pool } = require('../../config/db');
 const ExcelJS = require('exceljs');
 const XLSX = require('xlsx');
-const multer = require('multer');
 const { promisify } = require('util');
 const pipeline = promisify(require('stream').pipeline);
 
-const upload = multer({ storage: multer.memoryStorage() });
 
 async function listCourses(req, res, next) {
   try {

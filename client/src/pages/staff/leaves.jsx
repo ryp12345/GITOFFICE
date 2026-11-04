@@ -7,6 +7,7 @@ import axios from '../../api/axios';
 import { getMyLeaveEntitlements } from '../../api/leaveEntitlementApi';
 import { getHolidayRHList } from '../../api/holidayrhApi';
 import { getErrorMessage } from '../../utils/errors';
+import { escapeHtml } from '../../utils/safeUrl';
 
 const BALANCE_LEAVE_TYPES = ['CL', 'EL', 'RH', 'DL-OTHER'];
 
@@ -1063,7 +1064,8 @@ export default function StaffLeavesPage() {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
       const d = r.data?.data || {};
-      const esc = (v) => String(v ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+      // Every server value is HTML-escaped before it goes into the print document.
+      const esc = escapeHtml;
       const row = (label, value) => `<tr><th>${esc(label)}</th><td>${esc(value)}</td></tr>`;
       printWindow.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Leave application ${esc(d.leave_id)}</title>
         <style>body{font-family:Arial,sans-serif;margin:32px;color:#111}h1{text-align:center;font-size:22px;margin:0 0 6px}h2{text-align:center;margin:0 0 24px}

@@ -4,6 +4,39 @@ const AdmZip = require('adm-zip');
 const { pool } = require('../../config/db');
 const { form16Root, ensureDir } = require('../../middlewares/upload.middleware');
 const { sendForm16UploadIssueReport } = require('../../services/email.service');
+const { detectFileType, hasActivePdfContent, isInsideDir } = require('../../utils/fileSecurity');
+
+// Zip-bomb guards for bulk archives (checked against declared sizes before extracting).
+const ARCHIVE_MAX_ENTRIES = 5000;
+const ARCHIVE_MAX_ENTRY_BYTES = 20 * 1024 * 1024;
+const ARCHIVE_MAX_TOTAL_BYTES = 1024 * 1024 * 1024;
+
+function archiveTooLarge(message) {
+  const err = new Error(message);
+  err.statusCode = 400;
+  return err;
+}
+
+function assertArchiveBudget(entries) {
+  if (entries.length > ARCHIVE_MAX_ENTRIES) {
+    throw archiveTooLarge(`Archive has too many files (max ${ARCHIVE_MAX_ENTRIES}).`);
+  }
+  let total = 0;
+  entries.forEach(({ name, size }) => {
+    if (size > ARCHIVE_MAX_ENTRY_BYTES) {
+      throw archiveTooLarge(`"${path.basename(name || '')}" is larger than 20 MB when extracted.`);
+    }
+    total += size;
+  });
+  if (total > ARCHIVE_MAX_TOTAL_BYTES) {
+    throw archiveTooLarge('Archive is too large when extracted.');
+  }
+}
+
+// A real, script-free PDF.
+function isSafePdf(buffer) {
+  return detectFileType(buffer) === 'pdf' && !hasActivePdfContent(buffer);
+}
 
 function toYear(value) {
   const parsed = Number(value);
@@ -37,7 +70,8 @@ function normalizePan(value) {
 }
 
 function sanitizeFileName(name) {
-  const ext = path.extname(name || '').toLowerCase() || '.pdf';
+  // Content is already verified as PDF, so it is always stored as .pdf.
+  const ext = '.pdf';
   const base = path
     .basename(name || 'form16.pdf', ext)
     .replace(/[^a-zA-Z0-9_-]/g, '_')
@@ -64,9 +98,10 @@ function detectPart(entryName) {
 
 function toArchiveEntriesFromZip(buffer) {
   const zip = new AdmZip(buffer);
-  return zip
-    .getEntries()
-    .filter((entry) => !entry.isDirectory)
+  const files = zip.getEntries().filter((entry) => !entry.isDirectory);
+  assertArchiveBudget(files.map((entry) => ({ name: entry.entryName, size: Number(entry.header.size) || 0 })));
+  return files
+    .filter((entry) => /\.pdf$/i.test(entry.entryName || ''))
     .map((entry) => ({
       entryName: entry.entryName,
       data: entry.getData()
@@ -104,14 +139,17 @@ function toArchiveEntriesFromRar(buffer) {
 
   const listResult = extractor.getFileList?.();
   const listEntries = pickFileEntries(listResult);
-  const filesToExtract = listEntries
-    .filter((h) => !(h?.flags?.directory || h?.directory))
+  const fileHeaders = listEntries.filter((h) => !(h?.flags?.directory || h?.directory));
+  assertArchiveBudget(
+    fileHeaders.map((h) => ({ name: h.name || h.fileName, size: Number(h.unpSize ?? h.size ?? 0) || 0 }))
+  );
+  // Only PDFs are extracted; everything else in the archive is ignored.
+  const filesToExtract = fileHeaders
     .map((h) => h.name || h.fileName)
-    .filter(Boolean);
+    .filter((name) => name && /\.pdf$/i.test(name));
+  if (!filesToExtract.length) return [];
 
-  const extractResult = filesToExtract.length
-    ? extractor.extract({ files: filesToExtract })
-    : extractor.extract();
+  const extractResult = extractor.extract({ files: filesToExtract });
 
   const extractedFiles = pickFileEntries(extractResult);
 
@@ -206,27 +244,32 @@ async function upload(req, res, next) {
     const year = toYear(req.body.year);
     if (!year) return res.status(400).json({ success: false, message: 'Valid year is required' });
 
-    if (!req.file) return res.status(400).json({ success: false, message: 'PDF file is required' });
+    if (!req.file || !req.file.buffer) return res.status(400).json({ success: false, message: 'PDF file is required' });
 
+    // The folder is built only from the validated numeric staff id and year.
     const staffRoot = getStaffRoot(staffId);
     const yearDir = path.join(staffRoot, String(year));
     ensureDir(yearDir);
 
+    const fileName = sanitizeFileName(req.file.originalname);
+
     // Replace existing files for the same year, keep only current upload.
     const existing = fs
       .readdirSync(yearDir, { withFileTypes: true })
-      .filter((d) => d.isFile() && /\.pdf$/i.test(d.name) && d.name !== req.file.filename);
+      .filter((d) => d.isFile() && /\.pdf$/i.test(d.name));
 
     existing.forEach((file) => {
       const filePath = path.join(yearDir, file.name);
       if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
     });
 
+    fs.writeFileSync(path.join(yearDir, fileName), req.file.buffer);
+
     const uploadedRow = {
-      id: encodeId(staffId, year, req.file.filename),
+      id: encodeId(staffId, year, fileName),
       year,
-      file_name: req.file.filename,
-      file_url: `/uploads/form16/${staffId}/${year}/${req.file.filename}`,
+      file_name: fileName,
+      file_url: `/uploads/form16/${staffId}/${year}/${fileName}`,
       uploaded_at: new Date().toISOString()
     };
 
@@ -253,7 +296,13 @@ async function remove(req, res, next) {
       return res.status(400).json({ success: false, message: 'Invalid file id for this staff' });
     }
 
-    const filePath = path.join(getStaffRoot(staffId), String(decoded.year), String(decoded.fileName));
+    // The id is client-supplied base64: refuse anything that is not "<year>/<...>.pdf" inside
+    // this staff member's folder (blocks ../ path traversal deletes).
+    const staffRoot = getStaffRoot(staffId);
+    const filePath = path.join(staffRoot, String(decoded.year), String(decoded.fileName || ''));
+    if (!/^\d{4}$/.test(String(decoded.year)) || !/\.pdf$/i.test(filePath) || !isInsideDir(staffRoot, filePath)) {
+      return res.status(400).json({ success: false, message: 'Invalid file id for this staff' });
+    }
     if (!fs.existsSync(filePath)) {
       return res.status(404).json({ success: false, message: 'File not found' });
     }
@@ -332,7 +381,12 @@ async function bulkUpload(req, res, next) {
         continue;
       }
 
-      const originalPdfName = path.basename(entry.entryName || '');
+      // basename() drops any "../" in the archive path (zip-slip); the bytes must be a real PDF.
+      const originalPdfName = path.basename(String(entry.entryName || '').replace(/\\/g, '/'));
+      if (!isSafePdf(entry.data)) {
+        invalidFiles.push(originalPdfName);
+        continue;
+      }
       const baseNoExt = originalPdfName.replace(/\.pdf$/i, '');
       // PAN is 10 chars: 5 letters + 4 digits + 1 letter. Extract from start of filename.
       const panMatch = baseNoExt.match(/^([A-Za-z]{5}[0-9]{4}[A-Za-z]{1})/i);
@@ -433,5 +487,7 @@ module.exports = {
   list,
   upload,
   remove,
-  bulkUpload
+  bulkUpload,
+  // Exposed for security tests.
+  _internal: { toArchiveEntriesFromZip, isSafePdf, encodeId }
 };

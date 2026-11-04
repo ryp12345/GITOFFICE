@@ -19,6 +19,7 @@ import {
 import { DEPARTMENT_REPORTS } from './reportConfig';
 import { statTone } from '../../components/dashboard/ActivityDashboardWidgets';
 import { getErrorMessage } from '../../utils/errors';
+import { safeExternalUrl } from '../../utils/safeUrl';
 
 const PAGE_SIZES = [10, 25, 50, 100];
 
@@ -239,8 +240,11 @@ export default function DepartmentActivityReport({
     }
 
     if (column.type === 'link' && row[column.key] && !(column.naWhen && column.naWhen(row))) {
+      // Staff-entered link: only http(s) becomes clickable; anything else shows as plain text.
+      const safeHref = safeExternalUrl(row[column.key]);
+      if (!safeHref) return String(row[column.key]);
       return (
-        <a href={row[column.key]} target="_blank" rel="noreferrer" className="break-all text-blue-600 hover:underline">
+        <a href={safeHref} target="_blank" rel="noopener noreferrer" className="break-all text-blue-600 hover:underline">
           {row[column.key]}
         </a>
       );
