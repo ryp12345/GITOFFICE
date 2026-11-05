@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Notification from '../../components/common/Notification';
+import TemporaryPasswordModal from '../../components/common/TemporaryPasswordModal';
 import Header from '../../components/layout/Header';
 import Sidebar from '../../components/layout/Sidebar';
 import { impersonateUser, getUsers, resetUserPassword } from '../../api/userApi';
@@ -73,6 +74,8 @@ export default function SuperAdminUsersPage() {
   const [tab, setTab] = useState(USER_TABS[0].key);
   const [actionLoading, setActionLoading] = useState({ type: '', userId: null });
   const [notification, setNotification] = useState({ show: false, message: '', type: 'success' });
+  // One-time temporary password from the last reset; cleared (gone for good) when the dialog closes.
+  const [temporaryCredential, setTemporaryCredential] = useState(null);
 
   useEffect(() => {
     loadUsers();
@@ -124,15 +127,23 @@ export default function SuperAdminUsersPage() {
   const handleResetPassword = async (selectedUser) => {
     if (!selectedUser?.id) return;
 
-    const confirmed = window.confirm(`Reset ${selectedUser.email || 'this user'} password to Password@123?`);
+    const confirmed = window.confirm(
+      `Reset the password for ${selectedUser.email || 'this user'}?\n\n`
+      + 'A new one-time temporary password will be generated. Their current sessions will be signed out '
+      + 'and they must set a new password at next login.'
+    );
     if (!confirmed) return;
 
     setActionLoading({ type: 'reset', userId: selectedUser.id });
 
     try {
       const response = await resetUserPassword(selectedUser.id);
-      const message = response?.data?.message || 'Password reset successfully.';
-      showNotification(message, 'success');
+      const temporaryPassword = response?.data?.data?.temporaryPassword;
+      if (temporaryPassword) {
+        setTemporaryCredential({ email: selectedUser.email, password: temporaryPassword });
+      } else {
+        showNotification('Password reset, but no temporary password was returned. Please try again.', 'error');
+      }
     } catch (error) {
       const message = getErrorMessage(error, 'Failed to reset password.');
       showNotification(message, 'error');
@@ -310,7 +321,7 @@ export default function SuperAdminUsersPage() {
                                 disabled={Boolean(actionLoading.type)}
                                 onClick={() => handleResetPassword(user)}
                               >
-                                {isResetting ? 'Resetting...' : 'Reset to Password'}
+                                {isResetting ? 'Resetting...' : 'Reset Password'}
                               </button>
                             </td>
                           </tr>
@@ -348,6 +359,13 @@ export default function SuperAdminUsersPage() {
           </div>
         </main>
       </div>
+      <TemporaryPasswordModal
+        open={Boolean(temporaryCredential)}
+        email={temporaryCredential?.email}
+        password={temporaryCredential?.password}
+        title="Password reset"
+        onClose={() => setTemporaryCredential(null)}
+      />
     </div>
   );
 }

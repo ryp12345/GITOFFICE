@@ -5,10 +5,11 @@ const request = require('supertest');
 const app = require('../src/app');
 const userModel = require('../src/models/user.model');
 const authService = require('../src/services/auth.service');
-const { signAccessToken, verifyRefreshToken } = require('../src/utils/jwt');
+const { verifyRefreshToken } = require('../src/utils/jwt');
 const { staffRecordGuard, qualificationGuard } = require('../src/middlewares/staffAccess.middleware');
 
-const bearer = (payload) => `Bearer ${signAccessToken(payload)}`;
+// Tokens carry a password version; the helper stubs the per-request user lookup.
+const { bearer } = require('./helpers/session');
 const estb = { id: 1, role: 'Establishment', staff_id: null };
 const teacher = { id: 2, role: 'teaching', staff_id: 42 };
 

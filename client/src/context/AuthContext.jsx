@@ -53,7 +53,9 @@ export default function AuthProvider({ children }) {
             const nextUser = {
               ...prev,
               staff_id: freshUser.staff_id || null,
-              coordinator_names: freshUser.coordinator_names || []
+              coordinator_names: freshUser.coordinator_names || [],
+              // The server is the source of truth for a pending mandatory password change.
+              must_change_password: Boolean(freshUser.must_change_password)
             };
             localStorage.setItem('user', JSON.stringify(nextUser));
             return nextUser;

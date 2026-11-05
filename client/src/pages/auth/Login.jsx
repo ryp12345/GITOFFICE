@@ -3,6 +3,7 @@ import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { getDashboardPathByRole } from '../../utils/role';
 import { getErrorMessage } from '../../utils/errors';
+import { CHANGE_PASSWORD_PATH, mustChangePassword } from '../../utils/passwordChange';
 
 const NO_PORTAL_MESSAGE = 'Your account does not have a portal assigned. Please contact the administrator.';
 
@@ -45,6 +46,10 @@ export default function Login() {
     return isSafeRedirect(requested) ? requested : home;
   };
 
+  if (isAuthenticated && mustChangePassword(user)) {
+    return <Navigate to={CHANGE_PASSWORD_PATH} replace />;
+  }
+
   if (isAuthenticated) {
     const target = resolvePostLoginPath(user?.role);
     // A role without a portal maps to /login; redirecting there again would loop forever.
@@ -74,6 +79,11 @@ export default function Login() {
     try {
       setIsSubmitting(true);
       const nextUser = await login({ email: email.trim(), password });
+      // Signed in with a temporary password: the only page available is Change Password.
+      if (mustChangePassword(nextUser)) {
+        navigate(CHANGE_PASSWORD_PATH, { replace: true });
+        return;
+      }
       const target = resolvePostLoginPath(nextUser?.role);
       if (!target) {
         logout();

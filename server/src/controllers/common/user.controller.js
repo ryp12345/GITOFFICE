@@ -43,8 +43,14 @@ async function resetPassword(req, res, next) {
       throw err;
     }
 
-    const data = await userService.resetUserPassword(targetUserId);
-    res.json({ success: true, data, message: `Password reset successfully to ${data.defaultPassword}` });
+    const { user, temporaryPassword } = await userService.resetUserPassword(targetUserId);
+    // Shown to the admin once; never cached, logged or stored in plaintext.
+    res.setHeader('Cache-Control', 'no-store');
+    res.json({
+      success: true,
+      data: { user, temporaryPassword, mustChangePassword: true },
+      message: 'Password reset. Share the temporary password with the user securely; they must change it at next login.'
+    });
   } catch (error) {
     next(error);
   }
@@ -61,19 +67,11 @@ async function stopImpersonation(req, res, next) {
 
 async function changeOwnPassword(req, res, next) {
   try {
-    const { currentPassword, newPassword } = req.body;
-    if (!currentPassword || !newPassword) {
-      const err = new Error('currentPassword and newPassword are required');
-      err.statusCode = 400;
-      throw err;
-    }
-    if (newPassword.length < 8) {
-      const err = new Error('New password must be at least 8 characters');
-      err.statusCode = 400;
-      throw err;
-    }
-    await userService.changeOwnPassword(req.user.id, currentPassword, newPassword);
-    res.json({ success: true, message: 'Password changed successfully' });
+    const { currentPassword, newPassword, confirmPassword } = req.body || {};
+    // Validation (required fields, confirmation, policy, no re-use) lives in auth.service.
+    const session = await userService.changeOwnPassword(req.user, { currentPassword, newPassword, confirmPassword });
+    res.setHeader('Cache-Control', 'no-store');
+    res.json({ success: true, data: session, message: 'Password changed successfully' });
   } catch (error) {
     next(error);
   }

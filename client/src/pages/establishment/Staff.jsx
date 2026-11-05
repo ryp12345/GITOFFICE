@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import Header from '../../components/layout/Header';
 import Sidebar from '../../components/layout/Sidebar';
 import Notification from '../../components/common/Notification';
+import TemporaryPasswordModal from '../../components/common/TemporaryPasswordModal';
 import { useAuth } from '../../context/AuthContext';
 import { getDepartments } from '../../api/departmentApi';
 import { getAssociations } from '../../api/associationApi';
@@ -69,6 +70,8 @@ export default function StaffPage({
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
   const [notification, setNotification] = useState({ show: false, message: '', type: 'success' });
+  // One-time temporary password of the account just created; discarded when the dialog closes.
+  const [temporaryCredential, setTemporaryCredential] = useState(null);
   const [emailChecked, setEmailChecked] = useState(false);
   const [checkingEmail, setCheckingEmail] = useState(false);
   const [emailStatus, setEmailStatus] = useState('');
@@ -482,6 +485,10 @@ export default function StaffPage({
         setRows((previous) => [newRow, ...previous]);
         showNotification('Staff added successfully', 'success');
         closeModal();
+        // The new login's one-time password: shown once, the employee must change it at first login.
+        if (created.temporaryPassword) {
+          setTemporaryCredential({ email: created.user?.email || newRow.email, password: created.temporaryPassword });
+        }
       } catch (err) {
         const msg = getErrorMessage(err, 'Failed to create staff');
         setError(msg);
@@ -1162,6 +1169,13 @@ export default function StaffPage({
           </div>
         </div>
       )}
+      <TemporaryPasswordModal
+        open={Boolean(temporaryCredential)}
+        email={temporaryCredential?.email}
+        password={temporaryCredential?.password}
+        title="Employee account created"
+        onClose={() => setTemporaryCredential(null)}
+      />
     </div>
   );
 }

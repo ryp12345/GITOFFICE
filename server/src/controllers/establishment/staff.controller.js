@@ -63,6 +63,8 @@ async function create(req, res, next) {
       payload.email = `${String(payload.emailUser).trim()}@git.edu`;
     }
     const data = await staffService.create(payload);
+    // data.temporaryPassword is shown to the Establishment user once; never cache it.
+    res.setHeader('Cache-Control', 'no-store');
     res.status(201).json({ success: true, data });
   } catch (err) {
     // Friendly handling for Postgres unique/duplicate-key errors

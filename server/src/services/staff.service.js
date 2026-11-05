@@ -108,6 +108,7 @@ async function getStatistics({ start_date, end_date }) {
 
 const { pool } = require('../config/db');
 const { hashPassword } = require('../utils/hash');
+const { generateTemporaryPassword } = require('../utils/password');
 const { photoUrl } = require('./profilePhoto.service');
 
 async function listAll() {
@@ -188,9 +189,13 @@ async function create(payload) {
       throw err;
     }
 
-    const passwordHash = await hashPassword(payload.password || 'changeme');
+    // Every new account gets a unique one-time password (any password in the request is ignored)
+    // and must change it at first login. Only the hash is stored; the plaintext is returned to
+    // the Establishment user once, in this response.
+    const temporaryPassword = generateTemporaryPassword();
+    const passwordHash = await hashPassword(temporaryPassword);
     const userInsert = await client.query(
-      "INSERT INTO users (email, password, role, status, created_at, updated_at) VALUES ($1, $2, $3, 'Active', NOW(), NOW()) RETURNING id, email",
+      "INSERT INTO users (email, password, role, status, must_change_password, created_at, updated_at) VALUES ($1, $2, $3, 'Active', true, NOW(), NOW()) RETURNING id, email",
       [email, passwordHash, payload.role || 'staff']
     );
     const user = userInsert.rows[0];
@@ -306,7 +311,7 @@ async function create(payload) {
     }
 
     await client.query('COMMIT');
-    return { user, staff };
+    return { user, staff, temporaryPassword };
   } catch (err) {
     await client.query('ROLLBACK');
     throw err;

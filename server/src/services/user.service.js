@@ -2,8 +2,6 @@ const userModel = require('../models/user.model');
 const authService = require('./auth.service');
 const { comparePassword } = require('../utils/hash');
 
-const DEFAULT_RESET_PASSWORD = 'Password@123';
-
 async function getById(id) {
   const user = await userModel.findById(id);
   if (!user) {
@@ -19,8 +17,8 @@ async function listAll() {
 }
 
 async function impersonateUser(actor, targetUserId) {
-  const targetUser = await userModel.findById(targetUserId);
-  if (!targetUser) {
+  const baseTarget = await userModel.findById(targetUserId);
+  if (!baseTarget) {
     const err = new Error('User not found');
     err.statusCode = 404;
     throw err;
@@ -33,15 +31,15 @@ async function impersonateUser(actor, targetUserId) {
     throw err;
   }
 
+  // Sessions are tied to the target's password, so the full record (with hash) is needed.
+  // A target with a pending password change gets the same restricted session they would.
+  const targetUser = await authService.loadSessionUser(baseTarget.id);
   return authService.issueSession(targetUser, { impersonator });
 }
 
+// Unique one-time temporary password; the plaintext goes back to the admin once.
 async function resetUserPassword(targetUserId) {
-  const user = await authService.resetPassword(targetUserId, DEFAULT_RESET_PASSWORD);
-  return {
-    user,
-    defaultPassword: DEFAULT_RESET_PASSWORD
-  };
+  return authService.adminResetPassword(targetUserId);
 }
 
 async function stopImpersonation(actor) {
@@ -59,42 +57,17 @@ async function stopImpersonation(actor) {
     throw err;
   }
 
-  return authService.issueSession(impersonator);
-}
-
-async function getAuthUserWithPassword(userId) {
-  const baseUser = await userModel.findById(userId);
-  const user = await userModel.findByEmail(baseUser?.email);
-
-  if (!user) {
-    const err = new Error('User not found');
-    err.statusCode = 404;
-    throw err;
-  }
-
-  return user;
+  return authService.issueSession(await authService.loadSessionUser(impersonator.id));
 }
 
 async function verifyOwnCurrentPassword(userId, currentPassword) {
-  const user = await getAuthUserWithPassword(userId);
+  const user = await authService.loadSessionUser(userId);
   return comparePassword(currentPassword, user.password);
 }
 
-async function changeOwnPassword(userId, currentPassword, newPassword) {
-  const isValid = await verifyOwnCurrentPassword(userId, currentPassword);
-  if (!isValid) {
-    const err = new Error('Current password is incorrect');
-    err.statusCode = 400;
-    throw err;
-  }
-
-  if (currentPassword === newPassword) {
-    const err = new Error('New password cannot be same as your current password.');
-    err.statusCode = 400;
-    throw err;
-  }
-
-  await authService.resetPassword(userId, newPassword);
+// Returns a fresh session (the old tokens stop working once the hash changes).
+async function changeOwnPassword(actor, passwords) {
+  return authService.changePassword(actor.id, passwords, actor);
 }
 
 module.exports = {

@@ -48,6 +48,7 @@ import EstablishementLeaveList from '../pages/establishment/leave_management/Est
 import HolidayRHListPage from '../pages/establishment/leave_management/HolidayRHList';
 import ProtectedRoute from './ProtectedRoute';
 import RoleRoute from './RoleRoute';
+import { CHANGE_PASSWORD_PATH, mustChangePassword } from '../utils/passwordChange';
 import NoticeManagement from '../pages/notices/NoticeManagement';
 import PrincipalOfficeDashboard from '../pages/principal-office/Dashboard';
 import SidebarPrincipalOffice from '../components/layout/SidebarPrincipalOffice';
@@ -134,6 +135,10 @@ function HomeRedirect() {
 
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
+  }
+
+  if (mustChangePassword(user)) {
+    return <Navigate to={CHANGE_PASSWORD_PATH} replace />;
   }
 
   return <Navigate to={getDashboardPathByRole(user?.role)} replace />;

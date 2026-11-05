@@ -14,7 +14,7 @@ async function getCoordinatorNames(staffId) {
 
 async function findByEmail(email) {
   const { rows } = await pool.query(
-    `SELECT u.id, u.email, u.password, u.role, u.status, u.created_at,
+    `SELECT u.id, u.email, u.password, u.role, u.status, u.created_at, u.must_change_password,
        s.fname, s.mname, s.lname, s.id as staff_id
      FROM users u
      LEFT JOIN staff s ON s.user_id = u.id
@@ -30,7 +30,7 @@ async function findByEmail(email) {
 }
 
 async function findById(id) {
-  const { rows } = await pool.query('SELECT id, email, role, status, created_at FROM users WHERE id = $1 LIMIT 1', [id]);
+  const { rows } = await pool.query('SELECT id, email, role, status, created_at, must_change_password FROM users WHERE id = $1 LIMIT 1', [id]);
   const user = rows[0] || null;
   if (user) {
     // Get staff_id for this user
@@ -45,15 +45,27 @@ async function findById(id) {
   return user;
 }
 
-async function updatePasswordById(id, passwordHash) {
+// mustChangePassword: true after an admin reset or account creation (temporary password),
+// false when the user chose the password themselves.
+async function updatePasswordById(id, passwordHash, { mustChangePassword = false } = {}) {
   const { rows } = await pool.query(
     `
       UPDATE users
-      SET password = $2, updated_at = NOW()
+      SET password = $2, must_change_password = $3, updated_at = NOW()
       WHERE id = $1
-      RETURNING id, email, role, status, created_at
+      RETURNING id, email, role, status, created_at, must_change_password
     `,
-    [id, passwordHash]
+    [id, passwordHash, Boolean(mustChangePassword)]
+  );
+  return rows[0] || null;
+}
+
+// What authMiddleware needs on every request: the current hash (session version) and whether
+// a password change is pending. Primary-key lookup only.
+async function findAuthStateById(id) {
+  const { rows } = await pool.query(
+    'SELECT id, password, must_change_password FROM users WHERE id = $1 LIMIT 1',
+    [id]
   );
   return rows[0] || null;
 }
@@ -85,4 +97,4 @@ async function create({ email, passwordHash, role }) {
   return rows[0];
 }
 
-module.exports = { findByEmail, findById, updatePasswordById, findAll, create };
+module.exports = { findByEmail, findById, findAuthStateById, updatePasswordById, findAll, create };

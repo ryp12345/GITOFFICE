@@ -7,7 +7,6 @@ const request = require('supertest');
 const AdmZip = require('adm-zip');
 
 const app = require('../src/app');
-const { signAccessToken } = require('../src/utils/jwt');
 const { errorMiddleware } = require('../src/middlewares/error.middleware');
 const {
   detectFileType,
@@ -32,7 +31,8 @@ const SVG = Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" onload="alert(1
 const EXE = Buffer.from('MZ\x90\x00\x03\x00\x00\x00', 'latin1');
 const PHP = Buffer.from('<?php system($_GET["c"]); ?>');
 
-const bearer = (payload) => `Bearer ${signAccessToken(payload)}`;
+// Tokens carry a password version; the helper stubs the per-request user lookup.
+const { bearer } = require('./helpers/session');
 const teacher = bearer({ id: 2, role: 'teaching', staff_id: 42 });
 
 function runFilter(kind, originalname, mimetype) {

@@ -1,6 +1,7 @@
 import axios from 'axios';
 import { toast } from '../notifications/notifier';
 import { getHttpErrorMessage, isCancelledRequest } from '../utils/errors';
+import { CHANGE_PASSWORD_PATH, PASSWORD_CHANGE_REQUIRED } from '../utils/passwordChange';
 
 const configuredApiUrl = import.meta.env.VITE_API_URL?.trim();
 const runtimeHost = typeof window !== 'undefined' ? window.location.hostname : 'localhost';
@@ -25,6 +26,20 @@ const clearSessionAndRedirect = () => {
   if (pathname !== '/login') {
     // Login sends the user back here afterwards (Laravel's redirect()->intended()).
     window.location.replace(`/login?next=${encodeURIComponent(`${pathname}${search}`)}`);
+  }
+};
+
+const redirectToMandatoryPasswordChange = () => {
+  try {
+    const stored = JSON.parse(localStorage.getItem('user') || 'null');
+    if (stored && typeof stored === 'object') {
+      localStorage.setItem('user', JSON.stringify({ ...stored, must_change_password: true }));
+    }
+  } catch {
+    // An unreadable stored user is handled by AuthContext on reload.
+  }
+  if (window.location.pathname !== CHANGE_PASSWORD_PATH) {
+    window.location.replace(CHANGE_PASSWORD_PATH);
   }
 };
 
@@ -64,6 +79,13 @@ api.interceptors.response.use(
     normalizeError(error);
     const originalRequest = error.config;
     const status = error.response?.status;
+
+    // The server refuses everything except Change Password until a temporary password is
+    // replaced. Record that and send the user there (covers stale copies of the user in storage).
+    if (status === 403 && error.response?.data?.code === PASSWORD_CHANGE_REQUIRED) {
+      redirectToMandatoryPasswordChange();
+      return Promise.reject(error);
+    }
 
     // A 401 from the login form means wrong credentials, not an expired session.
     const isLoginRequest = originalRequest?.url?.includes('/auth/login');
